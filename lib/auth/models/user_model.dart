@@ -13,6 +13,7 @@ class UserModel {
   final String? pincode;
   final double? latitude;
   final double? longitude;
+  final String? locationSource;
   final String? selectedAddressId;
   final DateTime? createdAt;
   final DateTime? updatedAt;
@@ -30,6 +31,7 @@ class UserModel {
     this.pincode,
     this.latitude,
     this.longitude,
+    this.locationSource,
     this.selectedAddressId,
     this.createdAt,
     this.updatedAt,
@@ -71,6 +73,7 @@ class UserModel {
       pincode: map['pincode'],
       latitude: parseDouble(map['latitude']),
       longitude: parseDouble(map['longitude']),
+      locationSource: map['locationSource'],
       selectedAddressId: map['selectedAddressId'],
       createdAt: parseDateTime(map['createdAt']),
       updatedAt: parseDateTime(map['updatedAt']),
@@ -97,6 +100,7 @@ class UserModel {
       if (pincode != null) 'pincode': pincode,
       if (latitude != null) 'latitude': latitude,
       if (longitude != null) 'longitude': longitude,
+      if (locationSource != null) 'locationSource': locationSource,
       if (selectedAddressId != null) 'selectedAddressId': selectedAddressId,
       'createdAt': createdAt != null ? Timestamp.fromDate(createdAt!) : FieldValue.serverTimestamp(),
       'updatedAt': FieldValue.serverTimestamp(),
@@ -117,6 +121,7 @@ class UserModel {
     String? pincode,
     double? latitude,
     double? longitude,
+    String? locationSource,
     String? selectedAddressId,
     DateTime? createdAt,
     DateTime? updatedAt,
@@ -134,6 +139,7 @@ class UserModel {
       pincode: pincode ?? this.pincode,
       latitude: latitude ?? this.latitude,
       longitude: longitude ?? this.longitude,
+      locationSource: locationSource ?? this.locationSource,
       selectedAddressId: selectedAddressId ?? this.selectedAddressId,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,

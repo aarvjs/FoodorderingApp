@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/user_model.dart';
 import '../repositories/auth_repository.dart';
 import '../../features/address/providers/address_provider.dart';
@@ -343,6 +344,7 @@ class AuthNotifier extends Notifier<AuthState> {
     String? area,
     double? latitude,
     double? longitude,
+    String? locationSource,
     String? city,
     String? stateName,
     String? pincode,
@@ -374,6 +376,7 @@ class AuthNotifier extends Notifier<AuthState> {
         area: area ?? state.userModel?.area,
         latitude: latitude ?? state.userModel?.latitude,
         longitude: longitude ?? state.userModel?.longitude,
+        locationSource: locationSource ?? state.userModel?.locationSource ?? 'gps',
         city: city ?? state.userModel?.city,
         state: stateName ?? state.userModel?.state,
         pincode: pincode ?? state.userModel?.pincode,
@@ -381,6 +384,7 @@ class AuthNotifier extends Notifier<AuthState> {
       );
 
       await _repository.saveUserProfile(updatedUser);
+      print('[GPS] Firestore Save Success');
 
       state = state.copyWith(
         isLoading: false,
@@ -393,6 +397,51 @@ class AuthNotifier extends Notifier<AuthState> {
         isLoading: false,
         errorMessage: 'Failed to save profile: ${e.toString()}',
       );
+      return false;
+    }
+  }
+
+  /// Remove location data from Firestore and UserModel state
+  Future<bool> deleteLocationData() async {
+    final currentUser = _repository.currentUser;
+    final uid = currentUser?.uid ?? state.userModel?.uid;
+
+    if (uid == null) return false;
+
+    try {
+      final userDocRef = FirebaseFirestore.instance.collection('users').doc(uid);
+      await userDocRef.update({
+        'latitude': FieldValue.delete(),
+        'longitude': FieldValue.delete(),
+        'locationSource': FieldValue.delete(),
+        'formattedAddress': '',
+        'area': '',
+        'city': '',
+        'state': '',
+        'pincode': '',
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+
+      final updatedUser = (state.userModel ?? UserModel(uid: uid, phone: currentUser?.phoneNumber ?? '')).copyWith(
+        latitude: null,
+        longitude: null,
+        locationSource: null,
+        formattedAddress: '',
+        area: '',
+        city: '',
+        state: '',
+        pincode: '',
+        updatedAt: DateTime.now(),
+      );
+
+      state = state.copyWith(
+        userModel: updatedUser,
+      );
+
+      print('[GPS] Delete Success');
+      return true;
+    } catch (e) {
+      print('[GPS] Firestore Delete Error: $e');
       return false;
     }
   }

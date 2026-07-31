@@ -317,31 +317,14 @@ class AddressNotifier extends Notifier<AddressState> {
         selectAddress(newSelected, ref);
       }
     } else {
-      // Clear persistent address cache completely
-      try {
-        final authUser = ref?.read(authProvider).userModel ?? this.ref.read(authProvider).userModel;
-        if (authUser != null) {
-          SharedPreferences.getInstance().then((prefs) {
-            prefs.remove('${_persistentAddressKey}_${authUser.uid}');
-            final jsonList = newList.map((a) => a.toMap()).toList();
-            prefs.setString('${_savedAddressesListKey}_${authUser.uid}', jsonEncode(jsonList));
-          });
-        }
-      } catch (_) {}
-
-      final targetRef = ref;
-      if (targetRef != null) {
-        targetRef.read(authProvider.notifier).saveUserData(
-          formattedAddress: '',
-          area: '',
-          latitude: 0.0,
-          longitude: 0.0,
-          city: '',
-          stateName: '',
-          pincode: '',
-        );
+      // Clear persistent location cache completely
+      clearAddressCache();
+      if (ref != null) {
+        ref.read(authProvider.notifier).deleteLocationData();
       }
     }
+
+    print('[GPS] Delete Success');
   }
 
   /// Set default address by ID
@@ -386,41 +369,37 @@ class AddressNotifier extends Notifier<AddressState> {
     }
   }
 
-  /// Fetch GPS coordinates (ONCE ONLY), reverse-geocode into Address, save to Firestore & Local Storage, and select it immediately
+  /// Fetch fresh GPS coordinates, save to SharedPreferences & Firestore, and select immediately.
+  /// Logs status, permission, latitude, longitude, and save success.
   Future<bool> fetchGpsLocationAndSelect(WidgetRef ref) async {
     state = state.copyWith(isFetchingGps: true, errorMessage: null);
 
     try {
-      print('[AddressNotifier] Requesting fresh GPS coordinates...');
-      final userLocation = await _locationService.getCurrentLocation();
+      final position = await _locationService.fetchFreshGpsPosition();
 
-      print('========================================');
-      print('Fresh GPS Coordinates');
-      print('Latitude\n${userLocation.latitude}');
-      print('Longitude\n${userLocation.longitude}');
-      print('Address\n${userLocation.area.isNotEmpty ? userLocation.area : userLocation.city}');
-      print('========================================');
+      if (position.latitude == 0.0 && position.longitude == 0.0) {
+        throw Exception('INVALID_COORDINATES');
+      }
 
-      final bool isAddressFailed = userLocation.formattedAddress == 'Unable to fetch address';
+      final String coordStr = 'Location (${position.latitude.toStringAsFixed(4)}, ${position.longitude.toStringAsFixed(4)})';
 
       final gpsAddress = Address(
         id: 'addr_gps_${DateTime.now().millisecondsSinceEpoch}',
         label: 'Current Location',
-        formattedAddress: userLocation.formattedAddress,
-        locality: userLocation.area,
-        subLocality: userLocation.area,
-        city: userLocation.city,
-        state: userLocation.state,
-        postalCode: userLocation.pincode,
-        latitude: userLocation.latitude,
-        longitude: userLocation.longitude,
+        formattedAddress: coordStr,
+        locality: '',
+        subLocality: '',
+        city: '',
+        state: '',
+        postalCode: '',
+        latitude: position.latitude,
+        longitude: position.longitude,
         isDefault: true,
         isCurrent: true,
         createdAt: DateTime.now(),
         updatedAt: DateTime.now(),
       );
 
-      // Clean up previous GPS addresses to avoid accumulation
       final cleanList = state.addresses.where((a) => !a.isCurrent && a.label != 'Current Location').toList();
       final newList = [gpsAddress, ...cleanList];
 
@@ -428,27 +407,35 @@ class AddressNotifier extends Notifier<AddressState> {
         addresses: newList,
         selectedAddress: gpsAddress,
         isFetchingGps: false,
-        errorMessage: isAddressFailed ? 'Unable to fetch address' : null,
+        errorMessage: null,
       );
 
-      _persistAddress(gpsAddress, newList);
+      // Save locally to SharedPreferences
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        final authUser = ref.read(authProvider).userModel;
+        final userKey = authUser?.uid ?? 'guest';
+        await prefs.setDouble('latitude', position.latitude);
+        await prefs.setDouble('longitude', position.longitude);
+        await prefs.setString('locationSource', 'gps');
+        await prefs.setString('${_persistentAddressKey}_$userKey', jsonEncode(gpsAddress.toMap()));
+        print('[GPS] SharedPreferences Save Success');
+      } catch (pe) {
+        print('[GPS] SharedPreferences Save Error: $pe');
+      }
 
-      ref.read(authProvider.notifier).saveUserData(
-        formattedAddress: gpsAddress.fullAddress,
-        area: gpsAddress.area,
-        latitude: gpsAddress.latitude,
-        longitude: gpsAddress.longitude,
-        city: gpsAddress.city,
-        stateName: gpsAddress.state,
-        pincode: gpsAddress.pincode,
+      // Save to Firestore
+      await ref.read(authProvider.notifier).saveUserData(
+        latitude: position.latitude,
+        longitude: position.longitude,
+        locationSource: 'gps',
+        formattedAddress: coordStr,
       );
 
-      return !isAddressFailed;
+      return true;
     } catch (e) {
-      print('[AddressNotifier] GPS location error: $e');
-      final String msg = e.toString().contains('No internet connection')
-          ? 'No internet connection. Please check your network.'
-          : 'Unable to fetch current address';
+      print('[GPS] Location Error: $e');
+      final String msg = 'Unable to fetch your current location. Please try again.';
       state = state.copyWith(
         isFetchingGps: false,
         errorMessage: msg,

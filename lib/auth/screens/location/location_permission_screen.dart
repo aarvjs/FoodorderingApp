@@ -63,28 +63,24 @@ class _LocationPermissionScreenState extends ConsumerState<LocationPermissionScr
     });
 
     try {
-      // 1. Request permission & fetch position via locationProvider
-      final permSuccess = await ref.read(locationProvider.notifier).requestAndFetchLocation();
-
-      if (!permSuccess) {
-        if (mounted) {
-          setState(() {
-            _isLocalLoading = false;
-          });
-        }
-        return;
-      }
-
-      // 2. Reverse geocode, select, and save address
-      final addressSuccess = await ref.read(addressProvider.notifier).fetchGpsLocationAndSelect(ref);
+      final success = await ref.read(addressProvider.notifier).fetchGpsLocationAndSelect(ref);
 
       if (mounted) {
         setState(() {
           _isLocalLoading = false;
         });
 
-        if (addressSuccess) {
+        if (success) {
           _advanceNext();
+        } else {
+          ScaffoldMessenger.of(context).hideCurrentSnackBar();
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Unable to fetch your current location. Please try again.'),
+              backgroundColor: AppColors.error,
+              duration: Duration(seconds: 3),
+            ),
+          );
         }
       }
     } catch (e) {
@@ -92,6 +88,14 @@ class _LocationPermissionScreenState extends ConsumerState<LocationPermissionScr
         setState(() {
           _isLocalLoading = false;
         });
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Unable to fetch your current location. Please try again.'),
+            backgroundColor: AppColors.error,
+            duration: Duration(seconds: 3),
+          ),
+        );
       }
     }
   }
@@ -407,7 +411,7 @@ class _LocationPermissionScreenState extends ConsumerState<LocationPermissionScr
               ),
               Gap(12),
               Text(
-                'Fetching location...',
+                'Fetching your current location...',
                 style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.bold,

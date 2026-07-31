@@ -32,59 +32,83 @@ class LocationService {
     return await openAppSettings();
   }
 
-  /// Fetch fresh GPS position with LocationAccuracy.bestForNavigation (NO cached position).
-  /// Automatically prompts location settings if GPS is OFF and polls up to 10s for activation.
-  Future<UserLocation> getCurrentLocation() async {
-    print('[GPS] 1. Checking Location Service (GPS)...');
+  /// Fetch fresh GPS Position using LocationAccuracy.best with automatic fallback to LocationAccuracy.medium.
+  /// Logs status, permission, latitude, and longitude clearly.
+  Future<Position> fetchFreshGpsPosition() async {
+    print('[GPS] Location Service Status: Checking...');
     var serviceEnabled = await isLocationServiceEnabled();
+    print('[GPS] Location Service Status: ${serviceEnabled ? "ENABLED" : "DISABLED"}');
+
     if (!serviceEnabled) {
       print('[GPS] Location Service is OFF. Opening device location settings...');
       await openLocationSettings();
 
       final startTime = DateTime.now();
-      while (!serviceEnabled && DateTime.now().difference(startTime).inSeconds < 10) {
+      while (!serviceEnabled && DateTime.now().difference(startTime).inSeconds < 8) {
         await Future.delayed(const Duration(milliseconds: 800));
         serviceEnabled = await isLocationServiceEnabled();
       }
       if (!serviceEnabled) {
-        print('[GPS] User did not enable GPS. Aborting.');
-        throw Exception('GPS_DISABLED');
+        print('[GPS] Location Service Status: STILL DISABLED. Aborting.');
+        throw Exception('LOCATION_DISABLED');
       }
     }
 
-    print('[GPS] 2. Checking runtime permission...');
+    print('[GPS] Permission Status: Checking...');
     var permission = await Geolocator.checkPermission();
+    print('[GPS] Permission Status: $permission');
+
     if (permission == LocationPermission.denied) {
-      print('[GPS] Permission denied. Requesting permission...');
+      print('[GPS] Requesting location permission...');
       permission = await Geolocator.requestPermission();
+      print('[GPS] Permission Status after request: $permission');
       if (permission == LocationPermission.denied) {
-        print('[GPS] User denied location permission.');
         throw Exception('PERMISSION_DENIED');
       }
     }
 
     if (permission == LocationPermission.deniedForever) {
-      print('[GPS] Location permission is permanently denied.');
+      print('[GPS] Permission Status: PERMANENTLY DENIED');
       throw Exception('PERMISSION_PERMANENTLY_DENIED');
     }
 
-    print('========================================');
-    print('FETCHING FRESH GPS COORDINATES...');
-    print('========================================');
-    final position = await Geolocator.getCurrentPosition(
-      locationSettings: const LocationSettings(
-        accuracy: LocationAccuracy.best,
-        timeLimit: Duration(seconds: 20),
-      ),
-    );
+    // Try LocationAccuracy.best first
+    try {
+      print('[GPS] Fetching coordinates with LocationAccuracy.best...');
+      final position = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.best,
+          timeLimit: Duration(seconds: 10),
+        ),
+      );
+      print('[GPS] Latitude: ${position.latitude}');
+      print('[GPS] Longitude: ${position.longitude}');
+      return position;
+    } catch (bestErr) {
+      print('[GPS] LocationAccuracy.best failed ($bestErr). Retrying with LocationAccuracy.medium...');
+      try {
+        final positionMedium = await Geolocator.getCurrentPosition(
+          locationSettings: const LocationSettings(
+            accuracy: LocationAccuracy.medium,
+            timeLimit: Duration(seconds: 10),
+          ),
+        );
+        print('[GPS] Latitude: ${positionMedium.latitude}');
+        print('[GPS] Longitude: ${positionMedium.longitude}');
+        return positionMedium;
+      } catch (retryErr) {
+        print('[GPS] LocationAccuracy.medium failed: $retryErr');
+        throw Exception('GPS_FETCH_FAILED');
+      }
+    }
+  }
 
-    print('========================================');
-    print('FRESH GPS COORDINATES FETCHED:');
-    print('Fresh Latitude:\n${position.latitude}');
-    print('Fresh Longitude:\n${position.longitude}');
-    print('========================================');
+  /// Fetch fresh GPS position with LocationAccuracy.bestForNavigation (NO cached position).
+  /// Automatically prompts location settings if GPS is OFF and polls up to 10s for activation.
+  Future<UserLocation> getCurrentLocation() async {
+    final position = await fetchFreshGpsPosition();
 
-    print('[Geocoding] 4. Converting fresh coordinates into Address...');
+    print('[Geocoding] Converting fresh coordinates into Address...');
     try {
       return await getLocationFromCoordinates(
         position.latitude,
@@ -95,8 +119,8 @@ class LocationService {
       return UserLocation(
         latitude: position.latitude,
         longitude: position.longitude,
-        formattedAddress: 'Unable to fetch address',
-        area: 'Unable to fetch address',
+        formattedAddress: 'Current Location (${position.latitude.toStringAsFixed(4)}, ${position.longitude.toStringAsFixed(4)})',
+        area: '',
         city: '',
         state: '',
         pincode: '',
