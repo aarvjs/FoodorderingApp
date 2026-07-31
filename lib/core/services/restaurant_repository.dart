@@ -219,16 +219,27 @@ class RestaurantRepository {
     });
   }
 
-  /// Stream real-time menu items for a specific restaurant/branch
+  /// Stream real-time menu items for a specific restaurant/branch from Firestore `menuItems` collection
   Stream<List<FoodItem>> streamRestaurantMenu(String restaurantId, {String? branchId}) {
     return _firestore.collection('menuItems').snapshots().map((snapshot) {
+      final String id1 = restaurantId.trim();
+      final String id2 = (branchId ?? '').trim();
+
       return snapshot.docs
           .map((doc) => FoodItem.fromFirestore(doc.data(), doc.id))
           .where((item) {
-            if (restaurantId.isEmpty) return true;
-            final rMatch = item.restaurantId == restaurantId;
-            final bMatch = branchId != null && branchId.isNotEmpty && item.branchId == branchId;
-            return (rMatch || bMatch) && item.isAvailable;
+            if (id1.isEmpty && id2.isEmpty) return true;
+
+            final rMatch = (item.restaurantId != null && item.restaurantId!.isNotEmpty) &&
+                (item.restaurantId == id1 || item.restaurantId == id2);
+
+            final bMatch = (item.branchId != null && item.branchId!.isNotEmpty) &&
+                (item.branchId == id1 || item.branchId == id2);
+
+            final docMatch = (item.restaurantId == null || item.restaurantId!.isEmpty) &&
+                (item.branchId == null || item.branchId!.isEmpty);
+
+            return (rMatch || bMatch || docMatch) && item.isAvailable;
           })
           .toList();
     });

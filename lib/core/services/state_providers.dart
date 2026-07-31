@@ -122,13 +122,15 @@ class CartNotifier extends Notifier<CartState> {
     }
 
     final index = state.items.indexWhere(
-      (i) => i.foodItem.id == item.foodItem.id && i.selectedSize == item.selectedSize,
+      (i) => i.foodItem.id == item.foodItem.id &&
+          (item.selectedSize == null || i.selectedSize == null || i.selectedSize == item.selectedSize),
     );
 
     if (index >= 0) {
       final updatedItems = List<CartItem>.from(state.items);
       final currentQuantity = updatedItems[index].quantity;
-      updatedItems[index] = updatedItems[index].copyWith(quantity: currentQuantity + item.quantity);
+      final addAmount = item.quantity > 0 ? item.quantity : 1;
+      updatedItems[index] = updatedItems[index].copyWith(quantity: currentQuantity + addAmount);
       state = state.copyWith(items: updatedItems);
     } else {
       state = state.copyWith(items: [...state.items, item]);

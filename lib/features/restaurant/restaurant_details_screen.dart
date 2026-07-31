@@ -58,12 +58,15 @@ class _RestaurantDetailsScreenState extends ConsumerState<RestaurantDetailsScree
 
     // Listen to real-time Firestore streams for restaurant details & menu
     final detailsAsync = ref.watch(restaurantDetailsStreamProvider(widget.restaurantId));
-    final menuAsync = ref.watch(restaurantMenuStreamProvider(widget.restaurantId));
-
     final restaurant = detailsAsync.value;
+
+    final targetRestId = (restaurant != null && restaurant.restaurantId.isNotEmpty) ? restaurant.restaurantId : widget.restaurantId;
+    final menuAsync = ref.watch(restaurantMenuStreamProvider(targetRestId));
+
     final List<FoodItem> dynamicMenu = (menuAsync.value != null && menuAsync.value!.isNotEmpty)
         ? menuAsync.value!
         : (restaurant?.items ?? []);
+    final bool isMenuLoading = menuAsync.isLoading && dynamicMenu.isEmpty;
 
     // Watch cart state to show floating 'View Cart' banner
     final cartState = ref.watch(cartProvider);
@@ -422,32 +425,67 @@ class _RestaurantDetailsScreenState extends ConsumerState<RestaurantDetailsScree
               // Menu Dishes List
               SliverPadding(
                 padding: const EdgeInsets.only(left: 16, right: 16, top: 16, bottom: 100),
-                sliver: filteredItems.isEmpty
-                    ? SliverToBoxAdapter(
-                        child: Center(
-                          child: Padding(
-                            padding: const EdgeInsets.all(40),
-                            child: Text(
-                              'No dishes found matching filters.',
-                              style: TextStyle(color: isDark ? Colors.grey.shade400 : AppColors.textLight),
+                sliver: isMenuLoading
+                    ? SliverList(
+                        delegate: SliverChildBuilderDelegate(
+                          (context, index) => Padding(
+                            padding: const EdgeInsets.only(bottom: 16),
+                            child: Shimmer.fromColors(
+                              baseColor: isDark ? Colors.grey.shade800 : Colors.grey.shade300,
+                              highlightColor: isDark ? Colors.grey.shade700 : Colors.grey.shade100,
+                              child: Container(
+                                height: 110,
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(18),
+                                ),
+                              ),
                             ),
                           ),
+                          childCount: 4,
                         ),
                       )
-                    : SliverList(
-                        delegate: SliverChildBuilderDelegate(
-                          (context, index) {
-                            final foodItem = filteredItems[index];
-                            return FoodCard(
-                              foodItem: foodItem,
-                              restaurantId: restaurant.id,
-                              restaurantName: restaurant.name,
-                              onTap: () => context.push('/product/${restaurant.id}/${foodItem.id}'),
-                            );
-                          },
-                          childCount: filteredItems.length,
-                        ),
-                      ),
+                    : (filteredItems.isEmpty
+                        ? SliverToBoxAdapter(
+                            child: Center(
+                              child: Padding(
+                                padding: const EdgeInsets.all(40),
+                                child: Column(
+                                  children: [
+                                    Icon(
+                                      Iconsax.document_text,
+                                      size: 48,
+                                      color: isDark ? Colors.grey.shade600 : Colors.grey.shade400,
+                                    ),
+                                    const Gap(12),
+                                    Text(
+                                      'No menu items available for this outlet.',
+                                      textAlign: TextAlign.center,
+                                      style: TextStyle(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.bold,
+                                        color: isDark ? Colors.grey.shade400 : AppColors.textLight,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          )
+                        : SliverList(
+                            delegate: SliverChildBuilderDelegate(
+                              (context, index) {
+                                final foodItem = filteredItems[index];
+                                return FoodCard(
+                                  foodItem: foodItem,
+                                  restaurantId: restaurant.id,
+                                  restaurantName: restaurant.name,
+                                  onTap: () => context.push('/product/${restaurant.id}/${foodItem.id}'),
+                                );
+                              },
+                              childCount: filteredItems.length,
+                            ),
+                          )),
               ),
             ],
           ),
