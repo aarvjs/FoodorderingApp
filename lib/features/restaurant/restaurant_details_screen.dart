@@ -10,8 +10,13 @@ import '../../core/services/state_providers.dart';
 import '../../models/food_item.dart';
 import '../../models/restaurant.dart';
 import '../../models/table_model.dart';
+import '../../models/combo_model.dart';
 import '../../auth/providers/auth_provider.dart';
+import 'package:flutter/services.dart';
+import '../../core/utils/snackbar_utils.dart';
+import '../../models/offer_model.dart';
 import '../home/providers/restaurant_providers.dart';
+import '../product/combo_customization_sheet.dart';
 
 class RestaurantDetailsScreen extends ConsumerStatefulWidget {
   final String restaurantId;
@@ -24,6 +29,7 @@ class RestaurantDetailsScreen extends ConsumerStatefulWidget {
 
 class _RestaurantDetailsScreenState extends ConsumerState<RestaurantDetailsScreen> {
   String? _selectedCategory;
+  int _activeMainTab = 0; // 0: Menu, 1: Combos
   final TextEditingController _menuSearchController = TextEditingController();
   String _menuSearchQuery = '';
 
@@ -62,15 +68,14 @@ class _RestaurantDetailsScreenState extends ConsumerState<RestaurantDetailsScree
 
     final targetRestId = (restaurant != null && restaurant.restaurantId.isNotEmpty) ? restaurant.restaurantId : widget.restaurantId;
     final menuAsync = ref.watch(restaurantMenuStreamProvider(targetRestId));
+    final combosAsync = ref.watch(restaurantCombosStreamProvider(widget.restaurantId));
+    final offersAsync = ref.watch(restaurantOffersStreamProvider(widget.restaurantId));
+    final List<ComboModel> combosList = combosAsync.value ?? [];
 
     final List<FoodItem> dynamicMenu = (menuAsync.value != null && menuAsync.value!.isNotEmpty)
         ? menuAsync.value!
         : (restaurant?.items ?? []);
     final bool isMenuLoading = menuAsync.isLoading && dynamicMenu.isEmpty;
-
-    // Watch cart state to show floating 'View Cart' banner
-    final cartState = ref.watch(cartProvider);
-    final totalItemsInCart = cartState.items.fold<int>(0, (sum, item) => sum + item.quantity);
 
     if (detailsAsync.isLoading && restaurant == null) {
       return Scaffold(
@@ -255,7 +260,7 @@ class _RestaurantDetailsScreenState extends ConsumerState<RestaurantDetailsScree
                         children: [
                           _buildLogisticsColumn(Iconsax.routing, restaurant.distance, 'Distance', isDark),
                           _buildLogisticsColumn(Iconsax.clock, restaurant.deliveryTime, 'Delivery', isDark),
-                          _buildLogisticsColumn(Iconsax.ticket_discount, 'Offer', restaurant.offerText, isDark, highlight: true),
+                          _buildOfferBadgePill(offersAsync, restaurant, isDark),
                         ],
                       ),
 
@@ -327,7 +332,92 @@ class _RestaurantDetailsScreenState extends ConsumerState<RestaurantDetailsScree
 
                       const Gap(12),
                       const Divider(),
-                      const Gap(16),
+                      const Gap(12),
+
+                      // Segmented Main Tab Selector: Menu | Combos
+                      Container(
+                        padding: const EdgeInsets.all(4),
+                        decoration: BoxDecoration(
+                          color: isDark ? AppColors.darkCard : Colors.grey.shade200,
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: GestureDetector(
+                                onTap: () => setState(() => _activeMainTab = 0),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(vertical: 10),
+                                  decoration: BoxDecoration(
+                                    color: _activeMainTab == 0
+                                        ? AppColors.primary
+                                        : Colors.transparent,
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                  child: Center(
+                                    child: Row(
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      children: [
+                                        Icon(
+                                          Iconsax.element_4,
+                                          size: 16,
+                                          color: _activeMainTab == 0 ? Colors.white : (isDark ? Colors.grey.shade400 : AppColors.textDark),
+                                        ),
+                                        const Gap(6),
+                                        Text(
+                                          'Menu',
+                                          style: TextStyle(
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.bold,
+                                            color: _activeMainTab == 0 ? Colors.white : (isDark ? Colors.grey.shade400 : AppColors.textDark),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                            Expanded(
+                              child: GestureDetector(
+                                onTap: () => setState(() => _activeMainTab = 1),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(vertical: 10),
+                                  decoration: BoxDecoration(
+                                    color: _activeMainTab == 1
+                                        ? AppColors.primary
+                                        : Colors.transparent,
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                  child: Center(
+                                    child: Row(
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      children: [
+                                        Icon(
+                                          Icons.local_fire_department_rounded,
+                                          size: 16,
+                                          color: _activeMainTab == 1 ? Colors.white : (isDark ? Colors.grey.shade400 : AppColors.textDark),
+                                        ),
+                                        const Gap(6),
+                                        Text(
+                                          'Combos (${combosList.length})',
+                                          style: TextStyle(
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.bold,
+                                            color: _activeMainTab == 1 ? Colors.white : (isDark ? Colors.grey.shade400 : AppColors.textDark),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      const Gap(14),
 
                       // Menu Search Box
                       Container(
@@ -347,7 +437,7 @@ class _RestaurantDetailsScreenState extends ConsumerState<RestaurantDetailsScree
                             });
                           },
                           decoration: InputDecoration(
-                            hintText: 'Search within restaurant menu...',
+                            hintText: _activeMainTab == 0 ? 'Search within restaurant menu...' : 'Search combos...',
                             prefixIcon: Icon(Iconsax.search_normal_1, size: 18, color: isDark ? Colors.grey.shade400 : AppColors.textLight),
                             border: InputBorder.none,
                             enabledBorder: InputBorder.none,
@@ -362,201 +452,546 @@ class _RestaurantDetailsScreenState extends ConsumerState<RestaurantDetailsScree
                 ),
               ),
 
-              // Sticky Categories Header Tabs
-              SliverAppBar(
-                primary: false,
-                pinned: true,
-                automaticallyImplyLeading: false,
-                backgroundColor: isDark ? AppColors.darkBackground : AppColors.background,
-                elevation: 1,
-                title: Container(
-                  height: 44,
-                  alignment: Alignment.centerLeft,
-                  child: ListView.builder(
-                    scrollDirection: Axis.horizontal,
-                    itemCount: availableCategories.length + 1,
-                    physics: const BouncingScrollPhysics(),
-                    itemBuilder: (context, index) {
-                      final isAll = index == 0;
-                      final catName = isAll ? 'All Menu' : availableCategories[index - 1];
-                      final isSelected = isAll 
-                          ? (_selectedCategory == null)
-                          : (_selectedCategory == catName);
+              // Sticky Categories Header Tabs (Only in Menu Tab)
+              if (_activeMainTab == 0)
+                SliverAppBar(
+                  primary: false,
+                  pinned: true,
+                  automaticallyImplyLeading: false,
+                  backgroundColor: isDark ? AppColors.darkBackground : AppColors.background,
+                  elevation: 1,
+                  title: Container(
+                    height: 44,
+                    alignment: Alignment.centerLeft,
+                    child: ListView.builder(
+                      scrollDirection: Axis.horizontal,
+                      itemCount: availableCategories.length + 1,
+                      physics: const BouncingScrollPhysics(),
+                      itemBuilder: (context, index) {
+                        final isAll = index == 0;
+                        final catName = isAll ? 'All Menu' : availableCategories[index - 1];
+                        final isSelected = isAll 
+                            ? (_selectedCategory == null)
+                            : (_selectedCategory == catName);
 
-                      return GestureDetector(
-                        onTap: () {
-                          setState(() {
-                            _selectedCategory = isAll ? null : catName;
-                          });
-                        },
-                        child: Container(
-                          margin: const EdgeInsets.only(right: 10),
-                          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
-                          decoration: BoxDecoration(
-                            color: isSelected
-                                ? (isDark ? AppColors.darkPrimary : AppColors.primary)
-                                : (isDark ? AppColors.darkCard : Colors.white),
-                            borderRadius: BorderRadius.circular(10),
-                            border: Border.all(
-                              color: isSelected 
-                                  ? Colors.transparent 
-                                  : (isDark ? AppColors.darkDivider : Colors.grey.shade200),
-                            ),
-                          ),
-                          child: Center(
-                            child: Text(
-                              catName,
-                              style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.bold,
+                        return GestureDetector(
+                          onTap: () {
+                            setState(() {
+                              _selectedCategory = isAll ? null : catName;
+                            });
+                          },
+                          child: Container(
+                            margin: const EdgeInsets.only(right: 10),
+                            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
+                            decoration: BoxDecoration(
+                              color: isSelected
+                                  ? (isDark ? AppColors.darkPrimary : AppColors.primary)
+                                  : (isDark ? AppColors.darkCard : Colors.white),
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(
                                 color: isSelected 
-                                    ? (isDark ? AppColors.textDark : Colors.white)
-                                    : (isDark ? Colors.white : AppColors.textDark),
+                                    ? Colors.transparent 
+                                    : (isDark ? AppColors.darkDivider : Colors.grey.shade200),
                               ),
                             ),
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-              ),
-
-              // Menu Dishes List
-              SliverPadding(
-                padding: const EdgeInsets.only(left: 16, right: 16, top: 16, bottom: 100),
-                sliver: isMenuLoading
-                    ? SliverList(
-                        delegate: SliverChildBuilderDelegate(
-                          (context, index) => Padding(
-                            padding: const EdgeInsets.only(bottom: 16),
-                            child: Shimmer.fromColors(
-                              baseColor: isDark ? Colors.grey.shade800 : Colors.grey.shade300,
-                              highlightColor: isDark ? Colors.grey.shade700 : Colors.grey.shade100,
-                              child: Container(
-                                height: 110,
-                                decoration: BoxDecoration(
-                                  color: Colors.white,
-                                  borderRadius: BorderRadius.circular(18),
+                            child: Center(
+                              child: Text(
+                                catName,
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.bold,
+                                  color: isSelected 
+                                      ? (isDark ? AppColors.textDark : Colors.white)
+                                      : (isDark ? Colors.white : AppColors.textDark),
                                 ),
                               ),
                             ),
                           ),
-                          childCount: 4,
-                        ),
-                      )
-                    : (filteredItems.isEmpty
-                        ? SliverToBoxAdapter(
-                            child: Center(
-                              child: Padding(
-                                padding: const EdgeInsets.all(40),
-                                child: Column(
-                                  children: [
-                                    Icon(
-                                      Iconsax.document_text,
-                                      size: 48,
-                                      color: isDark ? Colors.grey.shade600 : Colors.grey.shade400,
+                        );
+                      },
+                    ),
+                  ),
+                ),
+
+              // Content View (Menu Dishes List or Combos List)
+              SliverPadding(
+                padding: const EdgeInsets.only(left: 16, right: 16, top: 16, bottom: 100),
+                sliver: _activeMainTab == 1
+                    ? _buildCombosSliver(combosList, restaurant, isDark)
+                    : (isMenuLoading
+                        ? SliverList(
+                            delegate: SliverChildBuilderDelegate(
+                              (context, index) => Padding(
+                                padding: const EdgeInsets.only(bottom: 16),
+                                child: Shimmer.fromColors(
+                                  baseColor: isDark ? Colors.grey.shade800 : Colors.grey.shade300,
+                                  highlightColor: isDark ? Colors.grey.shade700 : Colors.grey.shade100,
+                                  child: Container(
+                                    height: 110,
+                                    decoration: BoxDecoration(
+                                      color: Colors.white,
+                                      borderRadius: BorderRadius.circular(18),
                                     ),
-                                    const Gap(12),
+                                  ),
+                                ),
+                              ),
+                              childCount: 4,
+                            ),
+                          )
+                        : (filteredItems.isEmpty
+                            ? SliverToBoxAdapter(
+                                child: Center(
+                                  child: Padding(
+                                    padding: const EdgeInsets.all(40),
+                                    child: Column(
+                                      children: [
+                                        Icon(
+                                          Iconsax.document_text,
+                                          size: 48,
+                                          color: isDark ? Colors.grey.shade600 : Colors.grey.shade400,
+                                        ),
+                                        const Gap(12),
+                                        Text(
+                                          'No menu items available for this outlet.',
+                                          textAlign: TextAlign.center,
+                                          style: TextStyle(
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.bold,
+                                            color: isDark ? Colors.grey.shade400 : AppColors.textLight,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              )
+                            : SliverList(
+                                delegate: SliverChildBuilderDelegate(
+                                  (context, index) {
+                                    final foodItem = filteredItems[index];
+                                    return FoodCard(
+                                      foodItem: foodItem,
+                                      restaurantId: restaurant.id,
+                                      restaurantName: restaurant.name,
+                                      onTap: () => context.push('/product/${restaurant.id}/${foodItem.id}'),
+                                    );
+                                  },
+                                  childCount: filteredItems.length,
+                                ),
+                              ))),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildOfferBadgePill(AsyncValue<List<OfferModel>> offersAsync, Restaurant restaurant, bool isDark) {
+    final offersList = offersAsync.value ?? [];
+    final int offersCount = offersList.length;
+
+    String labelText = 'OFFERS';
+    if (offersCount > 0) {
+      labelText = '$offersCount OFFER${offersCount > 1 ? 'S' : ''}';
+    } else if (restaurant.offerText.isNotEmpty) {
+      labelText = restaurant.offerText;
+    }
+
+    return InkWell(
+      onTap: () => _showOffersBottomSheet(offersAsync, isDark),
+      borderRadius: BorderRadius.circular(20),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: isDark
+                ? [const Color(0xFF7C2D12), const Color(0xFFC2410C)]
+                : [const Color(0xFFFFF7ED), const Color(0xFFFFEDD5)],
+          ),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: isDark ? const Color(0xFFEA580C) : const Color(0xFFF97316),
+            width: 1.2,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFFF97316).withValues(alpha: 0.15),
+              blurRadius: 8,
+              offset: const Offset(0, 3),
+            ),
+          ],
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Iconsax.ticket_discount, size: 16, color: Color(0xFFEA580C)),
+            const Gap(6),
+            Text(
+              labelText,
+              style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w800,
+                color: Color(0xFFEA580C),
+                letterSpacing: 0.3,
+              ),
+            ),
+            const Gap(2),
+            const Icon(Icons.chevron_right_rounded, size: 16, color: Color(0xFFEA580C)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showOffersBottomSheet(AsyncValue<List<OfferModel>> initialOffersAsync, bool isDark) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        return Consumer(
+          builder: (context, ref, child) {
+            final liveOffersAsync = ref.watch(restaurantOffersStreamProvider(widget.restaurantId));
+
+            return Container(
+              constraints: BoxConstraints(
+                maxHeight: MediaQuery.of(context).size.height * 0.75,
+              ),
+              decoration: BoxDecoration(
+                color: isDark ? AppColors.darkCard : Colors.white,
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Bottom sheet handle bar
+                  Container(
+                    margin: const EdgeInsets.only(top: 10, bottom: 6),
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: isDark ? Colors.grey.shade700 : Colors.grey.shade300,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+
+                  // Header title
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: AppColors.primary.withValues(alpha: 0.1),
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(Iconsax.ticket_discount, color: AppColors.primary, size: 20),
+                            ),
+                            const Gap(10),
+                            Text(
+                              'Available Offers',
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                                color: isDark ? Colors.white : AppColors.textDark,
+                              ),
+                            ),
+                          ],
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.close_rounded),
+                          onPressed: () => Navigator.of(context).pop(),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const Divider(height: 1),
+
+                  // Body Content
+                  Expanded(
+                    child: liveOffersAsync.when(
+                      loading: () => Center(
+                        child: Padding(
+                          padding: const EdgeInsets.all(32.0),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              const CircularProgressIndicator(color: AppColors.primary),
+                              const Gap(16),
+                              Text(
+                                'Fetching available offers...',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  color: isDark ? Colors.grey.shade400 : AppColors.textLight,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      error: (err, stack) => Center(
+                        child: Padding(
+                          padding: const EdgeInsets.all(24.0),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              const Icon(Icons.error_outline_rounded, color: Colors.redAccent, size: 48),
+                              const Gap(12),
+                              Text(
+                                'Unable to load offers',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                  color: isDark ? Colors.white : AppColors.textDark,
+                                ),
+                              ),
+                              const Gap(6),
+                              Text(
+                                'Please check your connection and try again.',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: isDark ? Colors.grey.shade400 : AppColors.textLight,
+                                ),
+                              ),
+                              const Gap(16),
+                              ElevatedButton.icon(
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: AppColors.primary,
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                ),
+                                onPressed: () {
+                                  ref.invalidate(restaurantOffersStreamProvider(widget.restaurantId));
+                                },
+                                icon: const Icon(Icons.refresh_rounded, size: 18, color: Colors.white),
+                                label: const Text('Retry', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      data: (offers) {
+                        if (offers.isEmpty) {
+                          return Center(
+                            child: Padding(
+                              padding: const EdgeInsets.all(32.0),
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  const Text(
+                                    '🎁',
+                                    style: TextStyle(fontSize: 48),
+                                  ),
+                                  const Gap(12),
+                                  Text(
+                                    'No Offers Available',
+                                    style: TextStyle(
+                                      fontSize: 17,
+                                      fontWeight: FontWeight.bold,
+                                      color: isDark ? Colors.white : AppColors.textDark,
+                                    ),
+                                  ),
+                                  const Gap(6),
+                                  Text(
+                                    'Check back later for exciting offers.',
+                                    textAlign: TextAlign.center,
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      color: isDark ? Colors.grey.shade400 : AppColors.textLight,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
+                        }
+
+                        return ListView.separated(
+                          padding: const EdgeInsets.all(16),
+                          itemCount: offers.length,
+                          separatorBuilder: (_, __) => const Gap(14),
+                          itemBuilder: (context, index) {
+                            final offer = offers[index];
+                            final discountText = offer.formattedDiscount;
+
+                            return Container(
+                              decoration: BoxDecoration(
+                                color: isDark ? const Color(0xFF1E293B) : Colors.white,
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(
+                                  color: isDark ? Colors.grey.shade800 : Colors.grey.shade200,
+                                ),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withValues(alpha: 0.04),
+                                    blurRadius: 8,
+                                    offset: const Offset(0, 3),
+                                  ),
+                                ],
+                              ),
+                              child: Padding(
+                                padding: const EdgeInsets.all(16),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    // Row 1: Title & Discount Badge
+                                    Row(
+                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        Expanded(
+                                          child: Text(
+                                            offer.title,
+                                            style: TextStyle(
+                                              fontSize: 16,
+                                              fontWeight: FontWeight.bold,
+                                              color: isDark ? Colors.white : AppColors.textDark,
+                                            ),
+                                          ),
+                                        ),
+                                        const Gap(8),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                          decoration: BoxDecoration(
+                                            color: Colors.green.shade700,
+                                            borderRadius: BorderRadius.circular(8),
+                                          ),
+                                          child: Text(
+                                            discountText,
+                                            style: const TextStyle(
+                                              color: Colors.white,
+                                              fontSize: 11,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    const Gap(6),
+
+                                    // Description
                                     Text(
-                                      'No menu items available for this outlet.',
-                                      textAlign: TextAlign.center,
+                                      offer.description,
                                       style: TextStyle(
-                                        fontSize: 14,
-                                        fontWeight: FontWeight.bold,
-                                        color: isDark ? Colors.grey.shade400 : AppColors.textLight,
+                                        fontSize: 13,
+                                        color: isDark ? Colors.grey.shade300 : AppColors.textLight,
+                                      ),
+                                    ),
+                                    const Gap(10),
+
+                                    // Meta Info (Min Order / Expiry)
+                                    Row(
+                                      children: [
+                                        if (offer.minimumOrder > 0) ...[
+                                          Icon(Iconsax.shopping_bag, size: 14, color: isDark ? Colors.grey.shade400 : Colors.grey.shade600),
+                                          const Gap(4),
+                                          Text(
+                                            'Min order ₹${offer.minimumOrder.toStringAsFixed(0)}',
+                                            style: TextStyle(
+                                              fontSize: 11,
+                                              color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
+                                              fontWeight: FontWeight.w500,
+                                            ),
+                                          ),
+                                          const Gap(12),
+                                        ],
+                                        if (offer.endDate != null && offer.endDate!.isNotEmpty) ...[
+                                          Icon(Iconsax.calendar, size: 14, color: isDark ? Colors.grey.shade400 : Colors.grey.shade600),
+                                          const Gap(4),
+                                          Text(
+                                            'Till ${offer.endDate}',
+                                            style: TextStyle(
+                                              fontSize: 11,
+                                              color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
+                                              fontWeight: FontWeight.w500,
+                                            ),
+                                          ),
+                                        ],
+                                      ],
+                                    ),
+                                    const Gap(14),
+
+                                    // Dashed Coupon Box & Copy Button
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                                      decoration: BoxDecoration(
+                                        color: isDark ? Colors.black26 : Colors.orange.shade50.withValues(alpha: 0.5),
+                                        borderRadius: BorderRadius.circular(12),
+                                        border: Border.all(
+                                          color: AppColors.primary.withValues(alpha: 0.4),
+                                        ),
+                                      ),
+                                      child: Row(
+                                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                        children: [
+                                          Row(
+                                            children: [
+                                              const Icon(Iconsax.ticket, size: 18, color: AppColors.primary),
+                                              const Gap(8),
+                                              Text(
+                                                offer.couponCode,
+                                                style: const TextStyle(
+                                                  fontSize: 15,
+                                                  fontWeight: FontWeight.w900,
+                                                  letterSpacing: 1.0,
+                                                  color: AppColors.primary,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                          InkWell(
+                                            onTap: () {
+                                              Clipboard.setData(ClipboardData(text: offer.couponCode));
+                                              TopToast.show(
+                                                context,
+                                                'Coupon "${offer.couponCode}" copied successfully!',
+                                              );
+                                            },
+                                            borderRadius: BorderRadius.circular(8),
+                                            child: Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                              decoration: BoxDecoration(
+                                                color: AppColors.primary,
+                                                borderRadius: BorderRadius.circular(8),
+                                              ),
+                                              child: const Row(
+                                                children: [
+                                                  Icon(Icons.copy_rounded, size: 14, color: Colors.white),
+                                                  Gap(4),
+                                                  Text(
+                                                    'Copy Coupon',
+                                                    style: TextStyle(
+                                                      color: Colors.white,
+                                                      fontSize: 12,
+                                                      fontWeight: FontWeight.bold,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                          ),
+                                        ],
                                       ),
                                     ),
                                   ],
                                 ),
                               ),
-                            ),
-                          )
-                        : SliverList(
-                            delegate: SliverChildBuilderDelegate(
-                              (context, index) {
-                                final foodItem = filteredItems[index];
-                                return FoodCard(
-                                  foodItem: foodItem,
-                                  restaurantId: restaurant.id,
-                                  restaurantName: restaurant.name,
-                                  onTap: () => context.push('/product/${restaurant.id}/${foodItem.id}'),
-                                );
-                              },
-                              childCount: filteredItems.length,
-                            ),
-                          )),
-              ),
-            ],
-          ),
-
-          // Floating View Cart Bar (at bottom)
-          if (totalItemsInCart > 0 && cartState.items.first.restaurantId == restaurant.id)
-            Positioned(
-              bottom: 24,
-              left: 16,
-              right: 16,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                decoration: BoxDecoration(
-                  gradient: isDark ? AppColors.darkGradient : AppColors.primaryGradient,
-                  borderRadius: BorderRadius.circular(16),
-                  boxShadow: [
-                    BoxShadow(
-                      color: (isDark ? AppColors.darkPrimary : AppColors.primary).withOpacity(0.3),
-                      blurRadius: 10,
-                      offset: const Offset(0, 4),
-                    )
-                  ],
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          '$totalItemsInCart ITEM${totalItemsInCart > 1 ? 'S' : ''} ADDED',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 11,
-                            fontWeight: FontWeight.w900,
-                          ),
-                        ),
-                        Text(
-                          '₹${cartState.total}',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ],
+                            );
+                          },
+                        );
+                      },
                     ),
-                    GestureDetector(
-                      onTap: () => context.push('/cart'),
-                      child: const Row(
-                        children: [
-                          Text(
-                            'View Cart',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 15,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          Gap(4),
-                          Icon(Icons.shopping_bag_outlined, color: Colors.white, size: 20),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
+                  ),
+                ],
               ),
-            ),
-        ],
-      ),
+            );
+          },
+        );
+      },
     );
   }
 
@@ -697,6 +1132,273 @@ class _RestaurantDetailsScreenState extends ConsumerState<RestaurantDetailsScree
       error: (_, __) => const SizedBox.shrink(),
     );
   }
+
+  Widget _buildCombosSliver(List<ComboModel> combosList, Restaurant restaurant, bool isDark) {
+    if (combosList.isEmpty) {
+      return SliverToBoxAdapter(
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(40),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  Icons.fastfood_outlined,
+                  size: 56,
+                  color: isDark ? Colors.grey.shade600 : Colors.grey.shade400,
+                ),
+                const Gap(16),
+                Text(
+                  'No Combos Available',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: isDark ? Colors.white : AppColors.textDark,
+                  ),
+                ),
+                const Gap(6),
+                Text(
+                  'This outlet currently has no active combo deals.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: isDark ? Colors.grey.shade400 : AppColors.textLight,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    final filteredCombos = _menuSearchQuery.isEmpty
+        ? combosList
+        : combosList
+            .where((c) =>
+                c.name.toLowerCase().contains(_menuSearchQuery.toLowerCase()) ||
+                c.description.toLowerCase().contains(_menuSearchQuery.toLowerCase()))
+            .toList();
+
+    if (filteredCombos.isEmpty) {
+      return SliverToBoxAdapter(
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(40),
+            child: Text(
+              'No combos found matching "$_menuSearchQuery".',
+              style: TextStyle(
+                fontSize: 13,
+                color: isDark ? Colors.grey.shade400 : AppColors.textLight,
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    return SliverList(
+      delegate: SliverChildBuilderDelegate(
+        (context, index) {
+          final combo = filteredCombos[index];
+          final itemsSummary = combo.items.map((i) => i.productName).join(' • ');
+
+          return Container(
+            key: ValueKey(combo.id),
+            margin: const EdgeInsets.only(bottom: 16),
+            decoration: BoxDecoration(
+              color: isDark ? AppColors.darkCard : Colors.white,
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(
+                color: isDark ? AppColors.darkDivider : Colors.grey.shade200,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.04),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            clipBehavior: Clip.hardEdge,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Stack(
+                  children: [
+                    Image.network(
+                      combo.image,
+                      height: 140,
+                      width: double.infinity,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => Container(
+                        height: 140,
+                        color: AppColors.primary.withOpacity(0.1),
+                        child: const Icon(Icons.fastfood, size: 40, color: AppColors.primary),
+                      ),
+                    ),
+                    Positioned(
+                      top: 10,
+                      left: 10,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.green.shade700,
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.circle, color: Colors.white, size: 8),
+                            Gap(4),
+                            Text(
+                              'VEG COMBO',
+                              style: TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    Positioned(
+                      top: 10,
+                      right: 10,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withOpacity(0.75),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          combo.isAvailable ? 'AVAILABLE' : 'UNAVAILABLE',
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                            color: combo.isAvailable ? Colors.greenAccent : Colors.redAccent,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                Padding(
+                  padding: const EdgeInsets.all(14),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: Text(
+                              combo.name,
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                                color: isDark ? Colors.white : AppColors.textDark,
+                              ),
+                            ),
+                          ),
+                          Text(
+                            '₹${combo.price.toStringAsFixed(0)}',
+                            style: const TextStyle(
+                              fontSize: 17,
+                              fontWeight: FontWeight.w900,
+                              color: AppColors.primary,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const Gap(4),
+                      Text(
+                        combo.description.isNotEmpty ? combo.description : 'Special value combo meal.',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: isDark ? Colors.grey.shade400 : AppColors.textLight,
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      if (itemsSummary.isNotEmpty) ...[
+                        const Gap(8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: isDark ? Colors.white.withOpacity(0.05) : Colors.grey.shade100,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.inventory_2_outlined, size: 14, color: AppColors.primary),
+                              const Gap(6),
+                              Expanded(
+                                child: Text(
+                                  'Includes: $itemsSummary',
+                                  style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                      const Gap(12),
+                      ConstrainedBox(
+                        constraints: const BoxConstraints(minHeight: 42),
+                        child: SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppColors.primary,
+                              disabledBackgroundColor: isDark ? Colors.grey.shade800 : Colors.grey.shade300,
+                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                              elevation: 0,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                            ),
+                            onPressed: combo.isAvailable
+                                ? () {
+                                    showModalBottomSheet(
+                                      context: context,
+                                      isScrollControlled: true,
+                                      backgroundColor: Colors.transparent,
+                                      builder: (ctx) => ComboCustomizationSheet(
+                                        combo: combo,
+                                        restaurantId: restaurant.id,
+                                        restaurantName: restaurant.name,
+                                      ),
+                                    );
+                                  }
+                                : null,
+                            child: FittedBox(
+                              fit: BoxFit.scaleDown,
+                              child: Text(
+                                'ADD COMBO',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.bold,
+                                  color: combo.isAvailable
+                                      ? Colors.white
+                                      : (isDark ? Colors.grey.shade500 : Colors.grey.shade600),
+                                  letterSpacing: 0.5,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+        childCount: filteredCombos.length,
+      ),
+    );
+  }
 }
 
 class _TableBookingBottomSheet extends ConsumerStatefulWidget {
@@ -825,8 +1527,9 @@ class _TableBookingBottomSheetState extends ConsumerState<_TableBookingBottomShe
           ),
         );
       } else {
+        final errorDetail = repo.lastBookingError != null ? ': ${repo.lastBookingError}' : '. Please try again.';
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Failed to book table. Please try again.')),
+          SnackBar(content: Text('Table Booking Failed$errorDetail')),
         );
       }
     }
@@ -892,15 +1595,33 @@ class _TableBookingBottomSheetState extends ConsumerState<_TableBookingBottomShe
           tablesAsync.when(
             data: (tables) {
               if (tables.isEmpty) {
-                return Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 24),
+                return Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
+                  decoration: BoxDecoration(
+                    color: isDark ? Colors.grey.shade900.withOpacity(0.5) : Colors.grey.shade100,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                   child: Center(
                     child: Text(
-                      'No tables currently available for online booking.',
-                      style: TextStyle(color: isDark ? Colors.grey.shade400 : AppColors.textLight),
+                      'No tables available for booking.',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                        color: isDark ? Colors.grey.shade400 : AppColors.textLight,
+                      ),
                     ),
                   ),
                 );
+              }
+
+              // Auto-select first table if none selected yet or selected table is no longer available
+              if ((_selectedTable == null || !tables.any((t) => t.id == _selectedTable!.id)) && tables.isNotEmpty) {
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (mounted && (_selectedTable == null || !tables.any((t) => t.id == _selectedTable!.id))) {
+                    setState(() => _selectedTable = tables.first);
+                  }
+                });
               }
 
               return SizedBox(

@@ -18,6 +18,9 @@ class AppColors {
   static const Color textDark = Color(0xFF1A1A1A);
   static const Color textLight = Color(0xFF7A7A7A);
   static const Color textWhite = Color(0xFFFFFFFF);
+  static const Color textPrimary = textDark;
+  static const Color textSecondary = textLight;
+  static const Color surfaceDark = darkCard;
   static const Color divider = Color(0xFFEEEEEE);
   static const Color darkDivider = Color(0xFF2C2C2C);
   static const Color error = Color(0xFFEF4444);

@@ -103,11 +103,18 @@ class Order {
           category: 'General',
         );
         final qty = (itemMap['quantity'] is num) ? (itemMap['quantity'] as num).toInt() : 1;
+        final unitP = _numToDouble(itemMap['unitPrice'] ?? itemMap['price']);
         return CartItem(
           foodItem: food,
           quantity: qty,
+          unitPrice: unitP,
           restaurantId: (data['restaurantId'] ?? '').toString(),
           restaurantName: (data['restaurantName'] ?? data['branchName'] ?? '').toString(),
+          isCombo: itemMap['isCombo'] == true,
+          comboId: itemMap['comboId']?.toString(),
+          removedItems: (itemMap['removedItems'] as List?)?.map((e) => e.toString()).toList() ?? [],
+          replacements: (itemMap['replacements'] as List?)?.map((e) => e.toString()).toList() ?? [],
+          selectedAddons: (itemMap['selectedAddons'] as List?)?.map((e) => e.toString()).toList() ?? [],
         );
       }
       return CartItem(
@@ -126,10 +133,11 @@ class Order {
           category: '',
         ),
         quantity: 1,
+        unitPrice: 0.0,
         restaurantId: '',
         restaurantName: '',
       );
-    }).toList();
+    }).toList().cast<CartItem>();
 
     DateTime parsedDate = DateTime.now();
     if (data['createdAt'] != null) {

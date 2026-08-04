@@ -445,6 +445,7 @@ class _ProductDetailsScreenState extends ConsumerState<ProductDetailsScreen> {
                         final newItem = CartItem(
                           foodItem: foodItem.copyWith(price: finalPrice),
                           quantity: _quantity,
+                          unitPrice: finalPrice,
                           selectedSize: _selectedSize,
                           customInstructions: _instructionController.text.trim().isEmpty 
                               ? null 
@@ -455,18 +456,7 @@ class _ProductDetailsScreenState extends ConsumerState<ProductDetailsScreen> {
 
                         void doAdd() {
                           cartNotifier.addItem(newItem);
-                          AppSnackbar.show(
-                            context,
-                            '${foodItem.name} added to cart!',
-                            action: SnackBarAction(
-                              label: 'View',
-                              textColor: Colors.orange,
-                              onPressed: () {
-                                AppSnackbar.clear(context);
-                                context.push('/cart');
-                              },
-                            ),
-                          );
+                          TopToast.show(context, '${foodItem.name} added to cart');
                           context.pop();
                         }
 
@@ -489,6 +479,7 @@ class _ProductDetailsScreenState extends ConsumerState<ProductDetailsScreen> {
                                   onPressed: () {
                                     Navigator.pop(dialogCtx);
                                     cartNotifier.forceAddItem(newItem);
+                                    TopToast.show(context, '${foodItem.name} added to cart');
                                     context.pop();
                                   },
                                   child: const Text('Yes, Replace'),

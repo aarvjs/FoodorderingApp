@@ -69,8 +69,20 @@ class OrderRepository {
         'productName': item.foodItem.name,
         'quantity': item.quantity,
         'price': item.foodItem.price,
+        'unitPrice': item.unitPrice,
         'image': item.foodItem.imageUrl,
-        'customizations': item.customInstructions != null ? [item.customInstructions!] : [],
+        'isCombo': item.isCombo,
+        if (item.comboId != null) 'comboId': item.comboId,
+        'removedItems': item.removedItems,
+        'replacements': item.replacements,
+        'selectedAddons': item.selectedAddons,
+        'customizations': [
+          if (item.customInstructions != null) item.customInstructions!,
+          ...item.selectedCustomizations,
+          if (item.removedItems.isNotEmpty) 'Removed: ${item.removedItems.join(", ")}',
+          if (item.replacements.isNotEmpty) 'Replacements: ${item.replacements.join(", ")}',
+          if (item.selectedAddons.isNotEmpty) 'Addons: ${item.selectedAddons.join(", ")}',
+        ],
         if (item.selectedSize != null) 'size': item.selectedSize,
       };
     }).toList();

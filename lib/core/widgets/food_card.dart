@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:go_router/go_router.dart';
 import '../../models/food_item.dart';
 import '../../models/cart_item.dart';
 import '../config/app_colors.dart';
@@ -30,23 +29,13 @@ class FoodCard extends ConsumerWidget {
     final newItem = CartItem(
       foodItem: foodItem,
       quantity: 1,
+      unitPrice: foodItem.price,
       restaurantId: restaurantId,
       restaurantName: restaurantName,
     );
 
-    void showSnackbar() {
-      AppSnackbar.show(
-        context,
-        '${foodItem.name} added to cart!',
-        action: SnackBarAction(
-          label: 'View',
-          textColor: Colors.orange,
-          onPressed: () {
-            AppSnackbar.clear(context);
-            context.push('/cart');
-          },
-        ),
-      );
+    void showSuccessToast() {
+      TopToast.show(context, '${foodItem.name} added to cart');
     }
 
     if (cartNotifier.isDifferentRestaurant(restaurantId)) {
@@ -66,7 +55,7 @@ class FoodCard extends ConsumerWidget {
               onPressed: () {
                 Navigator.pop(dialogCtx);
                 cartNotifier.forceAddItem(newItem);
-                showSnackbar();
+                showSuccessToast();
               },
               child: const Text('Yes, Replace'),
             ),
@@ -75,7 +64,7 @@ class FoodCard extends ConsumerWidget {
       );
     } else {
       cartNotifier.addItem(newItem);
-      showSnackbar();
+      showSuccessToast();
     }
   }
 

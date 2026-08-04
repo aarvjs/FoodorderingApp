@@ -9,6 +9,7 @@ import '../utils/location_utils.dart';
 
 class RestaurantRepository {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  String? lastBookingError;
 
   /// Stream nearby restaurants/branches matching customer location delivery radius in real-time.
   Stream<List<Restaurant>> streamNearbyRestaurants({
@@ -187,6 +188,35 @@ class RestaurantRepository {
     });
   }
 
+  /// Stream real-time active offers/coupons for a specific restaurant/branch from Firestore `offers` collection
+  Stream<List<OfferModel>> streamRestaurantOffers(String restaurantId, {String? branchId}) {
+    final String rId = restaurantId.trim();
+    final String bId = (branchId ?? '').trim();
+
+    return _firestore.collection('offers').snapshots().map((snapshot) {
+      return snapshot.docs
+          .map((doc) => OfferModel.fromFirestore(doc.data(), doc.id))
+          .where((offer) {
+            if (!offer.isActive) return false;
+
+            final oRestId = (offer.restaurantId ?? '').trim();
+            final oBranchId = (offer.branchId ?? '').trim();
+
+            final bool matchesRest = oRestId.isEmpty ||
+                oRestId.toLowerCase() == 'all' ||
+                (rId.isNotEmpty && oRestId == rId);
+
+            final bool matchesBranch = oBranchId.isEmpty ||
+                oBranchId.toLowerCase() == 'all' ||
+                (bId.isNotEmpty && oBranchId == bId) ||
+                (rId.isNotEmpty && oBranchId == rId);
+
+            return matchesRest || matchesBranch;
+          })
+          .toList();
+    });
+  }
+
   /// Stream real-time single restaurant details by ID (listening to `branches` or `restaurants`)
   Stream<Restaurant?> streamRestaurantDetails(String id, {double userLat = 0.0, double userLng = 0.0}) {
     return _firestore.collection('branches').doc(id).snapshots().asyncMap((doc) async {
@@ -247,18 +277,21 @@ class RestaurantRepository {
 
   /// Stream real-time available tables for Table Booking feature
   Stream<List<TableModel>> streamAvailableTables(String idOrRestaurantId, {String? branchId}) {
-    final String targetBranchId = (branchId != null && branchId.isNotEmpty) ? branchId : idOrRestaurantId;
-    final String targetRestId = idOrRestaurantId;
+    final String targetBranchId = (branchId != null && branchId.isNotEmpty) ? branchId.trim() : idOrRestaurantId.trim();
+    final String targetRestId = idOrRestaurantId.trim();
 
     return _firestore.collection('tables').snapshots().map((snapshot) {
       return snapshot.docs
           .map((doc) => TableModel.fromFirestore(doc.data(), doc.id))
           .where((table) {
-            final bMatch = table.branchId == targetBranchId ||
-                table.restaurantId == targetBranchId ||
-                table.branchId == targetRestId ||
-                table.restaurantId == targetRestId;
-            final isAvail = table.status.toUpperCase() == 'AVAILABLE';
+            final String bId = table.branchId.trim();
+            final String rId = table.restaurantId.trim();
+
+            final bool bMatch = (bId.isNotEmpty && (bId == targetBranchId || bId == targetRestId)) ||
+                (rId.isNotEmpty && (rId == targetBranchId || rId == targetRestId));
+
+            final String st = table.status.toUpperCase();
+            final bool isAvail = st == 'AVAILABLE' || st == 'OPEN' || st == 'ACTIVE';
             return bMatch && isAvail;
           })
           .toList();
@@ -303,6 +336,13 @@ class RestaurantRepository {
 
   /// Book a table in Firestore `tableBookings` collection
   Future<bool> createTableBooking(TableBookingModel booking) async {
+    lastBookingError = null;
+    print('[createTableBooking] Starting booking process...');
+    print('[createTableBooking] Restaurant ID: ${booking.restaurantId}');
+    print('[createTableBooking] Branch ID: ${booking.branchId}');
+    print('[createTableBooking] Table ID: ${booking.tableId}');
+    print('[createTableBooking] User ID: ${booking.customerId}');
+
     try {
       final docRef = _firestore.collection('tableBookings').doc();
       final newBooking = TableBookingModel(
@@ -329,6 +369,8 @@ class RestaurantRepository {
       );
 
       await docRef.set(newBooking.toMap());
+      print('[createTableBooking] Firestore Write Result: SUCCESS');
+      print('[createTableBooking] Firestore Document ID: ${docRef.id}');
 
       // Create notification for Branch Manager & Super Admin
       try {
@@ -349,16 +391,26 @@ class RestaurantRepository {
         print('[createTableBooking] Notification error: $e');
       }
 
-      // Update table status to RESERVED / PENDING
+      // Update table status to RESERVED / PENDING (non-fatal if document missing or restricted)
       if (booking.tableId.isNotEmpty) {
-        await _firestore.collection('tables').doc(booking.tableId).update({
-          'status': 'RESERVED',
-          'updatedAt': DateTime.now().toIso8601String(),
-        });
+        try {
+          await _firestore.collection('tables').doc(booking.tableId).update({
+            'status': 'RESERVED',
+            'updatedAt': DateTime.now().toIso8601String(),
+          });
+        } catch (e) {
+          print('[createTableBooking] Non-fatal table status update error: $e');
+        }
       }
+
+      print('[createTableBooking] Success Flag: true');
+      print('[createTableBooking] Return Value: true');
       return true;
     } catch (e) {
-      print('[createTableBooking] Error creating booking: $e');
+      lastBookingError = e.toString();
+      print('[createTableBooking] Exception Message: $e');
+      print('[createTableBooking] Success Flag: false');
+      print('[createTableBooking] Return Value: false');
       return false;
     }
   }

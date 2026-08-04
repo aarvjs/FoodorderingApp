@@ -34,16 +34,18 @@ class _CartScreenState extends ConsumerState<CartScreen> {
     super.dispose();
   }
 
-  void _applyCouponCode() {
+  void _applyCouponCode() async {
     final code = _couponController.text.trim();
     if (code.isEmpty) return;
     
-    final success = ref.read(cartProvider.notifier).applyCoupon(code);
+    final success = await ref.read(cartProvider.notifier).applyCoupon(code);
     if (success) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Coupon "$code" applied successfully!'), backgroundColor: AppColors.success),
       );
     } else {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Invalid coupon code.'), backgroundColor: AppColors.error),
       );
@@ -148,32 +150,83 @@ class _CartScreenState extends ConsumerState<CartScreen> {
                                   child: Column(
                                     crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
-                                      Text(
-                                        item.foodItem.name,
-                                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
-                                      ),
-                                      if (item.selectedSize != null)
-                                        Text(
-                                          'Size: ${item.selectedSize}',
-                                          style: const TextStyle(fontSize: 12, color: AppColors.textLight),
-                                        ),
-                                      if (item.customInstructions != null)
-                                        Text(
-                                          'Note: "${item.customInstructions}"',
-                                          style: const TextStyle(
-                                            fontSize: 12,
-                                            color: Colors.orange,
-                                            fontStyle: FontStyle.italic,
-                                          ),
-                                        ),
-                                      const Gap(4),
-                                      Text(
-                                        '₹${item.foodItem.price.toStringAsFixed(0)}',
-                                        style: TextStyle(
-                                          fontWeight: FontWeight.w800,
-                                          color: isDark ? AppColors.darkPrimary : AppColors.primary,
-                                        ),
-                                      ),
+                                       Row(
+                                         children: [
+                                           Text(
+                                             item.foodItem.name,
+                                             style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                                           ),
+                                           if (item.isCombo) ...[
+                                             const Gap(6),
+                                             Container(
+                                               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                               decoration: BoxDecoration(
+                                                 color: Colors.amber.shade100,
+                                                 borderRadius: BorderRadius.circular(6),
+                                               ),
+                                               child: Text(
+                                                 'COMBO',
+                                                 style: TextStyle(
+                                                   fontSize: 9,
+                                                   fontWeight: FontWeight.w900,
+                                                   color: Colors.amber.shade900,
+                                                 ),
+                                               ),
+                                             ),
+                                           ],
+                                         ],
+                                       ),
+
+                                       // Combo Breakdown Details
+                                       if (item.removedItems.isNotEmpty)
+                                         Padding(
+                                           padding: const EdgeInsets.only(top: 2),
+                                           child: Text(
+                                             'Removed: ${item.removedItems.join(", ")}',
+                                             style: const TextStyle(fontSize: 11, color: Colors.red, fontWeight: FontWeight.w500),
+                                           ),
+                                         ),
+
+                                       if (item.replacements.isNotEmpty)
+                                         Padding(
+                                           padding: const EdgeInsets.only(top: 2),
+                                           child: Text(
+                                             'Replacements: ${item.replacements.join(", ")}',
+                                             style: const TextStyle(fontSize: 11, color: Colors.amber, fontWeight: FontWeight.w600),
+                                           ),
+                                         ),
+
+                                       if (item.selectedAddons.isNotEmpty)
+                                         Padding(
+                                           padding: const EdgeInsets.only(top: 2),
+                                           child: Text(
+                                             'Add-ons: ${item.selectedAddons.join(", ")}',
+                                             style: const TextStyle(fontSize: 11, color: Colors.blue, fontWeight: FontWeight.w600),
+                                           ),
+                                         ),
+
+                                       if (item.selectedSize != null)
+                                         Text(
+                                           'Size: ${item.selectedSize}',
+                                           style: const TextStyle(fontSize: 12, color: AppColors.textLight),
+                                         ),
+                                       if (item.customInstructions != null)
+                                         Text(
+                                           'Note: "${item.customInstructions}"',
+                                           style: const TextStyle(
+                                             fontSize: 12,
+                                             color: Colors.orange,
+                                             fontStyle: FontStyle.italic,
+                                           ),
+                                         ),
+                                       const Gap(4),
+                                       Text(
+                                         '₹${item.unitPrice.toStringAsFixed(0)}',
+                                         style: TextStyle(
+                                           fontWeight: FontWeight.w800,
+                                           color: isDark ? AppColors.darkPrimary : AppColors.primary,
+                                         ),
+                                       ),
                                     ],
                                   ),
                                 ),

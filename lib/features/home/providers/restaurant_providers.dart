@@ -8,8 +8,25 @@ import '../../../models/table_model.dart';
 import '../../address/providers/address_provider.dart';
 import '../../../auth/providers/auth_provider.dart';
 
+import '../../../core/services/combo_repository.dart';
+import '../../../models/combo_model.dart';
+
 final restaurantRepositoryProvider = Provider<RestaurantRepository>((ref) {
   return RestaurantRepository();
+});
+
+final comboRepositoryProvider = Provider<ComboRepository>((ref) {
+  return ComboRepository();
+});
+
+/// Stream provider family for restaurant combos
+final restaurantCombosStreamProvider = StreamProvider.family<List<ComboModel>, String>((ref, restaurantId) {
+  final repo = ref.watch(comboRepositoryProvider);
+  final detailsAsync = ref.watch(restaurantDetailsStreamProvider(restaurantId));
+  final restaurant = detailsAsync.value;
+  final parentRestId = restaurant?.restaurantId;
+  final branchId = restaurant?.id ?? restaurantId;
+  return repo.streamRestaurantCombos(parentRestId ?? restaurantId, branchId: branchId);
 });
 
 /// Stream provider for nearby restaurants filtered dynamically by delivery radius of customer's selected address
@@ -35,6 +52,16 @@ final categoriesStreamProvider = StreamProvider<List<CategoryModel>>((ref) {
 final offersStreamProvider = StreamProvider<List<OfferModel>>((ref) {
   final repo = ref.watch(restaurantRepositoryProvider);
   return repo.streamActiveOffers();
+});
+
+/// Stream provider family for restaurant specific offers / coupons
+final restaurantOffersStreamProvider = StreamProvider.family<List<OfferModel>, String>((ref, restaurantId) {
+  final repo = ref.watch(restaurantRepositoryProvider);
+  final detailsAsync = ref.watch(restaurantDetailsStreamProvider(restaurantId));
+  final restaurant = detailsAsync.value;
+  final parentRestId = restaurant?.restaurantId;
+  final branchId = restaurant?.id ?? restaurantId;
+  return repo.streamRestaurantOffers(parentRestId ?? restaurantId, branchId: branchId);
 });
 
 /// Stream provider family for single restaurant details
