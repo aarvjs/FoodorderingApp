@@ -10,6 +10,7 @@ import '../../../auth/providers/auth_provider.dart';
 
 import '../../../core/services/combo_repository.dart';
 import '../../../models/combo_model.dart';
+import '../../../models/combo_item_model.dart';
 
 final restaurantRepositoryProvider = Provider<RestaurantRepository>((ref) {
   return RestaurantRepository();
@@ -27,6 +28,18 @@ final restaurantCombosStreamProvider = StreamProvider.family<List<ComboModel>, S
   final parentRestId = restaurant?.restaurantId;
   final branchId = restaurant?.id ?? restaurantId;
   return repo.streamRestaurantCombos(parentRestId ?? restaurantId, branchId: branchId);
+});
+
+/// Stream provider family for dedicated items in a combo
+final comboItemsStreamProvider = StreamProvider.family<List<ComboItemModel>, String>((ref, comboId) {
+  final repo = ref.watch(comboRepositoryProvider);
+  return repo.streamComboItems(comboId);
+});
+
+/// Stream provider family for a single dynamic combo item (real-time customization groups & options)
+final singleComboItemStreamProvider = StreamProvider.family<ComboItemModel?, String>((ref, itemId) {
+  final repo = ref.watch(comboRepositoryProvider);
+  return repo.streamSingleComboItem(itemId);
 });
 
 /// Stream provider for nearby restaurants filtered dynamically by delivery radius of customer's selected address

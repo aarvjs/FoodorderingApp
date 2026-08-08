@@ -204,14 +204,15 @@ class RestaurantRepository {
 
             final bool matchesRest = oRestId.isEmpty ||
                 oRestId.toLowerCase() == 'all' ||
-                (rId.isNotEmpty && oRestId == rId);
+                (rId.isNotEmpty && (oRestId == rId || oRestId == bId)) ||
+                (bId.isNotEmpty && (oRestId == bId || oRestId == rId));
 
             final bool matchesBranch = oBranchId.isEmpty ||
                 oBranchId.toLowerCase() == 'all' ||
-                (bId.isNotEmpty && oBranchId == bId) ||
-                (rId.isNotEmpty && oBranchId == rId);
+                (bId.isNotEmpty && (oBranchId == bId || oBranchId == rId)) ||
+                (rId.isNotEmpty && (oBranchId == rId || oBranchId == bId));
 
-            return matchesRest || matchesBranch;
+            return matchesRest && matchesBranch;
           })
           .toList();
     });

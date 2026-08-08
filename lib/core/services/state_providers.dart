@@ -2,7 +2,6 @@ import 'package:cloud_firestore/cloud_firestore.dart' hide Order;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/cart_item.dart';
-import '../../models/address.dart';
 import '../../models/order.dart';
 import '../../auth/providers/auth_provider.dart';
 import 'order_repository.dart';
@@ -94,13 +93,26 @@ class CartState {
     List<CartItem>? items,
     String? appliedCoupon,
     double? discountPercentage,
+    bool clearCoupon = false,
   }) {
     return CartState(
       items: items ?? this.items,
-      appliedCoupon: appliedCoupon ?? this.appliedCoupon,
-      discountPercentage: discountPercentage ?? this.discountPercentage,
+      appliedCoupon: clearCoupon ? null : (appliedCoupon ?? this.appliedCoupon),
+      discountPercentage: clearCoupon ? 0.0 : (discountPercentage ?? this.discountPercentage),
     );
   }
+}
+
+class CouponApplyResult {
+  final bool isSuccess;
+  final String message;
+  final String? appliedCode;
+
+  const CouponApplyResult({
+    required this.isSuccess,
+    required this.message,
+    this.appliedCode,
+  });
 }
 
 class CartNotifier extends Notifier<CartState> {
@@ -112,20 +124,30 @@ class CartNotifier extends Notifier<CartState> {
   }
 
   void forceAddItem(CartItem item) {
-    state = CartState(items: [item]);
+    state = CartState(items: [item], appliedCoupon: null, discountPercentage: 0.0);
   }
 
   void addItem(CartItem item) {
     // If adding item from a different restaurant, reset cart
     if (state.items.isNotEmpty && state.items.first.restaurantId != item.restaurantId) {
-      state = CartState(items: [item]);
+      state = CartState(items: [item], appliedCoupon: null, discountPercentage: 0.0);
       return;
     }
 
-    final index = state.items.indexWhere(
-      (i) => i.foodItem.id == item.foodItem.id &&
-          (item.selectedSize == null || i.selectedSize == null || i.selectedSize == item.selectedSize),
-    );
+    final index = state.items.indexWhere((i) {
+      if (i.foodItem.id != item.foodItem.id) return false;
+      if (i.selectedSize != item.selectedSize) return false;
+      if (i.isCombo != item.isCombo) return false;
+      if (i.isCombo) {
+        final iCustoms = i.selectedCustomizations;
+        final itemCustoms = item.selectedCustomizations;
+        if (iCustoms.length != itemCustoms.length) return false;
+        for (int k = 0; k < iCustoms.length; k++) {
+          if (iCustoms[k] != itemCustoms[k]) return false;
+        }
+      }
+      return true;
+    });
 
     if (index >= 0) {
       final updatedItems = List<CartItem>.from(state.items);
@@ -160,20 +182,42 @@ class CartNotifier extends Notifier<CartState> {
     }
   }
 
-  Future<bool> applyCoupon(String code) async {
+  Future<CouponApplyResult> applyOffer(dynamic offer) async {
+    final code = (offer is String) ? offer : (offer.couponCode ?? '').toString();
+    return applyCoupon(code);
+  }
+
+  Future<CouponApplyResult> applyCoupon(String code) async {
     final normalizedCode = code.trim().toUpperCase();
-    if (normalizedCode.isEmpty) return false;
+    if (normalizedCode.isEmpty) {
+      return const CouponApplyResult(
+        isSuccess: false,
+        message: 'Please enter a coupon code.',
+      );
+    }
 
     // 1. Check legacy hardcoded coupons
     if (normalizedCode == 'WELCOME50') {
       state = state.copyWith(appliedCoupon: 'WELCOME50', discountPercentage: 0.50);
-      return true;
+      return const CouponApplyResult(
+        isSuccess: true,
+        message: 'Coupon "WELCOME50" applied successfully!',
+        appliedCode: 'WELCOME50',
+      );
     } else if (normalizedCode == 'BINGE20') {
       state = state.copyWith(appliedCoupon: 'BINGE20', discountPercentage: 0.20);
-      return true;
+      return const CouponApplyResult(
+        isSuccess: true,
+        message: 'Coupon "BINGE20" applied successfully!',
+        appliedCode: 'BINGE20',
+      );
     } else if (normalizedCode == 'FREEDEL') {
       state = state.copyWith(appliedCoupon: 'FREEDEL', discountPercentage: 0.05);
-      return true;
+      return const CouponApplyResult(
+        isSuccess: true,
+        message: 'Coupon "FREEDEL" applied successfully!',
+        appliedCode: 'FREEDEL',
+      );
     }
 
     // 2. Validate against Firestore `offers` collection documents
@@ -199,7 +243,12 @@ class CartNotifier extends Notifier<CartState> {
         // Check active status
         final status = (data['status'] ?? 'ACTIVE').toString().toUpperCase();
         final bool isActive = (data['isActive'] != false) && status == 'ACTIVE';
-        if (!isActive) continue;
+        if (!isActive) {
+          return const CouponApplyResult(
+            isSuccess: false,
+            message: 'This coupon is no longer active.',
+          );
+        }
 
         // Check Expiry Date
         final String? endDateStr = (data['endDate'] ?? data['validTill'])?.toString();
@@ -207,18 +256,14 @@ class CartNotifier extends Notifier<CartState> {
           try {
             final expiryDate = DateTime.parse(endDateStr);
             if (now.isAfter(expiryDate.add(const Duration(days: 1)))) {
-              continue; // Expired
+              return const CouponApplyResult(
+                isSuccess: false,
+                message: 'This coupon has expired.',
+              );
             }
           } catch (_) {
             // Ignore invalid date parsing errors
           }
-        }
-
-        // Check Minimum Order Amount
-        final minOrd = (data['minimumOrder'] ?? data['minOrderValue'] ?? 0.0);
-        final double minOrderVal = (minOrd is num) ? minOrd.toDouble() : double.tryParse(minOrd.toString()) ?? 0.0;
-        if (minOrderVal > 0 && currentSubtotal < minOrderVal) {
-          continue; // Minimum order constraint not met
         }
 
         // Check Restaurant ID & Branch ID relation (if assigned)
@@ -231,8 +276,21 @@ class CartNotifier extends Notifier<CartState> {
           final bool matchesRest = oRestId == currentRestId || oBranchId == currentRestId;
 
           if (!isGlobalRest && !isGlobalBranch && !matchesRest) {
-            continue; // Belongs to a different restaurant/branch
+            return const CouponApplyResult(
+              isSuccess: false,
+              message: 'This coupon is not valid for this restaurant.',
+            );
           }
+        }
+
+        // Check Minimum Order Amount
+        final minOrd = (data['minimumOrder'] ?? data['minOrderValue'] ?? 0.0);
+        final double minOrderVal = (minOrd is num) ? minOrd.toDouble() : double.tryParse(minOrd.toString()) ?? 0.0;
+        if (minOrderVal > 0 && currentSubtotal < minOrderVal) {
+          return CouponApplyResult(
+            isSuccess: false,
+            message: 'Minimum order of ₹${minOrderVal.toStringAsFixed(0)} required to apply this coupon.',
+          );
         }
 
         // Calculate discount percentage
@@ -241,13 +299,9 @@ class CartNotifier extends Notifier<CartState> {
         final double rawDisc = (discountVal is num) ? discountVal.toDouble() : double.tryParse(discountVal.toString()) ?? 0.0;
 
         double discountPct = 0.0;
-        if (discountType == 'FLAT' || (rawDisc >= 1.0 && discountType != 'PERCENTAGE')) {
-          if (rawDisc > 0 && rawDisc <= 100) {
-            discountPct = rawDisc / 100.0;
-          } else if (rawDisc > 100 && currentSubtotal > 0) {
+        if (discountType == 'FLAT' || discountType == 'FLAT_DISCOUNT' || (rawDisc >= 100.0 && discountType != 'PERCENTAGE')) {
+          if (rawDisc > 0 && currentSubtotal > 0) {
             discountPct = (rawDisc / currentSubtotal).clamp(0.0, 1.0);
-          } else {
-            discountPct = (rawDisc / 100.0).clamp(0.0, 1.0);
           }
         } else if (rawDisc > 0 && rawDisc <= 1.0) {
           discountPct = rawDisc;
@@ -257,21 +311,32 @@ class CartNotifier extends Notifier<CartState> {
 
         final appliedCodeName = rawCoupon.isNotEmpty ? rawCoupon : normalizedCode;
         state = state.copyWith(appliedCoupon: appliedCodeName, discountPercentage: discountPct);
-        return true;
+        return CouponApplyResult(
+          isSuccess: true,
+          message: 'Coupon "$appliedCodeName" applied successfully!',
+          appliedCode: appliedCodeName,
+        );
       }
     } catch (e) {
       debugPrint('[CartNotifier] Error validating coupon in Firestore: $e');
     }
 
-    return false;
+    return const CouponApplyResult(
+      isSuccess: false,
+      message: 'Invalid coupon code.',
+    );
   }
 
   void removeCoupon() {
-    state = state.copyWith(appliedCoupon: null, discountPercentage: 0.0);
+    state = CartState(
+      items: state.items,
+      appliedCoupon: null,
+      discountPercentage: 0.0,
+    );
   }
 
   void clearCart() {
-    state = const CartState(items: []);
+    state = const CartState(items: [], appliedCoupon: null, discountPercentage: 0.0);
   }
 }
 

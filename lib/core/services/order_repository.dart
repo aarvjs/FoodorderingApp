@@ -69,10 +69,14 @@ class OrderRepository {
         'productName': item.foodItem.name,
         'quantity': item.quantity,
         'price': item.foodItem.price,
+        'basePrice': item.basePrice,
         'unitPrice': item.unitPrice,
+        'totalPrice': item.totalPrice,
         'image': item.foodItem.imageUrl,
         'isCombo': item.isCombo,
         if (item.comboId != null) 'comboId': item.comboId,
+        if (item.comboName != null) 'comboName': item.comboName,
+        if (item.comboItemId != null) 'comboItemId': item.comboItemId,
         'removedItems': item.removedItems,
         'replacements': item.replacements,
         'selectedAddons': item.selectedAddons,
@@ -83,6 +87,7 @@ class OrderRepository {
           if (item.replacements.isNotEmpty) 'Replacements: ${item.replacements.join(", ")}',
           if (item.selectedAddons.isNotEmpty) 'Addons: ${item.selectedAddons.join(", ")}',
         ],
+        'customizationSelections': item.customizationSelections.map((c) => c.toMap()).toList(),
         if (item.selectedSize != null) 'size': item.selectedSize,
       };
     }).toList();

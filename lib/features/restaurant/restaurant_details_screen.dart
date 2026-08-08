@@ -16,7 +16,7 @@ import 'package:flutter/services.dart';
 import '../../core/utils/snackbar_utils.dart';
 import '../../models/offer_model.dart';
 import '../home/providers/restaurant_providers.dart';
-import '../product/combo_customization_sheet.dart';
+import '../product/combo_detail_screen.dart';
 
 class RestaurantDetailsScreen extends ConsumerStatefulWidget {
   final String restaurantId;
@@ -29,6 +29,7 @@ class RestaurantDetailsScreen extends ConsumerStatefulWidget {
 
 class _RestaurantDetailsScreenState extends ConsumerState<RestaurantDetailsScreen> {
   String? _selectedCategory;
+  String? _selectedComboCategory;
   int _activeMainTab = 0; // 0: Menu, 1: Combos
   final TextEditingController _menuSearchController = TextEditingController();
   String _menuSearchQuery = '';
@@ -332,7 +333,18 @@ class _RestaurantDetailsScreenState extends ConsumerState<RestaurantDetailsScree
 
                       const Gap(12),
                       const Divider(),
-                      const Gap(12),
+                      // LEVEL 1: Top Horizontal Combo Category / Collection Banners
+                      if (combosList.isNotEmpty) ...[
+                        _buildHorizontalComboCategories(
+                          combosList: combosList,
+                          restaurant: restaurant,
+                          isDark: isDark,
+                          activeCategory: _selectedComboCategory,
+                        ),
+                        const Gap(14),
+                        const Divider(),
+                        const Gap(12),
+                      ],
 
                       // Segmented Main Tab Selector: Menu | Combos
                       Container(
@@ -517,7 +529,7 @@ class _RestaurantDetailsScreenState extends ConsumerState<RestaurantDetailsScree
               SliverPadding(
                 padding: const EdgeInsets.only(left: 16, right: 16, top: 16, bottom: 100),
                 sliver: _activeMainTab == 1
-                    ? _buildCombosSliver(combosList, restaurant, isDark)
+                    ? _buildCombosSliver(combosList, restaurant, isDark, _selectedComboCategory)
                     : (isMenuLoading
                         ? SliverList(
                             delegate: SliverChildBuilderDelegate(
@@ -1133,7 +1145,139 @@ class _RestaurantDetailsScreenState extends ConsumerState<RestaurantDetailsScree
     );
   }
 
-  Widget _buildCombosSliver(List<ComboModel> combosList, Restaurant restaurant, bool isDark) {
+  Widget _buildHorizontalComboCategories({
+    required List<ComboModel> combosList,
+    required Restaurant restaurant,
+    required bool isDark,
+    required String? activeCategory,
+  }) {
+    if (combosList.isEmpty) return const SizedBox.shrink();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withValues(alpha: 0.12),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.local_fire_department_rounded, size: 16, color: AppColors.primary),
+              ),
+              const Gap(8),
+              Text(
+                "Combos",
+                style: TextStyle(
+                  fontSize: 17,
+                  fontWeight: FontWeight.w900,
+                  color: isDark ? Colors.white : AppColors.textDark,
+                  letterSpacing: -0.3,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const Gap(10),
+        SizedBox(
+          height: 148,
+          child: ListView.builder(
+            scrollDirection: Axis.horizontal,
+            physics: const BouncingScrollPhysics(),
+            itemCount: combosList.length,
+            itemBuilder: (context, index) {
+              final combo = combosList[index];
+              final isSelected = activeCategory == combo.name || (activeCategory == null && index == 0);
+
+              return GestureDetector(
+                onTap: () {
+                  setState(() {
+                    _selectedComboCategory = combo.name;
+                  });
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (ctx) => ComboDetailScreen(
+                        combo: combo,
+                        restaurant: restaurant,
+                      ),
+                    ),
+                  );
+                },
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  width: 116,
+                  margin: const EdgeInsets.only(right: 12, top: 2, bottom: 4),
+                  padding: const EdgeInsets.all(7),
+                  decoration: BoxDecoration(
+                    color: isDark
+                        ? (isSelected ? AppColors.primary.withValues(alpha: 0.2) : AppColors.darkCard)
+                        : (isSelected ? const Color(0xFFFFF4F0) : Colors.white),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: isSelected
+                          ? AppColors.primary
+                          : (isDark ? AppColors.darkDivider : Colors.grey.shade200),
+                      width: isSelected ? 2.2 : 1.0,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: isSelected
+                            ? AppColors.primary.withValues(alpha: 0.25)
+                            : Colors.black.withValues(alpha: 0.04),
+                        blurRadius: isSelected ? 10 : 6,
+                        offset: const Offset(0, 3),
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      // Banner image
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(12),
+                        child: Image.network(
+                          combo.image,
+                          height: 72,
+                          width: double.infinity,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => Container(
+                            height: 72,
+                            color: AppColors.primary.withValues(alpha: 0.1),
+                            child: const Icon(Icons.fastfood, size: 28, color: AppColors.primary),
+                          ),
+                        ),
+                      ),
+                      const Gap(8),
+                      // Combo Name
+                      Text(
+                        combo.name,
+                        textAlign: TextAlign.center,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 11.5,
+                          fontWeight: isSelected ? FontWeight.w900 : FontWeight.bold,
+                          color: isSelected
+                              ? (isDark ? Colors.white : AppColors.primary)
+                              : (isDark ? Colors.grey.shade300 : AppColors.textDark),
+                          height: 1.15,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildCombosSliver(List<ComboModel> combosList, Restaurant restaurant, bool isDark, String? selectedCategory) {
     if (combosList.isEmpty) {
       return SliverToBoxAdapter(
         child: Center(
@@ -1149,7 +1293,7 @@ class _RestaurantDetailsScreenState extends ConsumerState<RestaurantDetailsScree
                 ),
                 const Gap(16),
                 Text(
-                  'No Combos Available',
+                  'No Combos Configured',
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     fontSize: 16,
@@ -1159,7 +1303,7 @@ class _RestaurantDetailsScreenState extends ConsumerState<RestaurantDetailsScree
                 ),
                 const Gap(6),
                 Text(
-                  'This outlet currently has no active combo deals.',
+                  'This outlet currently has no active combo banners.',
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     fontSize: 12,
@@ -1173,229 +1317,60 @@ class _RestaurantDetailsScreenState extends ConsumerState<RestaurantDetailsScree
       );
     }
 
-    final filteredCombos = _menuSearchQuery.isEmpty
-        ? combosList
-        : combosList
-            .where((c) =>
-                c.name.toLowerCase().contains(_menuSearchQuery.toLowerCase()) ||
-                c.description.toLowerCase().contains(_menuSearchQuery.toLowerCase()))
-            .toList();
-
-    if (filteredCombos.isEmpty) {
-      return SliverToBoxAdapter(
-        child: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(40),
-            child: Text(
-              'No combos found matching "$_menuSearchQuery".',
-              style: TextStyle(
-                fontSize: 13,
-                color: isDark ? Colors.grey.shade400 : AppColors.textLight,
-              ),
-            ),
-          ),
-        ),
-      );
-    }
-
-    return SliverList(
-      delegate: SliverChildBuilderDelegate(
-        (context, index) {
-          final combo = filteredCombos[index];
-          final itemsSummary = combo.items.map((i) => i.productName).join(' • ');
-
-          return Container(
-            key: ValueKey(combo.id),
-            margin: const EdgeInsets.only(bottom: 16),
-            decoration: BoxDecoration(
-              color: isDark ? AppColors.darkCard : Colors.white,
-              borderRadius: BorderRadius.circular(18),
-              border: Border.all(
-                color: isDark ? AppColors.darkDivider : Colors.grey.shade200,
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.04),
-                  blurRadius: 10,
-                  offset: const Offset(0, 4),
+    return SliverToBoxAdapter(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 8),
+        child: Column(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: isDark ? AppColors.darkCard : Colors.white,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(
+                  color: isDark ? AppColors.darkDivider : Colors.grey.shade200,
                 ),
-              ],
-            ),
-            clipBehavior: Clip.hardEdge,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Stack(
-                  children: [
-                    Image.network(
-                      combo.image,
-                      height: 140,
-                      width: double.infinity,
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => Container(
-                        height: 140,
-                        color: AppColors.primary.withOpacity(0.1),
-                        child: const Icon(Icons.fastfood, size: 40, color: AppColors.primary),
-                      ),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 48,
+                    height: 48,
+                    decoration: BoxDecoration(
+                      color: AppColors.primary.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(14),
                     ),
-                    Positioned(
-                      top: 10,
-                      left: 10,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: Colors.green.shade700,
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: const Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(Icons.circle, color: Colors.white, size: 8),
-                            Gap(4),
-                            Text(
-                              'VEG COMBO',
-                              style: TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    Positioned(
-                      top: 10,
-                      right: 10,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: Colors.black.withOpacity(0.75),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Text(
-                          combo.isAvailable ? 'AVAILABLE' : 'UNAVAILABLE',
+                    child: const Icon(Icons.local_fire_department_rounded, color: AppColors.primary, size: 26),
+                  ),
+                  const Gap(16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          selectedCategory ?? combosList.first.name,
                           style: TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.bold,
-                            color: combo.isAvailable ? Colors.greenAccent : Colors.redAccent,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w900,
+                            color: isDark ? Colors.white : AppColors.textDark,
                           ),
                         ),
-                      ),
-                    ),
-                  ],
-                ),
-                Padding(
-                  padding: const EdgeInsets.all(14),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Expanded(
-                            child: Text(
-                              combo.name,
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                                color: isDark ? Colors.white : AppColors.textDark,
-                              ),
-                            ),
-                          ),
-                          Text(
-                            '₹${combo.price.toStringAsFixed(0)}',
-                            style: const TextStyle(
-                              fontSize: 17,
-                              fontWeight: FontWeight.w900,
-                              color: AppColors.primary,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const Gap(4),
-                      Text(
-                        combo.description.isNotEmpty ? combo.description : 'Special value combo meal.',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: isDark ? Colors.grey.shade400 : AppColors.textLight,
-                        ),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      if (itemsSummary.isNotEmpty) ...[
-                        const Gap(8),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                          decoration: BoxDecoration(
-                            color: isDark ? Colors.white.withOpacity(0.05) : Colors.grey.shade100,
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Row(
-                            children: [
-                              const Icon(Icons.inventory_2_outlined, size: 14, color: AppColors.primary),
-                              const Gap(6),
-                              Expanded(
-                                child: Text(
-                                  'Includes: $itemsSummary',
-                                  style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                            ],
+                        const Gap(4),
+                        Text(
+                          'Combo Category selected. Products will be available here in the next step.',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: isDark ? Colors.grey.shade400 : AppColors.textLight,
                           ),
                         ),
                       ],
-                      const Gap(12),
-                      ConstrainedBox(
-                        constraints: const BoxConstraints(minHeight: 42),
-                        child: SizedBox(
-                          width: double.infinity,
-                          child: ElevatedButton(
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: AppColors.primary,
-                              disabledBackgroundColor: isDark ? Colors.grey.shade800 : Colors.grey.shade300,
-                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                              elevation: 0,
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                            ),
-                            onPressed: combo.isAvailable
-                                ? () {
-                                    showModalBottomSheet(
-                                      context: context,
-                                      isScrollControlled: true,
-                                      backgroundColor: Colors.transparent,
-                                      builder: (ctx) => ComboCustomizationSheet(
-                                        combo: combo,
-                                        restaurantId: restaurant.id,
-                                        restaurantName: restaurant.name,
-                                      ),
-                                    );
-                                  }
-                                : null,
-                            child: FittedBox(
-                              fit: BoxFit.scaleDown,
-                              child: Text(
-                                'ADD COMBO',
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.bold,
-                                  color: combo.isAvailable
-                                      ? Colors.white
-                                      : (isDark ? Colors.grey.shade500 : Colors.grey.shade600),
-                                  letterSpacing: 0.5,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          );
-        },
-        childCount: filteredCombos.length,
+          ],
+        ),
       ),
     );
   }

@@ -9,6 +9,7 @@ import '../../core/widgets/empty_state.dart';
 import '../../core/widgets/custom_button.dart';
 import '../../core/services/state_providers.dart';
 import '../address/widgets/address_selection_bottom_sheet.dart';
+import 'widgets/coupon_selection_bottom_sheet.dart';
 
 class CartScreen extends ConsumerStatefulWidget {
   const CartScreen({super.key});
@@ -38,16 +39,36 @@ class _CartScreenState extends ConsumerState<CartScreen> {
     final code = _couponController.text.trim();
     if (code.isEmpty) return;
     
-    final success = await ref.read(cartProvider.notifier).applyCoupon(code);
-    if (success) {
-      if (!mounted) return;
+    final result = await ref.read(cartProvider.notifier).applyCoupon(code);
+    if (!mounted) return;
+
+    if (result.isSuccess) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Coupon "$code" applied successfully!'), backgroundColor: AppColors.success),
+        SnackBar(
+          content: Row(
+            children: [
+              const Icon(Icons.check_circle_rounded, color: Colors.white, size: 18),
+              const Gap(8),
+              Expanded(child: Text(result.message, style: const TextStyle(fontWeight: FontWeight.bold))),
+            ],
+          ),
+          backgroundColor: AppColors.success,
+          behavior: SnackBarBehavior.floating,
+        ),
       );
     } else {
-      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Invalid coupon code.'), backgroundColor: AppColors.error),
+        SnackBar(
+          content: Row(
+            children: [
+              const Icon(Icons.error_outline_rounded, color: Colors.white, size: 18),
+              const Gap(8),
+              Expanded(child: Text(result.message, style: const TextStyle(fontWeight: FontWeight.bold))),
+            ],
+          ),
+          backgroundColor: AppColors.error,
+          behavior: SnackBarBehavior.floating,
+        ),
       );
     }
     _couponController.clear();
@@ -152,9 +173,13 @@ class _CartScreenState extends ConsumerState<CartScreen> {
                                     children: [
                                        Row(
                                          children: [
-                                           Text(
-                                             item.foodItem.name,
-                                             style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                                           Expanded(
+                                             child: Text(
+                                               item.foodItem.name,
+                                               style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                                               maxLines: 2,
+                                               overflow: TextOverflow.ellipsis,
+                                             ),
                                            ),
                                            if (item.isCombo) ...[
                                              const Gap(6),
@@ -202,6 +227,27 @@ class _CartScreenState extends ConsumerState<CartScreen> {
                                            child: Text(
                                              'Add-ons: ${item.selectedAddons.join(", ")}',
                                              style: const TextStyle(fontSize: 11, color: Colors.blue, fontWeight: FontWeight.w600),
+                                           ),
+                                         ),
+
+                                       if (item.selectedCustomizations.isNotEmpty)
+                                         Padding(
+                                           padding: const EdgeInsets.only(top: 3),
+                                           child: Column(
+                                             crossAxisAlignment: CrossAxisAlignment.start,
+                                             children: item.selectedCustomizations
+                                                 .map((cust) => Padding(
+                                                       padding: const EdgeInsets.only(bottom: 1.5),
+                                                       child: Text(
+                                                         '• $cust',
+                                                         style: TextStyle(
+                                                           fontSize: 11,
+                                                           fontWeight: FontWeight.w600,
+                                                           color: isDark ? Colors.amber.shade300 : Colors.amber.shade900,
+                                                         ),
+                                                       ),
+                                                     ))
+                                                 .toList(),
                                            ),
                                          ),
 
@@ -273,69 +319,274 @@ class _CartScreenState extends ConsumerState<CartScreen> {
 
                   const Gap(20),
 
-                  // Promo Coupon Code Input
+                  // Restaurant-Specific Coupon Section
                   Container(
                     decoration: BoxDecoration(
                       color: isDark ? AppColors.darkCard : Colors.white,
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: isDark ? AppColors.darkDivider : Colors.grey.shade100),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(
+                        color: cartState.appliedCoupon != null
+                            ? AppColors.success.withValues(alpha: 0.5)
+                            : (isDark ? AppColors.darkDivider : Colors.grey.shade100),
+                        width: cartState.appliedCoupon != null ? 1.5 : 1.0,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: cartState.appliedCoupon != null
+                              ? AppColors.success.withValues(alpha: 0.05)
+                              : Colors.black.withValues(alpha: 0.02),
+                          blurRadius: 10,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
                     ),
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    padding: const EdgeInsets.all(16),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
+                        // Section Header
                         Row(
                           children: [
-                            const Icon(Iconsax.ticket_discount, color: AppColors.accent, size: 22),
-                            const Gap(10),
-                            Text(
-                              cartState.appliedCoupon != null
-                                  ? 'Coupon "${cartState.appliedCoupon}" Applied'
-                                  : 'Apply Promo Coupon',
-                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-                            ),
-                            if (cartState.appliedCoupon != null) ...[
-                              const Spacer(),
-                              GestureDetector(
-                                onTap: () => cartNotifier.removeCoupon(),
-                                child: const Icon(Icons.cancel, color: AppColors.error, size: 20),
+                            Container(
+                              padding: const EdgeInsets.all(7),
+                              decoration: BoxDecoration(
+                                color: cartState.appliedCoupon != null
+                                    ? AppColors.success.withValues(alpha: 0.12)
+                                    : AppColors.primary.withValues(alpha: 0.1),
+                                shape: BoxShape.circle,
                               ),
-                            ],
+                              child: Icon(
+                                Iconsax.ticket_discount,
+                                color: cartState.appliedCoupon != null ? AppColors.success : AppColors.primary,
+                                size: 18,
+                              ),
+                            ),
+                            const Gap(10),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    cartState.appliedCoupon != null ? 'Coupon Applied' : 'Offers & Coupons',
+                                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                                  ),
+                                  Text(
+                                    cartState.appliedCoupon != null
+                                        ? 'Saving ₹${cartState.couponDiscount.toStringAsFixed(0)} on this order!'
+                                        : 'Select restaurant coupon or enter promo code',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w600,
+                                      color: cartState.appliedCoupon != null
+                                          ? AppColors.success
+                                          : (isDark ? Colors.grey.shade400 : AppColors.textLight),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            if (cartState.appliedCoupon != null)
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: AppColors.success.withValues(alpha: 0.15),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: const Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(Icons.check_circle_rounded, size: 13, color: AppColors.success),
+                                    Gap(4),
+                                    Text(
+                                      'Applied',
+                                      style: TextStyle(
+                                        color: AppColors.success,
+                                        fontWeight: FontWeight.w900,
+                                        fontSize: 11,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
                           ],
                         ),
+
                         if (cartState.appliedCoupon == null) ...[
+                          const Gap(14),
+                          // Select Coupon Dropdown Button
+                          InkWell(
+                            onTap: () {
+                              CouponSelectionBottomSheet.show(
+                                context,
+                                restaurantId: restaurantId,
+                                restaurantName: cartState.items.first.restaurantName,
+                              );
+                            },
+                            borderRadius: BorderRadius.circular(14),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                              decoration: BoxDecoration(
+                                color: isDark ? AppColors.darkBackground : Colors.orange.shade50.withValues(alpha: 0.5),
+                                borderRadius: BorderRadius.circular(14),
+                                border: Border.all(
+                                  color: AppColors.primary.withValues(alpha: 0.35),
+                                ),
+                              ),
+                              child: Row(
+                                children: [
+                                  const Icon(Iconsax.discount_shape, color: AppColors.primary, size: 20),
+                                  const Gap(10),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        const Text(
+                                          'Select Coupon ▼',
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.w900,
+                                            fontSize: 14,
+                                            color: AppColors.primary,
+                                            letterSpacing: 0.3,
+                                          ),
+                                        ),
+                                        Text(
+                                          'Tap to view and apply available coupons',
+                                          style: TextStyle(
+                                            fontSize: 11,
+                                            color: isDark ? Colors.grey.shade400 : AppColors.textLight,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  const Icon(
+                                    Icons.keyboard_arrow_down_rounded,
+                                    color: AppColors.primary,
+                                    size: 22,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+
                           const Gap(12),
+                          // Manual Code Entry
                           Row(
                             children: [
                               Expanded(
-                                child: TextField(
-                                  controller: _couponController,
-                                  textCapitalization: TextCapitalization.characters,
-                                  decoration: InputDecoration(
-                                    hintText: 'Enter WELCOME50 or BINGE20',
-                                    fillColor: isDark ? AppColors.darkBackground : Colors.grey.shade50,
-                                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                child: Container(
+                                  decoration: BoxDecoration(
+                                    color: isDark ? AppColors.darkBackground : Colors.grey.shade50,
+                                    borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(
+                                      color: isDark ? AppColors.darkDivider : Colors.grey.shade200,
+                                    ),
+                                  ),
+                                  child: TextField(
+                                    controller: _couponController,
+                                    textCapitalization: TextCapitalization.characters,
+                                    decoration: const InputDecoration(
+                                      hintText: 'Enter coupon code (e.g. FLAT20)',
+                                      border: InputBorder.none,
+                                      contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                      isDense: true,
+                                    ),
+                                    onSubmitted: (_) => _applyCouponCode(),
                                   ),
                                 ),
                               ),
-                              const Gap(12),
+                              const Gap(10),
                               ElevatedButton(
                                 onPressed: _applyCouponCode,
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: isDark ? AppColors.darkPrimary : AppColors.primary,
                                   foregroundColor: isDark ? AppColors.textDark : Colors.white,
                                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                                  padding: const EdgeInsets.symmetric(horizontal: 18),
+                                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+                                  elevation: 0,
                                 ),
-                                child: const Text('Apply', style: TextStyle(fontWeight: FontWeight.bold)),
+                                child: const Text('Apply', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
                               ),
                             ],
                           ),
                         ] else ...[
-                          const Gap(6),
-                          Text(
-                            'Saving ₹${cartState.couponDiscount.toStringAsFixed(0)} on this order!',
-                            style: const TextStyle(fontSize: 12, color: AppColors.success, fontWeight: FontWeight.bold),
+                          const Gap(12),
+                          // Applied Coupon Details Box
+                          Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: isDark ? AppColors.darkBackground : Colors.green.shade50.withValues(alpha: 0.5),
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(
+                                color: AppColors.success.withValues(alpha: 0.3),
+                              ),
+                            ),
+                            child: Row(
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                  decoration: BoxDecoration(
+                                    color: isDark ? Colors.black38 : Colors.white,
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(
+                                      color: AppColors.success.withValues(alpha: 0.4),
+                                    ),
+                                  ),
+                                  child: Text(
+                                    cartState.appliedCoupon!,
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w900,
+                                      fontSize: 13,
+                                      letterSpacing: 0.8,
+                                      color: AppColors.success,
+                                    ),
+                                  ),
+                                ),
+                                const Gap(10),
+                                Expanded(
+                                  child: Text(
+                                    'Discount: ₹${cartState.couponDiscount.toStringAsFixed(0)} OFF',
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w800,
+                                      fontSize: 13,
+                                      color: AppColors.success,
+                                    ),
+                                  ),
+                                ),
+                                TextButton(
+                                  onPressed: () {
+                                    CouponSelectionBottomSheet.show(
+                                      context,
+                                      restaurantId: restaurantId,
+                                      restaurantName: cartState.items.first.restaurantName,
+                                    );
+                                  },
+                                  style: TextButton.styleFrom(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                    foregroundColor: isDark ? AppColors.darkPrimary : AppColors.primary,
+                                    textStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                                  ),
+                                  child: const Text('Change ▼'),
+                                ),
+                                TextButton(
+                                  onPressed: () {
+                                    cartNotifier.removeCoupon();
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                        content: Text('Coupon removed.'),
+                                        behavior: SnackBarBehavior.floating,
+                                      ),
+                                    );
+                                  },
+                                  style: TextButton.styleFrom(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                    foregroundColor: AppColors.error,
+                                    textStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                                  ),
+                                  child: const Text('Remove'),
+                                ),
+                              ],
+                            ),
                           ),
                         ],
                       ],

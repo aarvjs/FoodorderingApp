@@ -103,18 +103,35 @@ class Order {
           category: 'General',
         );
         final qty = (itemMap['quantity'] is num) ? (itemMap['quantity'] as num).toInt() : 1;
+        final baseP = _numToDouble(itemMap['basePrice'] ?? itemMap['price']);
         final unitP = _numToDouble(itemMap['unitPrice'] ?? itemMap['price']);
+        final rawCustoms = itemMap['customizations'] as List? ?? itemMap['selectedCustomizations'] as List? ?? [];
+        final List<String> parsedCustoms = rawCustoms.map((e) => e.toString()).toList();
+
+        final rawSelections = itemMap['customizationSelections'] as List? ?? [];
+        final List<ComboCustomizationSelection> parsedSelections = [];
+        for (final s in rawSelections) {
+          if (s is Map) {
+            parsedSelections.add(ComboCustomizationSelection.fromMap(Map<String, dynamic>.from(s)));
+          }
+        }
+
         return CartItem(
           foodItem: food,
           quantity: qty,
+          basePrice: baseP,
           unitPrice: unitP,
           restaurantId: (data['restaurantId'] ?? '').toString(),
           restaurantName: (data['restaurantName'] ?? data['branchName'] ?? '').toString(),
           isCombo: itemMap['isCombo'] == true,
           comboId: itemMap['comboId']?.toString(),
+          comboName: itemMap['comboName']?.toString(),
+          comboItemId: itemMap['comboItemId']?.toString(),
           removedItems: (itemMap['removedItems'] as List?)?.map((e) => e.toString()).toList() ?? [],
           replacements: (itemMap['replacements'] as List?)?.map((e) => e.toString()).toList() ?? [],
           selectedAddons: (itemMap['selectedAddons'] as List?)?.map((e) => e.toString()).toList() ?? [],
+          selectedCustomizations: parsedCustoms,
+          customizationSelections: parsedSelections,
         );
       }
       return CartItem(
