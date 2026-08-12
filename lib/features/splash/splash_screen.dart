@@ -130,7 +130,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
                     .shake(hz: 2, offset: const Offset(4, 4), duration: 800.ms),
                 const SizedBox(height: 24),
                 Text(
-                  'Flavors',
+                  'Perfect Pizza',
                   style: TextStyle(
                     fontSize: 36,
                     fontWeight: FontWeight.w900,

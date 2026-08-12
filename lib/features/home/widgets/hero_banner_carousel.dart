@@ -42,49 +42,28 @@ class _HeroBannerCarouselState extends ConsumerState<HeroBannerCarousel> {
 
   static final List<BannerData> _defaultBanners = [
     const BannerData(
-      title: '🍕 Cheese Burst\nPizza Festival',
-      subtitle: 'Ultra cheesy, ultra melty — order now!',
-      imageUrl:
-          'https://images.unsplash.com/photo-1513104890138-7c749659a591?w=900&q=90&auto=format&fit=crop',
+      title: '🍕 BUY 1 GET 1 FREE\non Large Pizzas',
+      subtitle: 'Freshly baked gourmet pizzas delivered hot to your door!',
+      imageUrl: 'assets/images/perfect_pizza_banner1.png',
       ctaText: 'Order Now',
+      badgeType: OfferBadgeType.buy1get1,
+      accentColors: [Color(0xFF0879C9), Color(0xFF005B9F)],
+    ),
+    const BannerData(
+      title: '🍔 SUPER COMBO DEALS\nFlat 40% OFF',
+      subtitle: 'Family pizza combos with garlic bread & chilled drinks',
+      imageUrl: 'assets/images/perfect_pizza_banner2.png',
+      ctaText: 'Grab Deal',
       badgeType: OfferBadgeType.flat50,
-      accentColors: [Color(0xFFFF4D4F), Color(0xFFFF7043)],
+      accentColors: [Color(0xFF0879C9), Color(0xFF005B9F)],
     ),
     const BannerData(
-      title: '🍔 Double Patty\nBurger Blast',
-      subtitle: 'Crispy, juicy, dripping with sauce!',
-      imageUrl:
-          'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=900&q=90&auto=format&fit=crop',
-      ctaText: 'Grab Now',
-      badgeType: OfferBadgeType.buy1get1,
-      accentColors: [Color(0xFF92400E), Color(0xFFD97706)],
-    ),
-    const BannerData(
-      title: '🥘 Royal Biryani\nWeek',
-      subtitle: 'Authentic dum biryani, free delivery!',
-      imageUrl:
-          'https://images.unsplash.com/photo-1563379091339-03b21ab4a4f8?w=900&q=90&auto=format&fit=crop',
-      ctaText: 'Order Now',
+      title: '🧀 CHEEZY DELIGHTS\nFree Delivery',
+      subtitle: 'Ultra cheesy pizzas delivered free on orders above ₹299',
+      imageUrl: 'assets/images/perfect_pizza_banner3.png',
+      ctaText: 'Explore Menu',
       badgeType: OfferBadgeType.freeDelivery,
-      accentColors: [Color(0xFF78350F), Color(0xFFB45309)],
-    ),
-    const BannerData(
-      title: '🍗 Crispy Chicken\nBucket',
-      subtitle: 'Golden crispy perfection in every bite',
-      imageUrl:
-          'https://images.unsplash.com/photo-1562967914-608f82629710?w=900&q=90&auto=format&fit=crop',
-      ctaText: 'Order Now',
-      badgeType: OfferBadgeType.weekend,
-      accentColors: [Color(0xFF7C2D12), Color(0xFFEA580C)],
-    ),
-    const BannerData(
-      title: '🍜 Chinese Food\nFestival',
-      subtitle: 'Momos, noodles & more — buy 1 get 1!',
-      imageUrl:
-          'https://images.unsplash.com/photo-1585032226651-759b368d7246?w=900&q=90&auto=format&fit=crop',
-      ctaText: 'Explore Now',
-      badgeType: OfferBadgeType.buy1get1,
-      accentColors: [Color(0xFF7C3AED), Color(0xFFDB2777)],
+      accentColors: [Color(0xFF0879C9), Color(0xFF005B9F)],
     ),
   ];
 
@@ -94,17 +73,19 @@ class _HeroBannerCarouselState extends ConsumerState<HeroBannerCarousel> {
 
     List<BannerData> bannersList = _defaultBanners;
     offersAsync.whenData((offers) {
-      if (offers.isNotEmpty) {
-        bannersList = offers.map((o) {
-          return BannerData(
-            title: o.title,
-            subtitle: o.description,
-            imageUrl: o.bannerUrl,
-            ctaText: o.ctaText,
-            badgeType: o.badgeType,
-            accentColors: o.accentColors,
-          );
-        }).toList();
+      final validFirestoreOffers = offers
+          .where((o) => o.bannerUrl.isNotEmpty && !o.bannerUrl.contains('unsplash.com'))
+          .map((o) => BannerData(
+                title: o.title,
+                subtitle: o.description,
+                imageUrl: o.bannerUrl,
+                ctaText: o.ctaText,
+                badgeType: o.badgeType,
+                accentColors: o.accentColors,
+              ))
+          .toList();
+      if (validFirestoreOffers.isNotEmpty) {
+        bannersList = [..._defaultBanners, ...validFirestoreOffers];
       }
     });
 
@@ -234,22 +215,32 @@ class _BannerCardState extends State<_BannerCard>
                   child: child,
                 );
               },
-              child: CachedNetworkImage(
-                imageUrl: banner.imageUrl,
-                fit: BoxFit.cover,
-                placeholder: (context, url) => Shimmer.fromColors(
-                  baseColor: Colors.grey.shade800,
-                  highlightColor: Colors.grey.shade600,
-                  child: Container(color: Colors.grey.shade800),
-                ),
-                errorWidget: (context, url, error) => Container(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: banner.accentColors,
+              child: banner.imageUrl.startsWith('assets/')
+                  ? Image.asset(
+                      banner.imageUrl,
+                      fit: BoxFit.cover,
+                      errorBuilder: (context, error, stackTrace) => Container(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(colors: banner.accentColors),
+                        ),
+                      ),
+                    )
+                  : CachedNetworkImage(
+                      imageUrl: banner.imageUrl,
+                      fit: BoxFit.cover,
+                      placeholder: (context, url) => Shimmer.fromColors(
+                        baseColor: Colors.grey.shade800,
+                        highlightColor: Colors.grey.shade600,
+                        child: Container(color: Colors.grey.shade800),
+                      ),
+                      errorWidget: (context, url, error) => Container(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: banner.accentColors,
+                          ),
+                        ),
+                      ),
                     ),
-                  ),
-                ),
-              ),
             ),
 
             // Cinematic gradient overlay — bottom-heavy

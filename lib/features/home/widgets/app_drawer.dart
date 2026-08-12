@@ -295,7 +295,7 @@ class AppDrawer extends ConsumerWidget {
                         _showInfoDialog(
                           context,
                           'Help & Support',
-                          'For support or order queries, reach out at support@flavorsdelivery.com or call 1800-456-789. Available 24/7.',
+                          'For support or order queries, reach out at support@perfectpizza.com or call 1800-456-789. Available 24/7.',
                           isDark,
                         );
                       }, isDark),
@@ -303,15 +303,15 @@ class AppDrawer extends ConsumerWidget {
                         _showInfoDialog(
                           context,
                           'Privacy Policy',
-                          'Flavors App protects your data with end-to-end security. We use your location strictly to show nearby restaurants and faster delivery.',
+                          'Perfect Pizza protects your data with end-to-end security. We use your location strictly to show nearby outlets and faster delivery.',
                           isDark,
                         );
                       }, isDark),
                       _buildMenuItem(Iconsax.message_question, 'About', () {
                         _showInfoDialog(
                           context,
-                          'About Flavors Food Delivery',
-                          'Flavors v1.0.0 (Build 100)\nDelivering happiness fresh to your door in minutes!',
+                          'About Perfect Pizza',
+                          'Perfect Pizza v1.0.0 (Build 100)\nHot & Fresh Pizza Delivered Fast to your doorstep!',
                           isDark,
                         );
                       }, isDark),
@@ -328,11 +328,11 @@ class AppDrawer extends ConsumerWidget {
                   child: Column(
                     children: [
                       Text(
-                        'Flavors Food Delivery',
+                        'Perfect Pizza',
                         style: TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.bold,
-                          color: isDark ? Colors.grey.shade400 : AppColors.textLight,
+                          color: isDark ? Colors.grey.shade400 : AppColors.primary,
                         ),
                       ),
                       const Gap(2),

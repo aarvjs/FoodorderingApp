@@ -23,7 +23,7 @@ class MyApp extends ConsumerWidget {
     final themeMode = ref.watch(themeProvider);
 
     return MaterialApp.router(
-      title: 'Flavors - Premium Food Delivery App',
+      title: 'Perfect Pizza - Hot & Fresh Pizza Delivery',
       debugShowCheckedModeBanner: false,
       themeMode: themeMode,
       theme: AppTheme.lightTheme,

@@ -89,7 +89,7 @@ class SettingsScreen extends ConsumerWidget {
               ),
               child: Column(
                 children: [
-                  _buildLegalTile('About Flavors App', 'Read specifications & build details', isDark, context),
+                  _buildLegalTile('About Perfect Pizza', 'Read specifications & build details', isDark, context),
                   _buildDivider(isDark),
                   _buildLegalTile('Terms of Service', 'Terms and conditions guidelines', isDark, context),
                   _buildDivider(isDark),

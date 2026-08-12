@@ -58,16 +58,18 @@ final themeProvider = NotifierProvider<ThemeNotifier, ThemeMode>(() {
 class CartState {
   final List<CartItem> items;
   final String? appliedCoupon;
+  final String? appliedOfferId;
   final double discountPercentage;
 
   const CartState({
     required this.items,
     this.appliedCoupon,
+    this.appliedOfferId,
     this.discountPercentage = 0.0,
   });
 
   double get subtotal {
-    return items.fold(0.0, (sum, item) => sum + (item.foodItem.price * item.quantity));
+    return items.fold(0.0, (total, item) => total + (item.foodItem.price * item.quantity));
   }
 
   double get couponDiscount {
@@ -92,12 +94,14 @@ class CartState {
   CartState copyWith({
     List<CartItem>? items,
     String? appliedCoupon,
+    String? appliedOfferId,
     double? discountPercentage,
     bool clearCoupon = false,
   }) {
     return CartState(
       items: items ?? this.items,
       appliedCoupon: clearCoupon ? null : (appliedCoupon ?? this.appliedCoupon),
+      appliedOfferId: clearCoupon ? null : (appliedOfferId ?? this.appliedOfferId),
       discountPercentage: clearCoupon ? 0.0 : (discountPercentage ?? this.discountPercentage),
     );
   }
@@ -124,30 +128,17 @@ class CartNotifier extends Notifier<CartState> {
   }
 
   void forceAddItem(CartItem item) {
-    state = CartState(items: [item], appliedCoupon: null, discountPercentage: 0.0);
+    state = CartState(items: [item], appliedCoupon: null, appliedOfferId: null, discountPercentage: 0.0);
   }
 
   void addItem(CartItem item) {
     // If adding item from a different restaurant, reset cart
     if (state.items.isNotEmpty && state.items.first.restaurantId != item.restaurantId) {
-      state = CartState(items: [item], appliedCoupon: null, discountPercentage: 0.0);
+      state = CartState(items: [item], appliedCoupon: null, appliedOfferId: null, discountPercentage: 0.0);
       return;
     }
 
-    final index = state.items.indexWhere((i) {
-      if (i.foodItem.id != item.foodItem.id) return false;
-      if (i.selectedSize != item.selectedSize) return false;
-      if (i.isCombo != item.isCombo) return false;
-      if (i.isCombo) {
-        final iCustoms = i.selectedCustomizations;
-        final itemCustoms = item.selectedCustomizations;
-        if (iCustoms.length != itemCustoms.length) return false;
-        for (int k = 0; k < iCustoms.length; k++) {
-          if (iCustoms[k] != itemCustoms[k]) return false;
-        }
-      }
-      return true;
-    });
+    final index = state.items.indexWhere((i) => i.cartKey == item.cartKey);
 
     if (index >= 0) {
       final updatedItems = List<CartItem>.from(state.items);
@@ -160,31 +151,67 @@ class CartNotifier extends Notifier<CartState> {
     }
   }
 
-  void updateQuantity(String itemId, int quantity) {
+  void updateQuantityAtIndex(int index, int quantity) {
+    if (index < 0 || index >= state.items.length) return;
     if (quantity <= 0) {
-      removeItem(itemId);
+      removeItemAtIndex(index);
       return;
     }
-    final updatedItems = state.items.map((item) {
-      if (item.foodItem.id == itemId) {
-        return item.copyWith(quantity: quantity);
-      }
-      return item;
-    }).toList();
+    final updatedItems = List<CartItem>.from(state.items);
+    updatedItems[index] = updatedItems[index].copyWith(quantity: quantity);
     state = state.copyWith(items: updatedItems);
   }
 
-  void removeItem(String itemId) {
-    final updatedItems = state.items.where((item) => item.foodItem.id != itemId).toList();
+  void removeItemAtIndex(int index) {
+    if (index < 0 || index >= state.items.length) return;
+    final updatedItems = List<CartItem>.from(state.items)..removeAt(index);
     state = state.copyWith(items: updatedItems);
     if (updatedItems.isEmpty) {
       clearCart();
     }
   }
 
+  void updateQuantity(String itemId, int quantity) {
+    final index = state.items.indexWhere((i) => i.foodItem.id == itemId || i.cartKey == itemId);
+    if (index >= 0) {
+      updateQuantityAtIndex(index, quantity);
+    }
+  }
+
+  void removeItem(String itemId) {
+    final index = state.items.indexWhere((i) => i.foodItem.id == itemId || i.cartKey == itemId);
+    if (index >= 0) {
+      removeItemAtIndex(index);
+    } else {
+      final updatedItems = state.items.where((item) => item.foodItem.id != itemId).toList();
+      state = state.copyWith(items: updatedItems);
+      if (updatedItems.isEmpty) {
+        clearCart();
+      }
+    }
+  }
+
   Future<CouponApplyResult> applyOffer(dynamic offer) async {
     final code = (offer is String) ? offer : (offer.couponCode ?? '').toString();
     return applyCoupon(code);
+  }
+
+  int? _parseTimeToMinutes(String timeStr) {
+    try {
+      final clean = timeStr.trim().toUpperCase();
+      final isPm = clean.contains('PM');
+      final isAm = clean.contains('AM');
+      final timePart = clean.replaceAll(RegExp(r'[^\d:]'), '');
+      final parts = timePart.split(':');
+      if (parts.length >= 2) {
+        int hour = int.parse(parts[0]);
+        int min = int.parse(parts[1]);
+        if (isPm && hour < 12) hour += 12;
+        if (isAm && hour == 12) hour = 0;
+        return hour * 60 + min;
+      }
+    } catch (_) {}
+    return null;
   }
 
   Future<CouponApplyResult> applyCoupon(String code) async {
@@ -196,23 +223,30 @@ class CartNotifier extends Notifier<CartState> {
       );
     }
 
+    if (state.items.isEmpty) {
+      return const CouponApplyResult(
+        isSuccess: false,
+        message: 'Your cart is empty.',
+      );
+    }
+
     // 1. Check legacy hardcoded coupons
     if (normalizedCode == 'WELCOME50') {
-      state = state.copyWith(appliedCoupon: 'WELCOME50', discountPercentage: 0.50);
+      state = state.copyWith(appliedCoupon: 'WELCOME50', appliedOfferId: null, discountPercentage: 0.50);
       return const CouponApplyResult(
         isSuccess: true,
         message: 'Coupon "WELCOME50" applied successfully!',
         appliedCode: 'WELCOME50',
       );
     } else if (normalizedCode == 'BINGE20') {
-      state = state.copyWith(appliedCoupon: 'BINGE20', discountPercentage: 0.20);
+      state = state.copyWith(appliedCoupon: 'BINGE20', appliedOfferId: null, discountPercentage: 0.20);
       return const CouponApplyResult(
         isSuccess: true,
         message: 'Coupon "BINGE20" applied successfully!',
         appliedCode: 'BINGE20',
       );
     } else if (normalizedCode == 'FREEDEL') {
-      state = state.copyWith(appliedCoupon: 'FREEDEL', discountPercentage: 0.05);
+      state = state.copyWith(appliedCoupon: 'FREEDEL', appliedOfferId: null, discountPercentage: 0.05);
       return const CouponApplyResult(
         isSuccess: true,
         message: 'Coupon "FREEDEL" applied successfully!',
@@ -224,7 +258,8 @@ class CartNotifier extends Notifier<CartState> {
     try {
       final snap = await FirebaseFirestore.instance.collection('offers').get();
       
-      final currentRestId = state.items.isNotEmpty ? state.items.first.restaurantId.trim() : '';
+      final currentRestId = state.items.first.restaurantId.trim();
+      final currentBranchId = (state.items.first.foodItem.branchId ?? '').trim();
       final currentSubtotal = state.subtotal;
       final now = DateTime.now();
 
@@ -240,17 +275,30 @@ class CartNotifier extends Notifier<CartState> {
 
         if (!matchCode) continue;
 
-        // Check active status
+        // Requirement 9: Is offer active?
         final status = (data['status'] ?? 'ACTIVE').toString().toUpperCase();
         final bool isActive = (data['isActive'] != false) && status == 'ACTIVE';
         if (!isActive) {
           return const CouponApplyResult(
             isSuccess: false,
-            message: 'This coupon is no longer active.',
+            message: 'This offer is no longer active.',
           );
         }
 
-        // Check Expiry Date
+        // Requirement 1 & 9: Is current date valid?
+        final String? startDateStr = data['startDate']?.toString();
+        if (startDateStr != null && startDateStr.isNotEmpty) {
+          try {
+            final sDate = DateTime.parse(startDateStr);
+            if (now.isBefore(sDate)) {
+              return const CouponApplyResult(
+                isSuccess: false,
+                message: 'This offer is scheduled for a future date.',
+              );
+            }
+          } catch (_) {}
+        }
+
         final String? endDateStr = (data['endDate'] ?? data['validTill'])?.toString();
         if (endDateStr != null && endDateStr.isNotEmpty) {
           try {
@@ -258,59 +306,138 @@ class CartNotifier extends Notifier<CartState> {
             if (now.isAfter(expiryDate.add(const Duration(days: 1)))) {
               return const CouponApplyResult(
                 isSuccess: false,
-                message: 'This coupon has expired.',
+                message: 'This offer has expired.',
               );
             }
-          } catch (_) {
-            // Ignore invalid date parsing errors
+          } catch (_) {}
+        }
+
+        // Requirement 1: Is current time valid? (Validity Type: Scheduled Time vs Full Day)
+        final validityType = (data['validityType'] ?? 'FULL_DAY').toString().toUpperCase();
+        if (validityType == 'SCHEDULED_TIME') {
+          final sTime = data['startTime']?.toString();
+          final eTime = data['endTime']?.toString();
+          if (sTime != null && eTime != null && sTime.isNotEmpty && eTime.isNotEmpty) {
+            final startMin = _parseTimeToMinutes(sTime);
+            final endMin = _parseTimeToMinutes(eTime);
+            final nowMin = now.hour * 60 + now.minute;
+            if (startMin != null && endMin != null) {
+              if (nowMin < startMin || nowMin > endMin) {
+                return CouponApplyResult(
+                  isSuccess: false,
+                  message: 'Offer is only available between $sTime and $eTime.',
+                );
+              }
+            }
           }
         }
 
-        // Check Restaurant ID & Branch ID relation (if assigned)
+        // Requirement 8: Is current day allowed?
+        final rawDays = data['applicableDays'];
+        if (rawDays is List && rawDays.isNotEmpty) {
+          final dayMap = {1: 'MONDAY', 2: 'TUESDAY', 3: 'WEDNESDAY', 4: 'THURSDAY', 5: 'FRIDAY', 6: 'SATURDAY', 7: 'SUNDAY'};
+          final currentDayName = dayMap[now.weekday] ?? '';
+          final allowedDays = rawDays.map((d) => d.toString().trim().toUpperCase()).toList();
+          if (!allowedDays.contains(currentDayName)) {
+            return const CouponApplyResult(
+              isSuccess: false,
+              message: 'This offer is not applicable today.',
+            );
+          }
+        }
+
+        // Requirement 2: Has usage limit been reached?
+        final uLimit = (data['usageLimit'] ?? 0);
+        final int usageLimit = (uLimit is num) ? uLimit.toInt() : int.tryParse(uLimit.toString()) ?? 0;
+        final uCount = (data['usageCount'] ?? 0);
+        final int usageCount = (uCount is num) ? uCount.toInt() : int.tryParse(uCount.toString()) ?? 0;
+        if (usageLimit > 0 && usageCount >= usageLimit) {
+          return const CouponApplyResult(
+            isSuccess: false,
+            message: 'Sorry, this offer has reached its usage limit.',
+          );
+        }
+
+        // Check Restaurant ID & Branch ID scope
         final String oRestId = (data['restaurantId'] ?? '').toString().trim();
         final String oBranchId = (data['branchId'] ?? '').toString().trim();
 
         if (currentRestId.isNotEmpty) {
           final bool isGlobalRest = oRestId.isEmpty || oRestId.toUpperCase() == 'ALL';
           final bool isGlobalBranch = oBranchId.isEmpty || oBranchId.toUpperCase() == 'ALL';
-          final bool matchesRest = oRestId == currentRestId || oBranchId == currentRestId;
+          final bool matchesRest = oRestId == currentRestId || oBranchId == currentRestId || oBranchId == currentBranchId;
 
           if (!isGlobalRest && !isGlobalBranch && !matchesRest) {
             return const CouponApplyResult(
               isSuccess: false,
-              message: 'This coupon is not valid for this restaurant.',
+              message: 'This offer is not valid for this restaurant branch.',
             );
           }
         }
 
-        // Check Minimum Order Amount
-        final minOrd = (data['minimumOrder'] ?? data['minOrderValue'] ?? 0.0);
-        final double minOrderVal = (minOrd is num) ? minOrd.toDouble() : double.tryParse(minOrd.toString()) ?? 0.0;
-        if (minOrderVal > 0 && currentSubtotal < minOrderVal) {
-          return CouponApplyResult(
+        // Requirement 7: Exclude Categories check & calculate eligible subtotal
+        final rawExcluded = data['excludedCategoryIds'];
+        List<String> excludedCatList = [];
+        if (rawExcluded is List) {
+          excludedCatList = rawExcluded.map((e) => e.toString().trim().toUpperCase()).toList();
+        }
+
+        double eligibleSubtotal = 0.0;
+        for (final item in state.items) {
+          final itemCat = item.foodItem.category.trim().toUpperCase();
+          final itemId = item.foodItem.id.trim().toUpperCase();
+          final bool isExcluded = excludedCatList.contains(itemCat) || excludedCatList.contains(itemId);
+          if (!isExcluded) {
+            eligibleSubtotal += item.foodItem.price * item.quantity;
+          }
+        }
+
+        if (eligibleSubtotal <= 0) {
+          return const CouponApplyResult(
             isSuccess: false,
-            message: 'Minimum order of ₹${minOrderVal.toStringAsFixed(0)} required to apply this coupon.',
+            message: 'Items in your cart belong to excluded categories for this offer.',
           );
         }
 
-        // Calculate discount percentage
-        final discountType = (data['discountType'] ?? data['type'] ?? '').toString().toUpperCase();
-        final discountVal = (data['discountPercentage'] ?? data['discount'] ?? 0.0);
-        final double rawDisc = (discountVal is num) ? discountVal.toDouble() : double.tryParse(discountVal.toString()) ?? 0.0;
-
-        double discountPct = 0.0;
-        if (discountType == 'FLAT' || discountType == 'FLAT_DISCOUNT' || (rawDisc >= 100.0 && discountType != 'PERCENTAGE')) {
-          if (rawDisc > 0 && currentSubtotal > 0) {
-            discountPct = (rawDisc / currentSubtotal).clamp(0.0, 1.0);
-          }
-        } else if (rawDisc > 0 && rawDisc <= 1.0) {
-          discountPct = rawDisc;
-        } else if (rawDisc > 1.0 && rawDisc <= 100.0) {
-          discountPct = rawDisc / 100.0;
+        // Requirement 4: Minimum Order Amount check
+        final minOrd = (data['minimumOrderAmount'] ?? data['minimumOrder'] ?? data['minOrderValue'] ?? 0.0);
+        final double minOrderVal = (minOrd is num) ? minOrd.toDouble() : double.tryParse(minOrd.toString()) ?? 0.0;
+        if (minOrderVal > 0 && eligibleSubtotal < minOrderVal) {
+          final double shortage = minOrderVal - eligibleSubtotal;
+          return CouponApplyResult(
+            isSuccess: false,
+            message: 'Add ₹${shortage.toStringAsFixed(0)} more to use this offer.',
+          );
         }
 
+        // Requirement 5 & 6: Calculate percentage/fixed discount & Apply maximum discount cap
+        final discountType = (data['discountType'] ?? data['type'] ?? '').toString().toUpperCase();
+        final discountVal = (data['discountValue'] ?? data['discountPercentage'] ?? data['discount'] ?? 0.0);
+        final double rawDisc = (discountVal is num) ? discountVal.toDouble() : double.tryParse(discountVal.toString()) ?? 0.0;
+        final maxDisc = (data['maximumDiscountAmount'] ?? 0.0);
+        final double maxDiscountCap = (maxDisc is num) ? maxDisc.toDouble() : double.tryParse(maxDisc.toString()) ?? 0.0;
+
+        double finalDiscountAmount = 0.0;
+        if (discountType == 'FIXED_AMOUNT' || discountType == 'FLAT' || (rawDisc >= 100.0 && discountType != 'PERCENTAGE')) {
+          finalDiscountAmount = rawDisc.clamp(0.0, eligibleSubtotal);
+        } else {
+          // Percentage discount
+          final pct = (rawDisc > 1.0) ? (rawDisc / 100.0) : rawDisc;
+          finalDiscountAmount = eligibleSubtotal * pct;
+          if (maxDiscountCap > 0 && finalDiscountAmount > maxDiscountCap) {
+            finalDiscountAmount = maxDiscountCap;
+          }
+        }
+
+        final double discountPctForCart = currentSubtotal > 0 ? (finalDiscountAmount / currentSubtotal) : 0.0;
         final appliedCodeName = rawCoupon.isNotEmpty ? rawCoupon : normalizedCode;
-        state = state.copyWith(appliedCoupon: appliedCodeName, discountPercentage: discountPct);
+
+        state = state.copyWith(
+          appliedCoupon: appliedCodeName,
+          appliedOfferId: doc.id,
+          discountPercentage: discountPctForCart,
+        );
+
         return CouponApplyResult(
           isSuccess: true,
           message: 'Coupon "$appliedCodeName" applied successfully!',
@@ -331,12 +458,13 @@ class CartNotifier extends Notifier<CartState> {
     state = CartState(
       items: state.items,
       appliedCoupon: null,
+      appliedOfferId: null,
       discountPercentage: 0.0,
     );
   }
 
   void clearCart() {
-    state = const CartState(items: [], appliedCoupon: null, discountPercentage: 0.0);
+    state = const CartState(items: [], appliedCoupon: null, appliedOfferId: null, discountPercentage: 0.0);
   }
 }
 
@@ -376,7 +504,15 @@ class OrdersNotifier extends Notifier<List<Order>> {
   List<Order> build() => [];
 
   void placeOrder(Order order) {
-    state = [order, ...state];
+    state = [order, ...state.where((o) => o.id != order.id)];
+  }
+
+  void updateOrder(Order order) {
+    state = state.map((o) => o.id == order.id ? order : o).toList();
+  }
+
+  void removeOrder(String orderId) {
+    state = state.where((o) => o.id != orderId).toList();
   }
 }
 

@@ -87,6 +87,20 @@ class CartItem {
     return diff > 0 ? diff : 0.0;
   }
 
+  String get cartKey {
+    final sizeStr = selectedSize ?? '';
+    final cId = comboId ?? '';
+    final customsStr = selectedCustomizations.join('_');
+    final remStr = removedItems.join('_');
+    final replStr = replacements.join('_');
+    final addonsStr = selectedAddons.join('_');
+    final selStr = customizationSelections
+        .map((s) => '${s.groupName}:${s.optionName}:${s.additionalPrice}')
+        .join('_');
+    final noteStr = customInstructions ?? '';
+    return '${foodItem.id}_${isCombo}_${cId}_${sizeStr}_${customsStr}_${remStr}_${replStr}_${addonsStr}_${selStr}_$noteStr';
+  }
+
   CartItem copyWith({
     FoodItem? foodItem,
     int? quantity,

@@ -24,7 +24,15 @@ class ComboDetailScreen extends ConsumerWidget {
     this.restaurant,
   });
 
-  void _onAddItem(BuildContext context, WidgetRef ref, ComboItemModel item) {
+  void _onAddItem(BuildContext context, WidgetRef ref, ComboItemModel item, {bool isComboActive = true}) {
+    if (!isComboActive) {
+      TopToast.show(
+        context,
+        'This combo is currently unavailable.',
+      );
+      return;
+    }
+
     final groups = item.customizationGroups;
     if (groups.isNotEmpty || item.isCustomisable) {
       showModalBottomSheet(
@@ -83,6 +91,10 @@ class ComboDetailScreen extends ConsumerWidget {
     final itemsAsync = ref.watch(comboItemsStreamProvider(combo.id));
     final List<ComboItemModel> comboItems = itemsAsync.value ?? [];
 
+    final liveComboAsync = ref.watch(singleComboStreamProvider(combo.id));
+    final liveCombo = liveComboAsync.value;
+    final bool isComboActive = (liveCombo != null) ? liveCombo.isActive : combo.isActive;
+
     return Scaffold(
       backgroundColor: isDark ? AppColors.darkBackground : AppColors.background,
       body: CustomScrollView(
@@ -110,7 +122,7 @@ class ComboDetailScreen extends ConsumerWidget {
                   Image.network(
                     combo.image,
                     fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => Container(
+                    errorBuilder: (context, error, stackTrace) => Container(
                       color: AppColors.primary.withValues(alpha: 0.1),
                       child: const Center(
                         child: Icon(Icons.fastfood, size: 64, color: AppColors.primary),
@@ -185,6 +197,34 @@ class ComboDetailScreen extends ConsumerWidget {
                         fontSize: 13,
                         color: isDark ? Colors.grey.shade400 : AppColors.textLight,
                         height: 1.4,
+                      ),
+                    ),
+                  ],
+
+                  if (!isComboActive) ...[
+                    const Gap(12),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: Colors.red.shade50,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.red.shade200),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(Icons.info_outline_rounded, color: Colors.red.shade700, size: 18),
+                          const Gap(8),
+                          Expanded(
+                            child: Text(
+                              'This combo is currently inactive and items cannot be ordered.',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.red.shade900,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ],
@@ -453,7 +493,7 @@ class ComboDetailScreen extends ConsumerWidget {
                                               height: 80,
                                               width: 80,
                                               fit: BoxFit.cover,
-                                              errorBuilder: (_, __, ___) => Container(
+                                              errorBuilder: (context, error, stackTrace) => Container(
                                                 height: 80,
                                                 width: 80,
                                                 color: AppColors.primary.withValues(alpha: 0.08),
@@ -464,9 +504,9 @@ class ComboDetailScreen extends ConsumerWidget {
                                           const Gap(8),
                                           // Prominent ADD button
                                           ElevatedButton(
-                                            onPressed: () => _onAddItem(context, ref, item),
+                                            onPressed: () => _onAddItem(context, ref, item, isComboActive: isComboActive),
                                             style: ElevatedButton.styleFrom(
-                                              backgroundColor: AppColors.primary,
+                                              backgroundColor: isComboActive ? AppColors.primary : Colors.grey.shade400,
                                               foregroundColor: Colors.white,
                                               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
                                               minimumSize: const Size(80, 32),

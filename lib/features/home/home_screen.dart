@@ -52,28 +52,28 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
       'bg': Color(0xFFFFEEEB),
     },
     {
+      'title': 'Coupons',
+      'icon': Iconsax.discount_shape,
+      'color': Color(0xFFE91D25),
+      'bg': Color(0xFFFFEBEE),
+    },
+    {
       'title': 'Collections',
       'icon': Iconsax.folder_open,
       'color': Color(0xFF3B82F6),
       'bg': Color(0xFFEBF5FF),
     },
     {
-      'title': 'Gift Cards',
-      'icon': Iconsax.gift,
+      'title': 'Referrals',
+      'icon': Iconsax.share,
       'color': Color(0xFF10B981),
       'bg': Color(0xFFE8FFF5),
     },
     {
-      'title': 'Party Orders',
-      'icon': Iconsax.cake,
+      'title': 'Gift Cards',
+      'icon': Iconsax.gift,
       'color': Color(0xFF8B5CF6),
       'bg': Color(0xFFF5F0FF),
-    },
-    {
-      'title': 'Food on Train',
-      'icon': Iconsax.box,
-      'color': Color(0xFF06B6D4),
-      'bg': Color(0xFFE8FEFF),
     },
     {
       'title': 'Premium',
@@ -362,13 +362,23 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                         final itemBg = item['bg'] as Color;
                         return GestureDetector(
                           onTap: () {
-                            if (item['title'] == 'Offers') {
+                            final title = item['title'] as String;
+                            if (title == 'Offers' || title == 'Coupons') {
                               context.push('/offers');
+                            } else if (title == 'Referrals') {
+                              context.push('/referral');
+                            } else if (title == 'Collections') {
+                              if (allRestaurants.isNotEmpty) {
+                                context.push('/restaurant/${allRestaurants.first.id}');
+                              } else {
+                                context.push('/search');
+                              }
+                            } else if (title == 'Premium') {
+                              context.push('/premium');
                             } else {
                               ScaffoldMessenger.of(context).showSnackBar(
                                 SnackBar(
-                                  content:
-                                      Text('Opening ${item['title']}...'),
+                                  content: Text('Opening $title...'),
                                   behavior: SnackBarBehavior.floating,
                                   shape: RoundedRectangleBorder(
                                       borderRadius: BorderRadius.circular(12)),

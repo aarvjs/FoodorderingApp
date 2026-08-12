@@ -65,14 +65,13 @@ const List<_SlideData> _kSlides = [
   _SlideData(
     title: 'Track Your\nOrder Live',
     subtitle:
-        'Watch your rider on the map in real-time. Know exactly when your food will arrive at your door.',
-    imageUrl:
-        'https://images.unsplash.com/photo-1526367790999-0150786486a9?w=900&q=90&auto=format&fit=crop',
-    gradientColors: [Color(0xFF667EEA), Color(0xFF764BA2), Color(0xFF1A0533)],
+        'Watch your Perfect Pizza rider on the map in real-time. Know exactly when your hot pizza will arrive at your door.',
+    imageUrl: 'assets/images/perfect_pizza_onboarding2.png',
+    gradientColors: [Color(0xFF0879C9), Color(0xFF005B9F), Color(0xFF003865)],
     floatingItems: [
-      _FloatingItem(emoji: '🛵', topFrac: 0.07, leftFrac: 0.03, scale: 1.8, phaseOffset: 0.0),
-      _FloatingItem(emoji: '📍', topFrac: 0.10, leftFrac: 0.71, scale: 1.45, phaseOffset: 0.35),
-      _FloatingItem(emoji: '🗺️', topFrac: 0.30, leftFrac: 0.81, scale: 1.15, phaseOffset: 0.6),
+      _FloatingItem(emoji: '🍕', topFrac: 0.07, leftFrac: 0.03, scale: 1.8, phaseOffset: 0.0),
+      _FloatingItem(emoji: '🛵', topFrac: 0.10, leftFrac: 0.71, scale: 1.45, phaseOffset: 0.35),
+      _FloatingItem(emoji: '📍', topFrac: 0.30, leftFrac: 0.81, scale: 1.15, phaseOffset: 0.6),
       _FloatingItem(emoji: '⚡', topFrac: 0.22, leftFrac: 0.01, scale: 0.95, phaseOffset: 0.2),
       _FloatingItem(emoji: '📦', topFrac: 0.48, leftFrac: 0.83, scale: 0.95, phaseOffset: 0.5),
       _FloatingItem(emoji: '🏠', topFrac: 0.54, leftFrac: 0.01, scale: 1.15, phaseOffset: 0.7),
@@ -348,16 +347,25 @@ class _SlidePage extends StatelessWidget {
                 child: Stack(
                   fit: StackFit.expand,
                   children: [
-                    CachedNetworkImage(
-                      imageUrl: slide.imageUrl,
-                      fit: BoxFit.cover,
-                      errorWidget: (context, url, error) => Container(
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                              colors: slide.gradientColors),
-                        ),
-                      ),
-                    ),
+                    slide.imageUrl.startsWith('assets/')
+                        ? Image.asset(
+                            slide.imageUrl,
+                            fit: BoxFit.cover,
+                            errorBuilder: (context, error, stackTrace) => Container(
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(colors: slide.gradientColors),
+                              ),
+                            ),
+                          )
+                        : CachedNetworkImage(
+                            imageUrl: slide.imageUrl,
+                            fit: BoxFit.cover,
+                            errorWidget: (context, url, error) => Container(
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(colors: slide.gradientColors),
+                              ),
+                            ),
+                          ),
                     // Bottom gradient overlay
                     Positioned.fill(
                       child: DecoratedBox(

@@ -437,32 +437,95 @@ class _CouponSelectionBottomSheetState extends ConsumerState<CouponSelectionBott
                           ],
                           const Gap(10),
 
-                          // Meta Tags: Minimum Order & Expiry
-                          Row(
+                          // Meta Tags: Minimum Order, Expiry, Remaining Uses & Schedule
+                          Wrap(
+                            spacing: 10,
+                            runSpacing: 6,
+                            crossAxisAlignment: WrapCrossAlignment.center,
                             children: [
                               if (offer.minimumOrder > 0) ...[
-                                Icon(Iconsax.shopping_bag, size: 13, color: isDark ? Colors.grey.shade400 : Colors.grey.shade600),
-                                const Gap(4),
-                                Text(
-                                  'Min order ₹${offer.minimumOrder.toStringAsFixed(0)}',
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
-                                    fontWeight: FontWeight.w600,
-                                  ),
+                                Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(Iconsax.shopping_bag, size: 13, color: isDark ? Colors.grey.shade400 : Colors.grey.shade600),
+                                    const Gap(4),
+                                    Text(
+                                      'Min order ₹${offer.minimumOrder.toStringAsFixed(0)}',
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ],
                                 ),
-                                const Gap(10),
+                              ],
+                              if (offer.usageLimit > 0) ...[
+                                Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(Iconsax.people, size: 13, color: offer.remainingUses <= 5 ? Colors.orange.shade700 : (isDark ? Colors.grey.shade400 : Colors.grey.shade600)),
+                                    const Gap(4),
+                                    Text(
+                                      '${offer.remainingUses} / ${offer.usageLimit} left',
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        color: offer.remainingUses <= 5 ? Colors.orange.shade700 : (isDark ? Colors.grey.shade400 : Colors.grey.shade600),
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                              if (offer.maximumDiscountAmount > 0) ...[
+                                Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(Iconsax.card, size: 13, color: isDark ? Colors.grey.shade400 : Colors.grey.shade600),
+                                    const Gap(4),
+                                    Text(
+                                      'Max ₹${offer.maximumDiscountAmount.toStringAsFixed(0)} OFF',
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                              if (offer.validityType == 'SCHEDULED_TIME' && offer.startTime != null && offer.endTime != null && offer.startTime!.isNotEmpty) ...[
+                                Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(Iconsax.clock, size: 13, color: isDark ? Colors.grey.shade400 : Colors.grey.shade600),
+                                    const Gap(4),
+                                    Text(
+                                      '${offer.startTime} - ${offer.endTime}',
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ],
                               if (offer.endDate != null && offer.endDate!.isNotEmpty) ...[
-                                Icon(Iconsax.calendar, size: 13, color: isDark ? Colors.grey.shade400 : Colors.grey.shade600),
-                                const Gap(4),
-                                Text(
-                                  'Till ${offer.endDate}',
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
-                                    fontWeight: FontWeight.w600,
-                                  ),
+                                Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(Iconsax.calendar, size: 13, color: isDark ? Colors.grey.shade400 : Colors.grey.shade600),
+                                    const Gap(4),
+                                    Text(
+                                      'Till ${offer.endDate}',
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ],
                             ],

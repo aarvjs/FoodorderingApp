@@ -21,6 +21,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   String _selectedPaymentMethod = 'COD';
   String? _selectedAddressId;
   bool _isPlacingOrder = false;
+  final TextEditingController _deliveryAddressController = TextEditingController();
 
   final List<Map<String, dynamic>> _paymentMethods = [
     {'id': 'COD', 'name': 'Cash on Delivery (COD)', 'icon': Iconsax.wallet_3},
@@ -38,9 +39,18 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         final defaultAddr = addresses.firstWhere((a) => a.isDefault, orElse: () => addresses.first);
         setState(() {
           _selectedAddressId = defaultAddr.id;
+          if (_deliveryAddressController.text.trim().isEmpty) {
+            _deliveryAddressController.text = defaultAddr.fullAddress;
+          }
         });
       }
     });
+  }
+
+  @override
+  void dispose() {
+    _deliveryAddressController.dispose();
+    super.dispose();
   }
 
   void _showAddAddressSheet(BuildContext context) {
@@ -118,6 +128,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                 ref.read(addressProvider.notifier).addAddress(newAddress);
                 setState(() {
                   _selectedAddressId = newAddress.id;
+                  _deliveryAddressController.text = newAddress.fullAddress;
                 });
                 Navigator.pop(context);
               },
@@ -132,6 +143,18 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     final cartState = ref.read(cartProvider);
     if (cartState.items.isEmpty) return;
 
+    final manualAddress = _deliveryAddressController.text.trim();
+    if (manualAddress.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please enter your complete delivery address.'),
+          backgroundColor: AppColors.error,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
     final addressState = ref.read(addressProvider);
     Address? selectedAddr = addressState.selectedAddress;
 
@@ -142,21 +165,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       );
     }
 
-    if (selectedAddr == null || selectedAddr.formattedAddress.isEmpty || selectedAddr.latitude == 0.0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please select a delivery address.'),
-          backgroundColor: AppColors.error,
-        ),
-      );
-      showModalBottomSheet(
-        context: context,
-        isScrollControlled: true,
-        backgroundColor: Colors.transparent,
-        builder: (_) => const AddressSelectionBottomSheet(),
-      );
-      return;
-    }
+    final double lat = selectedAddr?.latitude ?? 12.9716;
+    final double lng = selectedAddr?.longitude ?? 77.5946;
 
     final authState = ref.read(authProvider);
     final customerId = authState.userModel?.uid ?? 'cust_guest_${DateTime.now().millisecondsSinceEpoch}';
@@ -166,8 +176,6 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     final customerPhone = authState.userModel?.phone?.isNotEmpty == true
         ? authState.userModel!.phone!
         : '+91 9876543210';
-
-    final fullAddress = selectedAddr.fullAddress;
 
     final firstItem = cartState.items.first;
     final String restId = firstItem.restaurantId;
@@ -188,9 +196,9 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         customerId: customerId,
         customerName: customerName,
         customerPhone: customerPhone,
-        customerAddress: fullAddress,
-        latitude: selectedAddr.latitude,
-        longitude: selectedAddr.longitude,
+        customerAddress: manualAddress,
+        latitude: lat,
+        longitude: lng,
         items: cartState.items,
         subtotal: cartState.subtotal,
         tax: cartState.gstTax,
@@ -198,6 +206,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         discount: cartState.couponDiscount,
         grandTotal: cartState.total,
         paymentMethod: _selectedPaymentMethod,
+        appliedCoupon: cartState.appliedCoupon,
+        appliedOfferId: cartState.appliedOfferId,
       );
 
       // Create in-app notification document
@@ -286,6 +296,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                         onTap: () {
                           setState(() {
                             _selectedAddressId = addr.id;
+                            _deliveryAddressController.text = addr.fullAddress;
                           });
                         },
                         child: Container(
@@ -361,6 +372,74 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                         ),
                       );
                     },
+                  ),
+
+                  const Gap(8),
+
+                  // Delivery Address Manual Input Card (Required)
+                  Container(
+                    margin: const EdgeInsets.only(bottom: 20),
+                    decoration: BoxDecoration(
+                      color: isDark ? AppColors.darkCard : Colors.white,
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(
+                        color: isDark ? AppColors.darkDivider : Colors.grey.shade200,
+                        width: 1.5,
+                      ),
+                    ),
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            const Icon(Iconsax.location5, size: 18, color: AppColors.primary),
+                            const Gap(8),
+                            Text(
+                              'Delivery Address *',
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.bold,
+                                color: isDark ? Colors.white : AppColors.textDark,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const Gap(10),
+                        TextField(
+                          controller: _deliveryAddressController,
+                          maxLines: 3,
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: isDark ? Colors.white : AppColors.textDark,
+                          ),
+                          decoration: InputDecoration(
+                            hintText: 'Enter your complete delivery address (e.g. Flat/House No, Street, Landmark, Area, City)',
+                            hintStyle: TextStyle(
+                              fontSize: 12,
+                              color: isDark ? Colors.grey.shade500 : Colors.grey.shade400,
+                            ),
+                            filled: true,
+                            fillColor: isDark ? Colors.black26 : Colors.grey.shade50,
+                            contentPadding: const EdgeInsets.all(12),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide(
+                                color: isDark ? Colors.grey.shade800 : Colors.grey.shade300,
+                              ),
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: const BorderSide(
+                                color: AppColors.primary,
+                                width: 1.5,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
 
                   const Gap(16),

@@ -19,6 +19,19 @@ class OfferModel {
   final String? startDate;
   final String? endDate;
 
+  // Enhancements fields
+  final String validityType;
+  final String? startTime;
+  final String? endTime;
+  final List<String> applicableDays;
+  final int usageLimit;
+  final int usageCount;
+  final int remainingUses;
+  final double minimumOrderAmount;
+  final double discountValue;
+  final double maximumDiscountAmount;
+  final List<String> excludedCategoryIds;
+
   const OfferModel({
     required this.id,
     required this.title,
@@ -36,16 +49,29 @@ class OfferModel {
     this.discountType,
     this.startDate,
     this.endDate,
+    this.validityType = 'FULL_DAY',
+    this.startTime,
+    this.endTime,
+    this.applicableDays = const [],
+    this.usageLimit = 0,
+    this.usageCount = 0,
+    this.remainingUses = 0,
+    this.minimumOrderAmount = 0.0,
+    this.discountValue = 0.0,
+    this.maximumDiscountAmount = 0.0,
+    this.excludedCategoryIds = const [],
   });
 
   String get formattedDiscount {
     final dType = (discountType ?? '').toUpperCase();
-    if (dType == 'FLAT' || (discountPercentage >= 100 && dType != 'PERCENTAGE')) {
-      return '₹${discountPercentage.toStringAsFixed(0)} OFF';
-    } else if (discountPercentage <= 1.0 && discountPercentage > 0) {
-      return '${(discountPercentage * 100).toStringAsFixed(0)}% OFF';
-    } else if (discountPercentage > 1) {
-      return '${discountPercentage.toStringAsFixed(0)}% OFF';
+    if (dType == 'FIXED_AMOUNT' || dType == 'FLAT' || (discountValue > 0 && dType != 'PERCENTAGE')) {
+      final val = discountValue > 0 ? discountValue : discountPercentage;
+      return '₹${val.toStringAsFixed(0)} OFF';
+    } else {
+      final pct = discountValue > 0 ? discountValue : (discountPercentage > 1 ? discountPercentage : discountPercentage * 100);
+      if (pct > 0) {
+        return '${pct.toStringAsFixed(0)}% OFF';
+      }
     }
     return 'SPECIAL OFFER';
   }
@@ -54,15 +80,47 @@ class OfferModel {
     final title = (data['title'] ?? 'Special Discount Offer').toString();
     final description = (data['description'] ?? 'Delicious food with heavy discounts!').toString();
     final banner = (data['banner'] ?? data['bannerUrl'] ?? data['image'] ?? '').toString();
-    final type = (data['type'] ?? data['discountType'] ?? '').toString().toUpperCase();
-    final discount = (data['discountPercentage'] ?? data['discount'] ?? 0.0);
+    final type = (data['discountType'] ?? data['type'] ?? '').toString().toUpperCase();
+    
+    final discount = (data['discountValue'] ?? data['discountPercentage'] ?? data['discount'] ?? 0.0);
     final discVal = (discount is num) ? discount.toDouble() : double.tryParse(discount.toString()) ?? 0.0;
-    final minOrd = (data['minimumOrder'] ?? data['minOrderValue'] ?? 0.0);
+    
+    final minOrd = (data['minimumOrderAmount'] ?? data['minimumOrder'] ?? data['minOrderValue'] ?? 0.0);
     final minOrdVal = (minOrd is num) ? minOrd.toDouble() : double.tryParse(minOrd.toString()) ?? 0.0;
+    
+    final maxDisc = (data['maximumDiscountAmount'] ?? 0.0);
+    final maxDiscVal = (maxDisc is num) ? maxDisc.toDouble() : double.tryParse(maxDisc.toString()) ?? 0.0;
+
+    final uLimit = (data['usageLimit'] ?? 0);
+    final uLimitVal = (uLimit is num) ? uLimit.toInt() : int.tryParse(uLimit.toString()) ?? 0;
+
+    final uCount = (data['usageCount'] ?? 0);
+    final uCountVal = (uCount is num) ? uCount.toInt() : int.tryParse(uCount.toString()) ?? 0;
+
+    final remUses = (data['remainingUses'] ?? (uLimitVal > 0 ? (uLimitVal - uCountVal) : 0));
+    final remUsesVal = (remUses is num) ? remUses.toInt() : int.tryParse(remUses.toString()) ?? 0;
+
     final status = (data['status'] ?? 'ACTIVE').toString().toUpperCase();
+    final bool isAct = (data['isActive'] != false) && status == 'ACTIVE';
     final sDate = data['startDate']?.toString();
     final eDate = (data['endDate'] ?? data['validTill'])?.toString();
     final rawCode = (data['coupon'] ?? data['couponCode'] ?? data['code'] ?? '').toString();
+
+    final vType = (data['validityType'] ?? 'FULL_DAY').toString();
+    final sTime = data['startTime']?.toString();
+    final eTime = data['endTime']?.toString();
+
+    final rawDays = data['applicableDays'];
+    List<String> daysList = [];
+    if (rawDays is List) {
+      daysList = rawDays.map((e) => e.toString()).toList();
+    }
+
+    final rawExcluded = data['excludedCategoryIds'];
+    List<String> excludedList = [];
+    if (rawExcluded is List) {
+      excludedList = rawExcluded.map((e) => e.toString()).toList();
+    }
 
     OfferBadgeType badgeType = OfferBadgeType.flat50;
     if (type.contains('FREE') || title.toLowerCase().contains('free')) {
@@ -100,10 +158,22 @@ class OfferModel {
       accentColors: colorGradients[hash % colorGradients.length],
       restaurantId: data['restaurantId']?.toString(),
       branchId: data['branchId']?.toString(),
-      isActive: status == 'ACTIVE',
-      discountType: (data['discountType'] ?? data['type'])?.toString(),
+      isActive: isAct,
+      discountType: type.isNotEmpty ? type : (data['discountType']?.toString()),
       startDate: sDate,
       endDate: eDate,
+      validityType: vType,
+      startTime: sTime,
+      endTime: eTime,
+      applicableDays: daysList,
+      usageLimit: uLimitVal,
+      usageCount: uCountVal,
+      remainingUses: remUsesVal,
+      minimumOrderAmount: minOrdVal,
+      discountValue: discVal,
+      maximumDiscountAmount: maxDiscVal,
+      excludedCategoryIds: excludedList,
     );
   }
 }
+

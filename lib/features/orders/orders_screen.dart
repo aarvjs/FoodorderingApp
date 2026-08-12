@@ -19,9 +19,7 @@ class OrdersScreen extends ConsumerWidget {
     final realOrdersAsync = ref.watch(userOrdersStreamProvider);
     final memoryOrders = ref.watch(ordersProvider);
 
-    final List<Order> allOrders = (realOrdersAsync.value != null && realOrdersAsync.value!.isNotEmpty)
-        ? realOrdersAsync.value!
-        : memoryOrders;
+    final List<Order> allOrders = realOrdersAsync.value ?? memoryOrders;
 
     final ongoingOrders = allOrders.where((o) => o.isOngoing).toList();
     final completedOrders = allOrders.where((o) => o.isCompleted).toList();
@@ -92,7 +90,7 @@ class OrdersScreen extends ConsumerWidget {
             borderRadius: BorderRadius.circular(20),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.02),
+                color: Colors.black.withValues(alpha: 0.02),
                 blurRadius: 10,
                 offset: const Offset(0, 4),
               ),
@@ -137,8 +135,8 @@ class OrdersScreen extends ConsumerWidget {
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                         decoration: BoxDecoration(
                           color: isOngoing 
-                              ? Colors.amber.withOpacity(0.15) 
-                              : (order.isCompleted ? Colors.green.withOpacity(0.15) : Colors.red.withOpacity(0.15)),
+                              ? Colors.amber.withValues(alpha: 0.15) 
+                              : (order.isCompleted ? Colors.green.withValues(alpha: 0.15) : Colors.red.withValues(alpha: 0.15)),
                           borderRadius: BorderRadius.circular(6),
                         ),
                         child: Text(
@@ -162,7 +160,7 @@ class OrdersScreen extends ConsumerWidget {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(
-                    color: Colors.blue.withOpacity(0.1),
+                    color: Colors.blue.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Row(
@@ -184,13 +182,81 @@ class OrdersScreen extends ConsumerWidget {
                 Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: Colors.red.withOpacity(0.08),
+                    color: Colors.red.withValues(alpha: 0.08),
                     borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.red.withOpacity(0.2)),
+                    border: Border.all(color: Colors.red.withValues(alpha: 0.2)),
                   ),
                   child: Text(
                     'Reason: ${order.rejectionReason}',
                     style: const TextStyle(fontSize: 11, color: Colors.red, fontWeight: FontWeight.w600),
+                  ),
+                ),
+              ],
+
+              if (order.isCancelled) ...[
+                const Gap(8),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.red.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.red.withValues(alpha: 0.2)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text(
+                            'ORDER CANCELLED',
+                            style: TextStyle(fontSize: 11, fontWeight: FontWeight.w900, color: Colors.red),
+                          ),
+                          if (order.cancelledBy != null && order.cancelledBy!.isNotEmpty)
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: Colors.red.withValues(alpha: 0.15),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: Text(
+                                'BY: ${order.cancelledBy!.replaceAll('_', ' ').toUpperCase()}',
+                                style: const TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.red),
+                              ),
+                            ),
+                        ],
+                      ),
+                      if (order.cancellationReason != null && order.cancellationReason!.isNotEmpty) ...[
+                        const Gap(4),
+                        Text(
+                          'Reason: ${order.cancellationReason}',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: isDark ? Colors.red.shade200 : Colors.red.shade900,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                      if (order.cancellationNote != null && order.cancellationNote!.isNotEmpty) ...[
+                        const Gap(2),
+                        Text(
+                          'Note: ${order.cancellationNote}',
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontStyle: FontStyle.italic,
+                            color: isDark ? Colors.grey.shade400 : Colors.grey.shade700,
+                          ),
+                        ),
+                      ],
+                      if (order.cancelledAt != null) ...[
+                        const Gap(2),
+                        Text(
+                          'Time: ${DateFormat('dd MMM yyyy, hh:mm a').format(order.cancelledAt!)}',
+                          style: const TextStyle(fontSize: 9, color: AppColors.textLight),
+                        ),
+                      ],
+                    ],
                   ),
                 ),
               ],
@@ -217,16 +283,41 @@ class OrdersScreen extends ConsumerWidget {
                     'Payment: ${order.paymentMethod}',
                     style: const TextStyle(fontSize: 12, color: AppColors.textLight),
                   ),
-                  CustomButton(
-                    text: isOngoing ? 'Helpline' : 'Reorder',
-                    width: 100,
-                    height: 36,
-                    isSecondary: true,
-                    onPressed: () {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text(isOngoing ? 'Support team notified.' : 'Items added back to cart.')),
-                      );
-                    },
+                  Row(
+                    children: [
+                      if (order.isCancellable) ...[
+                        OutlinedButton(
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: Colors.red,
+                            side: const BorderSide(color: Colors.red),
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                            minimumSize: const Size(85, 34),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                          ),
+                          onPressed: () {
+                            showDialog(
+                              context: context,
+                              builder: (ctx) => _CancelOrderDialog(order: order),
+                            );
+                          },
+                          child: const Text('Cancel Order', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                        ),
+                        const Gap(8),
+                      ],
+                      CustomButton(
+                        text: isOngoing ? 'Helpline' : 'Reorder',
+                        width: 90,
+                        height: 36,
+                        isSecondary: true,
+                        onPressed: () {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text(isOngoing ? 'Support team notified.' : 'Items added back to cart.')),
+                          );
+                        },
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -327,6 +418,245 @@ class OrdersScreen extends ConsumerWidget {
           ),
         );
       }),
+    );
+  }
+}
+
+class _CancelOrderDialog extends ConsumerStatefulWidget {
+  final Order order;
+  const _CancelOrderDialog({required this.order});
+
+  @override
+  ConsumerState<_CancelOrderDialog> createState() => _CancelOrderDialogState();
+}
+
+class _CancelOrderDialogState extends ConsumerState<_CancelOrderDialog> {
+  final List<String> _reasons = const [
+    'Ordered by mistake',
+    'Changed my mind',
+    'Taking too long',
+    'Found another option',
+    'Incorrect order',
+    'Other',
+  ];
+
+  late String _selectedReason;
+  final TextEditingController _customReasonController = TextEditingController();
+  final TextEditingController _noteController = TextEditingController();
+  bool _isSubmitting = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedReason = _reasons.first;
+  }
+
+  @override
+  void dispose() {
+    _customReasonController.dispose();
+    _noteController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _handleConfirmCancel() async {
+    final finalReason = (_selectedReason == 'Other' && _customReasonController.text.trim().isNotEmpty)
+        ? _customReasonController.text.trim()
+        : _selectedReason;
+
+    setState(() => _isSubmitting = true);
+
+    try {
+      final repo = ref.read(orderRepositoryProvider);
+      final res = await repo.cancelOrder(
+        orderId: widget.order.id,
+        cancelledBy: 'customer',
+        cancellationReason: finalReason,
+        cancellationNote: _noteController.text.trim(),
+      );
+
+      if (!mounted) return;
+      Navigator.of(context).pop();
+
+      if (res['success'] == true) {
+        ref.read(ordersProvider.notifier).updateOrder(
+          widget.order.copyWith(
+            status: 'CANCELLED',
+            cancelledBy: 'customer',
+            cancellationReason: finalReason,
+            cancellationNote: _noteController.text.trim(),
+            cancelledAt: DateTime.now(),
+          ),
+        );
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Order cancelled successfully.')),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(res['message'] ?? 'Failed to cancel order.')),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      Navigator.of(context).pop();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error cancelling order: $e')),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return Dialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+      backgroundColor: isDark ? AppColors.darkCard : Colors.white,
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.cancel_outlined, color: Colors.red, size: 22),
+                const Gap(8),
+                const Expanded(
+                  child: Text(
+                    'Cancel Order',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.close, size: 20),
+                  onPressed: () => Navigator.of(context).pop(),
+                ),
+              ],
+            ),
+            const Divider(),
+            const Gap(8),
+
+            if (widget.order.isProcessing) ...[
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.amber.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.amber.shade300),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.warning_amber_rounded, color: Colors.amber.shade900, size: 20),
+                    const Gap(8),
+                    Expanded(
+                      child: Text(
+                        'This order is already being processed. Cancellation/refund may be subject to the restaurant\'s cancellation policy.',
+                        style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.amber.shade900),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const Gap(12),
+            ],
+
+            const Text(
+              'Why are you cancelling this order?',
+              style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+            ),
+            const Gap(8),
+
+            ..._reasons.map((reason) {
+              final isSelected = _selectedReason == reason;
+              return InkWell(
+                onTap: () => setState(() => _selectedReason = reason),
+                borderRadius: BorderRadius.circular(8),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
+                  child: Row(
+                    children: [
+                      Icon(
+                        isSelected ? Icons.radio_button_checked : Icons.radio_button_off,
+                        size: 20,
+                        color: isSelected ? AppColors.primary : Colors.grey,
+                      ),
+                      const Gap(10),
+                      Text(
+                        reason,
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            }),
+
+            if (_selectedReason == 'Other') ...[
+              const Gap(6),
+              TextField(
+                controller: _customReasonController,
+                style: const TextStyle(fontSize: 13),
+                decoration: InputDecoration(
+                  labelText: 'Specify Reason *',
+                  isDense: true,
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+              ),
+            ],
+
+            const Gap(12),
+            TextField(
+              controller: _noteController,
+              style: const TextStyle(fontSize: 13),
+              maxLines: 2,
+              decoration: InputDecoration(
+                labelText: 'Additional Note (Optional)',
+                hintText: 'Tell us more (optional)',
+                isDense: true,
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+            ),
+
+            const Gap(20),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    onPressed: () => Navigator.of(context).pop(),
+                    child: const Text('Keep Order', style: TextStyle(fontWeight: FontWeight.bold)),
+                  ),
+                ),
+                const Gap(12),
+                Expanded(
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.red,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    onPressed: _isSubmitting ? null : _handleConfirmCancel,
+                    child: _isSubmitting
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                          )
+                        : const Text('Cancel Order', style: TextStyle(fontWeight: FontWeight.bold)),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

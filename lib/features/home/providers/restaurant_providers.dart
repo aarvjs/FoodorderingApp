@@ -36,6 +36,12 @@ final comboItemsStreamProvider = StreamProvider.family<List<ComboItemModel>, Str
   return repo.streamComboItems(comboId);
 });
 
+/// Stream provider family for a single dynamic combo doc (real-time active/inactive status)
+final singleComboStreamProvider = StreamProvider.family<ComboModel?, String>((ref, comboId) {
+  final repo = ref.watch(comboRepositoryProvider);
+  return repo.streamSingleCombo(comboId);
+});
+
 /// Stream provider family for a single dynamic combo item (real-time customization groups & options)
 final singleComboItemStreamProvider = StreamProvider.family<ComboItemModel?, String>((ref, itemId) {
   final repo = ref.watch(comboRepositoryProvider);

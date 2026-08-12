@@ -88,6 +88,24 @@ class ComboRepository {
     });
   }
 
+  /// Stream dynamic real-time data for a single combo category/banner by docId
+  Stream<ComboModel?> streamSingleCombo(String comboId) {
+    final String targetId = comboId.trim();
+    if (targetId.isEmpty) return Stream.value(null);
+
+    return _firestore
+        .collection('combos')
+        .doc(targetId)
+        .snapshots()
+        .handleError((err) {
+          debugPrint('[ComboRepository] Firestore snapshot error on single combo="$targetId": $err');
+        })
+        .map((docSnap) {
+          if (!docSnap.exists || docSnap.data() == null) return null;
+          return ComboModel.fromFirestore(docSnap.data()!, docSnap.id);
+        });
+  }
+
   /// Stream dynamic real-time data for a single combo item by docId
   Stream<ComboItemModel?> streamSingleComboItem(String itemId) {
     final String targetId = itemId.trim();

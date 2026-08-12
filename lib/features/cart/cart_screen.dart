@@ -277,14 +277,14 @@ class _CartScreenState extends ConsumerState<CartScreen> {
                                   ),
                                 ),
                                 // Quantity Selector
-                                QuantitySelector(
-                                  quantity: item.quantity,
-                                  width: 80,
-                                  height: 32,
-                                  onChanged: (newQty) {
-                                    cartNotifier.updateQuantity(item.foodItem.id, newQty);
-                                  },
-                                ),
+                                 QuantitySelector(
+                                   quantity: item.quantity,
+                                   width: 80,
+                                   height: 32,
+                                   onChanged: (newQty) {
+                                     cartNotifier.updateQuantityAtIndex(index, newQty);
+                                   },
+                                 ),
                               ],
                             );
                           },

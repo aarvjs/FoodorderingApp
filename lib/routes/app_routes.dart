@@ -24,6 +24,8 @@ import '../auth/screens/location/location_confirm_screen.dart';
 import '../auth/screens/profile/complete_profile_screen.dart';
 import '../features/bookings/my_bookings_screen.dart';
 
+import '../features/referral/referral_screen.dart';
+
 class AppRoutes {
   static const String splash = '/';
   static const String onboarding = '/onboarding';
@@ -48,6 +50,7 @@ class AppRoutes {
   static const String settings = '/settings';
   static const String premium = '/premium';
   static const String bookings = '/bookings';
+  static const String referral = '/referral';
 
   static final GoRouter router = GoRouter(
     initialLocation: splash,
@@ -168,6 +171,10 @@ class AppRoutes {
       GoRoute(
         path: bookings,
         builder: (context, state) => const MyBookingsScreen(),
+      ),
+      GoRoute(
+        path: referral,
+        builder: (context, state) => const ReferralScreen(),
       ),
     ],
   );

@@ -91,14 +91,18 @@ class _PremiumCategoryListState extends ConsumerState<PremiumCategoryList> {
     List<CategoryData> categoriesList = _defaultCategories;
     categoriesAsync.whenData((models) {
       if (models.isNotEmpty) {
-        categoriesList = models.map((m) {
-          return CategoryData(
-            name: m.name,
-            imageUrl: m.imageUrl,
-            bgColor: m.bgColor,
-            shadowColor: m.shadowColor,
-          );
-        }).toList();
+        final dynamicCats = models
+            .where((m) => m.imageUrl.isNotEmpty && !m.imageUrl.contains('unsplash.com'))
+            .map((m) => CategoryData(
+                  name: m.name,
+                  imageUrl: m.imageUrl,
+                  bgColor: m.bgColor,
+                  shadowColor: m.shadowColor,
+                ))
+            .toList();
+        if (dynamicCats.isNotEmpty) {
+          categoriesList = dynamicCats;
+        }
       }
     });
 

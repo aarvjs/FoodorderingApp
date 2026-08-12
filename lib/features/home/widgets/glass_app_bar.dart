@@ -7,7 +7,6 @@ import 'package:gap/gap.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/config/app_colors.dart';
 import '../../../auth/providers/auth_provider.dart';
-import '../../../auth/providers/location_provider.dart';
 import '../../../features/address/providers/address_provider.dart';
 import '../../../features/address/widgets/address_selection_bottom_sheet.dart';
 
@@ -108,18 +107,10 @@ class _GlassAppBarState extends ConsumerState<GlassAppBar>
 
     final authState = ref.watch(authProvider);
     final addressState = ref.watch(addressProvider);
-    final locationState = ref.watch(locationProvider);
 
     final userModel = authState.userModel;
     final activeAddr = addressState.selectedAddress;
 
-    final savedAddress = activeAddr != null
-        ? '${activeAddr.label}: ${activeAddr.fullAddress}'
-        : (userModel?.formattedAddress?.isNotEmpty == true
-            ? userModel!.formattedAddress!
-            : (locationState.location?.formattedAddress.isNotEmpty == true
-                ? locationState.location!.formattedAddress
-                : 'Choose your delivery location'));
 
     final photoUrl = userModel?.photoUrl;
     final initial = (userModel?.fullName?.isNotEmpty == true)
@@ -131,12 +122,12 @@ class _GlassAppBarState extends ConsumerState<GlassAppBar>
       decoration: BoxDecoration(
         gradient: isDark
             ? const LinearGradient(
-                colors: [Color(0xFF1A0A0A), Color(0xFF0F0F0F)],
+                colors: [Color(0xFF0A192F), Color(0xFF112240)],
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
               )
             : const LinearGradient(
-                colors: [Color(0xFFFFF1F0), Color(0xFFFFF8F5)],
+                colors: [Color(0xFFEAF6FF), Colors.white],
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
               ),
@@ -147,7 +138,7 @@ class _GlassAppBarState extends ConsumerState<GlassAppBar>
           BoxShadow(
             color: isDark
                 ? Colors.black.withOpacity(0.4)
-                : const Color(0xFFFF4D4F).withOpacity(0.08),
+                : AppColors.primary.withOpacity(0.08),
             blurRadius: 20,
             offset: const Offset(0, 8),
           ),
@@ -171,10 +162,10 @@ class _GlassAppBarState extends ConsumerState<GlassAppBar>
                           ? [AppColors.primary, AppColors.secondary]
                           : (isDark
                               ? [
-                                  const Color(0xFF2A1A1A),
-                                  const Color(0xFF1E1010)
+                                  const Color(0xFF1E293B),
+                                  const Color(0xFF0F172A)
                                 ]
-                              : [Colors.white, const Color(0xFFFFF0EF)]),
+                              : [Colors.white, AppColors.lightBlue]),
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
                     ),
@@ -505,7 +496,7 @@ class _GlassAppBarState extends ConsumerState<GlassAppBar>
     return Container(
       decoration: const BoxDecoration(
         gradient: LinearGradient(
-          colors: [Color(0xFFFF4D4F), Color(0xFFFF8A65)],
+          colors: [AppColors.primary, AppColors.secondary],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),

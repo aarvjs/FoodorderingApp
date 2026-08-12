@@ -101,9 +101,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
               // Premium Food Delivery Header Illustration
               const FoodAuthIllustration(
-                title: 'Welcome to Flavors',
-                subtitle: 'Enter your mobile number to discover delicious meals & exclusive offers near you.',
-                icon: Iconsax.shop,
+                title: 'Welcome to Perfect Pizza',
+                subtitle: 'Enter your mobile number to discover hot pizzas & exclusive deals near you.',
+                icon: Icons.local_pizza_rounded,
               ),
 
               const SizedBox(height: 40),
