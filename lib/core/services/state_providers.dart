@@ -60,12 +60,16 @@ class CartState {
   final String? appliedCoupon;
   final String? appliedOfferId;
   final double discountPercentage;
+  final double? overrideDeliveryFee;
+  final double taxPercentage;
 
   const CartState({
     required this.items,
     this.appliedCoupon,
     this.appliedOfferId,
     this.discountPercentage = 0.0,
+    this.overrideDeliveryFee,
+    this.taxPercentage = 0.0,
   });
 
   double get subtotal {
@@ -78,11 +82,15 @@ class CartState {
 
   double get deliveryFee {
     if (items.isEmpty) return 0.0;
-    return subtotal > 500 ? 0.0 : 40.0; // Free delivery above 500
+    if (overrideDeliveryFee != null) return overrideDeliveryFee!;
+    return subtotal > 500 ? 0.0 : 40.0; // Fallback
   }
 
   double get gstTax {
-    return subtotal * 0.05; // 5% GST
+    if (items.isEmpty || taxPercentage <= 0) return 0.0;
+    final taxableAmount = subtotal - couponDiscount;
+    if (taxableAmount <= 0) return 0.0;
+    return taxableAmount * (taxPercentage / 100.0);
   }
 
   double get total {
@@ -96,6 +104,8 @@ class CartState {
     String? appliedCoupon,
     String? appliedOfferId,
     double? discountPercentage,
+    double? overrideDeliveryFee,
+    double? taxPercentage,
     bool clearCoupon = false,
   }) {
     return CartState(
@@ -103,9 +113,13 @@ class CartState {
       appliedCoupon: clearCoupon ? null : (appliedCoupon ?? this.appliedCoupon),
       appliedOfferId: clearCoupon ? null : (appliedOfferId ?? this.appliedOfferId),
       discountPercentage: clearCoupon ? 0.0 : (discountPercentage ?? this.discountPercentage),
+      overrideDeliveryFee: overrideDeliveryFee ?? this.overrideDeliveryFee,
+      taxPercentage: taxPercentage ?? this.taxPercentage,
     );
   }
 }
+
+
 
 class CouponApplyResult {
   final bool isSuccess;

@@ -52,12 +52,16 @@ class OrderRepository {
     required List<CartItem> items,
     required double subtotal,
     required double tax,
+    double taxPercentage = 0.0,
     required double deliveryFee,
+    double deliveryDistanceKm = 0.0,
+
     required double discount,
     required double grandTotal,
     String paymentMethod = 'CASH_ON_DELIVERY',
     String? appliedCoupon,
     String? appliedOfferId,
+
   }) async {
     final docRef = _firestore.collection(_collectionName).doc();
     final nowIso = DateTime.now().toIso8601String();
@@ -123,9 +127,15 @@ class OrderRepository {
       'quantity': totalQuantity,
       'subtotal': subtotal,
       'tax': tax,
+      'taxPercentage': taxPercentage,
+      'gstPercentage': taxPercentage,
       'deliveryFee': deliveryFee,
+
       'deliveryCharge': deliveryFee,
+      'deliveryDistanceKm': deliveryDistanceKm,
+      'distanceKm': deliveryDistanceKm,
       'discount': discount,
+
       'appliedCoupon': appliedCoupon ?? '',
       'totalAmount': grandTotal,
       'grandTotal': grandTotal,

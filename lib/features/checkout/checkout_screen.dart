@@ -6,9 +6,10 @@ import 'package:gap/gap.dart';
 import '../../core/config/app_colors.dart';
 import '../../core/widgets/custom_button.dart';
 import '../../core/services/state_providers.dart';
+import '../../core/services/delivery_charge_service.dart';
 import '../../models/address.dart';
 import '../../auth/providers/auth_provider.dart';
-import '../address/widgets/address_selection_bottom_sheet.dart';
+
 
 class CheckoutScreen extends ConsumerStatefulWidget {
   const CheckoutScreen({super.key});
@@ -170,12 +171,36 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
 
     final authState = ref.read(authProvider);
     final customerId = authState.userModel?.uid ?? 'cust_guest_${DateTime.now().millisecondsSinceEpoch}';
-    final customerName = authState.userModel?.fullName?.isNotEmpty == true
-        ? authState.userModel!.fullName!
-        : 'Guest Customer';
-    final customerPhone = authState.userModel?.phone?.isNotEmpty == true
-        ? authState.userModel!.phone!
-        : '+91 9876543210';
+    final String? rawName = authState.userModel?.fullName;
+    final customerName = (rawName != null && rawName.isNotEmpty) ? rawName : 'Guest Customer';
+
+    final String? rawPhone = authState.userModel?.phone;
+    final customerPhone = (rawPhone != null && rawPhone.isNotEmpty) ? rawPhone : '+91 9876543210';
+
+
+    final deliveryCalcAsync = ref.read(deliveryChargeCalculationProvider);
+    final deliveryCalcResult = deliveryCalcAsync.value;
+    if (deliveryCalcResult?.isOutsideRadius == true) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            deliveryCalcResult?.errorMessage ??
+                'Delivery unavailable: Your address exceeds the maximum delivery radius for this restaurant branch.',
+          ),
+          backgroundColor: AppColors.error,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
+    final double effectiveDeliveryFee = deliveryCalcResult?.deliveryFee ?? cartState.deliveryFee;
+    final double effectiveDistanceKm = deliveryCalcResult?.distanceKm ?? 0.0;
+    final double taxPercentage = deliveryCalcResult?.taxPercentage ?? 0.0;
+    final double taxableAmount = (cartState.subtotal - cartState.couponDiscount).clamp(0.0, double.infinity);
+    final double effectiveGstAmount = taxPercentage > 0 ? double.parse((taxableAmount * (taxPercentage / 100.0)).toStringAsFixed(2)) : 0.0;
+    final double computedTotal = cartState.subtotal - cartState.couponDiscount + effectiveDeliveryFee + effectiveGstAmount;
+    final double effectiveGrandTotal = double.parse(computedTotal.toStringAsFixed(2));
 
     final firstItem = cartState.items.first;
     final String restId = firstItem.restaurantId;
@@ -201,14 +226,18 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         longitude: lng,
         items: cartState.items,
         subtotal: cartState.subtotal,
-        tax: cartState.gstTax,
-        deliveryFee: cartState.deliveryFee,
+        tax: effectiveGstAmount,
+        taxPercentage: taxPercentage,
+        deliveryFee: effectiveDeliveryFee,
+        deliveryDistanceKm: effectiveDistanceKm,
         discount: cartState.couponDiscount,
-        grandTotal: cartState.total,
+        grandTotal: effectiveGrandTotal,
         paymentMethod: _selectedPaymentMethod,
         appliedCoupon: cartState.appliedCoupon,
         appliedOfferId: cartState.appliedOfferId,
       );
+
+
 
       // Create in-app notification document
       final notificationRepo = ref.read(notificationRepositoryProvider);
@@ -251,6 +280,18 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     final addressState = ref.watch(addressProvider);
     final addresses = addressState.addresses;
     final cartState = ref.watch(cartProvider);
+
+    final deliveryCalcAsync = ref.watch(deliveryChargeCalculationProvider);
+    final deliveryCalcResult = deliveryCalcAsync.value;
+    final double effectiveDeliveryFee = deliveryCalcResult?.deliveryFee ?? cartState.deliveryFee;
+    final double taxPercentage = deliveryCalcResult?.taxPercentage ?? 0.0;
+    final double taxableAmount = (cartState.subtotal - cartState.couponDiscount).clamp(0.0, double.infinity);
+    final double effectiveGstAmount = taxPercentage > 0 ? double.parse((taxableAmount * (taxPercentage / 100.0)).toStringAsFixed(2)) : 0.0;
+    final double computedTotal = cartState.subtotal - cartState.couponDiscount + effectiveDeliveryFee + effectiveGstAmount;
+    final double effectiveGrandTotal = double.parse(computedTotal.toStringAsFixed(2));
+    final bool isOutsideRadius = deliveryCalcResult?.isOutsideRadius == true;
+
+
 
     return Scaffold(
       appBar: AppBar(title: const Text('Checkout Details')),
@@ -519,27 +560,71 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
+                        _buildRecapRow('Item Subtotal', '₹${cartState.subtotal.toStringAsFixed(2)}', isDark),
+                        if (cartState.couponDiscount > 0)
+                          _buildRecapRow(
+                            'Coupon Discount',
+                            '- ₹${cartState.couponDiscount.toStringAsFixed(2)}',
+                            isDark,
+                            isDiscount: true,
+                          ),
+                        _buildRecapRow(
+                          deliveryCalcResult?.distanceKm != null && deliveryCalcResult!.distanceKm > 0
+                              ? 'Delivery Charge (${deliveryCalcResult.distanceKm.toStringAsFixed(1)} km)'
+                              : 'Delivery Charge',
+                          effectiveDeliveryFee == 0 ? 'FREE' : '₹${effectiveDeliveryFee.toStringAsFixed(2)}',
+                          isDark,
+                        ),
+                        if (taxPercentage > 0 && effectiveGstAmount > 0)
+                          _buildRecapRow(
+                            'Govt Taxes & GST (${taxPercentage.toStringAsFixed(taxPercentage.truncateToDouble() == taxPercentage ? 0 : 1)}%)',
+                            '₹${effectiveGstAmount.toStringAsFixed(2)}',
+                            isDark,
+                          ),
+
+                        const Divider(height: 20),
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            const Text('Grand Total', style: TextStyle(fontWeight: FontWeight.bold)),
+                            const Text('Grand Total', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16)),
                             Text(
-                              '₹${cartState.total}',
+                              '₹${effectiveGrandTotal.toStringAsFixed(2)}',
                               style: TextStyle(
-                                fontWeight: FontWeight.bold,
+                                fontWeight: FontWeight.w900,
+                                fontSize: 18,
                                 color: isDark ? AppColors.darkPrimary : AppColors.primary,
                               ),
                             ),
                           ],
                         ),
-                        const Gap(6),
-                        Text(
-                          'Includes taxes and delivery fees for ${cartState.items.length} items.',
-                          style: const TextStyle(fontSize: 11, color: AppColors.textLight),
-                        ),
                       ],
                     ),
                   ),
+
+                  if (isOutsideRadius) ...[
+                    const Gap(16),
+                    Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: Colors.red.shade50,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: Colors.red.shade200),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.warning_amber_rounded, color: Colors.red, size: 22),
+                          const Gap(10),
+                          Expanded(
+                            child: Text(
+                              deliveryCalcResult?.errorMessage ??
+                                  'Delivery unavailable: Your address exceeds the maximum delivery radius.',
+                              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.red),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -558,15 +643,54 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                   ),
                 ),
                 child: CustomButton(
-                  text: 'Confirm & Place Order (COD)',
+                  text: isOutsideRadius ? 'Outside Delivery Area' : 'Confirm & Place Order (COD)',
                   isLoading: _isPlacingOrder,
-                  onPressed: _onPlaceOrder,
+                  onPressed: isOutsideRadius
+                      ? () {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                deliveryCalcResult?.errorMessage ??
+                                    'Delivery unavailable: Your address is outside the maximum delivery radius for this restaurant.',
+                              ),
+                              backgroundColor: AppColors.error,
+                              behavior: SnackBarBehavior.floating,
+                            ),
+                          );
+                        }
+                      : _onPlaceOrder,
                 ),
+
               ),
             ),
           ],
+
         ),
       ),
     );
   }
+
+  Widget _buildRecapRow(String label, String value, bool isDark, {bool isDiscount = false}) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            label,
+            style: TextStyle(fontSize: 12, color: isDark ? Colors.grey.shade400 : AppColors.textLight),
+          ),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.bold,
+              color: isDiscount ? AppColors.success : (isDark ? Colors.white : AppColors.textDark),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
+

@@ -17,7 +17,9 @@ class Order {
   final List<CartItem> items;
   final double subtotal;
   final double tax;
+  final double taxPercentage;
   final double deliveryFee;
+  final double deliveryDistanceKm;
   final double discount;
   final double totalAmount;
   final String paymentMethod; // "CASH_ON_DELIVERY" or "UPI"
@@ -46,9 +48,13 @@ class Order {
     required this.items,
     this.subtotal = 0.0,
     this.tax = 0.0,
+    this.taxPercentage = 0.0,
     this.deliveryFee = 0.0,
+    this.deliveryDistanceKm = 0.0,
     this.discount = 0.0,
     required this.totalAmount,
+
+
     required this.paymentMethod,
     this.paymentStatus = 'PENDING',
     required this.status,
@@ -220,8 +226,12 @@ class Order {
       items: parsedItems,
       subtotal: _numToDouble(data['subtotal']),
       tax: _numToDouble(data['tax']),
+      taxPercentage: _numToDouble(data['taxPercentage'] ?? data['gstPercentage']),
       deliveryFee: _numToDouble(data['deliveryFee'] ?? data['deliveryCharge']),
+
+      deliveryDistanceKm: _numToDouble(data['deliveryDistanceKm'] ?? data['distanceKm']),
       discount: _numToDouble(data['discount']),
+
       totalAmount: _numToDouble(data['totalAmount'] ?? data['grandTotal']),
       paymentMethod: (data['paymentMethod'] ?? 'CASH_ON_DELIVERY').toString(),
       paymentStatus: (data['paymentStatus'] ?? 'PENDING').toString(),

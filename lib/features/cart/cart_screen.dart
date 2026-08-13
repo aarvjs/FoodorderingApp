@@ -8,7 +8,9 @@ import '../../core/widgets/quantity_selector.dart';
 import '../../core/widgets/empty_state.dart';
 import '../../core/widgets/custom_button.dart';
 import '../../core/services/state_providers.dart';
+import '../../core/services/delivery_charge_service.dart';
 import '../address/widgets/address_selection_bottom_sheet.dart';
+
 import 'widgets/coupon_selection_bottom_sheet.dart';
 
 class CartScreen extends ConsumerStatefulWidget {
@@ -79,6 +81,18 @@ class _CartScreenState extends ConsumerState<CartScreen> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final cartState = ref.watch(cartProvider);
     final cartNotifier = ref.read(cartProvider.notifier);
+
+    final deliveryCalcAsync = ref.watch(deliveryChargeCalculationProvider);
+    final deliveryCalcResult = deliveryCalcAsync.value;
+    final double effectiveDeliveryFee = deliveryCalcResult?.deliveryFee ?? cartState.deliveryFee;
+    final double taxPercentage = deliveryCalcResult?.taxPercentage ?? 0.0;
+    final double taxableAmount = (cartState.subtotal - cartState.couponDiscount).clamp(0.0, double.infinity);
+    final double effectiveGstAmount = taxPercentage > 0 ? double.parse((taxableAmount * (taxPercentage / 100.0)).toStringAsFixed(2)) : 0.0;
+    final double calculatedTotal = cartState.subtotal - cartState.couponDiscount + effectiveDeliveryFee + effectiveGstAmount;
+    final double effectiveGrandTotal = double.parse(calculatedTotal.toStringAsFixed(2));
+    final bool isOutsideRadius = deliveryCalcResult?.isOutsideRadius == true;
+
+
 
     // If empty state
     if (cartState.items.isEmpty) {
@@ -700,12 +714,20 @@ class _CartScreenState extends ConsumerState<CartScreen> {
                             isDiscount: true,
                           ),
                         _buildBillRow(
-                          'Delivery Charges', 
-                          cartState.deliveryFee == 0 ? 'FREE' : '₹${cartState.deliveryFee.toStringAsFixed(2)}', 
+                          deliveryCalcAsync.value?.distanceKm != null && deliveryCalcAsync.value!.distanceKm > 0
+                              ? 'Delivery Charges (${deliveryCalcAsync.value!.distanceKm.toStringAsFixed(1)} km)'
+                              : 'Delivery Charges', 
+                          effectiveDeliveryFee == 0 ? 'FREE' : '₹${effectiveDeliveryFee.toStringAsFixed(2)}', 
                           isDark,
-                          isFree: cartState.deliveryFee == 0,
+                          isFree: effectiveDeliveryFee == 0,
                         ),
-                        _buildBillRow('Govt Taxes & GST (5%)', '₹${cartState.gstTax.toStringAsFixed(2)}', isDark),
+                        if (taxPercentage > 0 && effectiveGstAmount > 0)
+                          _buildBillRow(
+                            'Govt Taxes & GST (${taxPercentage.toStringAsFixed(taxPercentage.truncateToDouble() == taxPercentage ? 0 : 1)}%)',
+                            '₹${effectiveGstAmount.toStringAsFixed(2)}',
+                            isDark,
+                          ),
+
                         const Divider(height: 24),
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -715,7 +737,7 @@ class _CartScreenState extends ConsumerState<CartScreen> {
                               style: TextStyle(fontWeight: FontWeight.w900, fontSize: 18),
                             ),
                             Text(
-                              '₹${cartState.total}',
+                              '₹${effectiveGrandTotal.toStringAsFixed(2)}',
                               style: TextStyle(
                                 fontWeight: FontWeight.w900, 
                                 fontSize: 18,
@@ -727,6 +749,32 @@ class _CartScreenState extends ConsumerState<CartScreen> {
                       ],
                     ),
                   ),
+
+                  if (isOutsideRadius) ...[
+                    const Gap(16),
+                    Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: Colors.red.shade50,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: Colors.red.shade200),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.warning_amber_rounded, color: Colors.red, size: 22),
+                          const Gap(10),
+                          Expanded(
+                            child: Text(
+                              deliveryCalcAsync.value?.errorMessage ??
+                                  'Delivery unavailable: Your address exceeds the maximum delivery radius for this restaurant branch.',
+                              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.red),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+
                 ],
               ),
             ),
@@ -756,7 +804,7 @@ class _CartScreenState extends ConsumerState<CartScreen> {
                           style: TextStyle(fontSize: 10, color: AppColors.textLight, fontWeight: FontWeight.bold),
                         ),
                         Text(
-                          '₹${cartState.total}',
+                          '₹${effectiveGrandTotal.toStringAsFixed(2)}',
                           style: TextStyle(
                             fontSize: 20, 
                             fontWeight: FontWeight.w900,
@@ -769,9 +817,23 @@ class _CartScreenState extends ConsumerState<CartScreen> {
                     // Checkout Button
                     Expanded(
                       child: CustomButton(
-                        text: 'Proceed to Pay',
+                        text: isOutsideRadius ? 'Outside Delivery Area' : 'Proceed to Pay',
                         height: 48,
                         onPressed: () {
+                          if (isOutsideRadius) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                  deliveryCalcResult?.errorMessage ??
+                                      'Delivery unavailable: Your address is outside the maximum delivery radius for this restaurant.',
+                                ),
+                                backgroundColor: AppColors.error,
+                                behavior: SnackBarBehavior.floating,
+                              ),
+                            );
+                            return;
+                          }
+
                           final addressState = ref.read(addressProvider);
                           final selectedAddr = addressState.selectedAddress;
 
@@ -795,6 +857,7 @@ class _CartScreenState extends ConsumerState<CartScreen> {
                         },
                       ),
                     ),
+
                   ],
                 ),
               ),
