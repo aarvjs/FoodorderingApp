@@ -25,6 +25,7 @@ import '../auth/screens/profile/complete_profile_screen.dart';
 import '../features/bookings/my_bookings_screen.dart';
 
 import '../features/referral/referral_screen.dart';
+import '../features/rewards/rewards_screen.dart';
 
 class AppRoutes {
   static const String splash = '/';
@@ -46,6 +47,7 @@ class AppRoutes {
   static const String orderSuccess = '/order-success';
   static const String address = '/address';
   static const String offers = '/offers';
+  static const String rewards = '/rewards';
   static const String notifications = '/notifications';
   static const String settings = '/settings';
   static const String premium = '/premium';
@@ -157,6 +159,10 @@ class AppRoutes {
         builder: (context, state) => const OffersScreen(),
       ),
       GoRoute(
+        path: rewards,
+        builder: (context, state) => const RewardsScreen(),
+      ),
+      GoRoute(
         path: notifications,
         builder: (context, state) => const NotificationsScreen(),
       ),
@@ -179,3 +185,4 @@ class AppRoutes {
     ],
   );
 }
+

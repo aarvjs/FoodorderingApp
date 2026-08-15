@@ -6,6 +6,7 @@ import '../../models/order.dart';
 import '../../auth/providers/auth_provider.dart';
 import 'order_repository.dart';
 import 'notification_repository.dart';
+import '../../features/rewards/repositories/reward_repository.dart';
 export '../../features/address/providers/address_provider.dart';
 
 // ==========================================
@@ -26,8 +27,18 @@ final userOrdersStreamProvider = StreamProvider<List<Order>>((ref) {
   final authState = ref.watch(authProvider);
   final userId = authState.userModel?.uid ?? '';
   final repo = ref.watch(orderRepositoryProvider);
-  return repo.streamCustomerOrders(userId);
+  final rewardRepo = ref.watch(rewardRepositoryProvider);
+
+  return repo.streamCustomerOrders(userId).map((orders) {
+    for (final order in orders) {
+      if (order.isCompleted || order.status.toUpperCase() == 'DELIVERED') {
+        rewardRepo.awardPointsForOrder(order);
+      }
+    }
+    return orders;
+  });
 });
+
 
 final userNotificationsStreamProvider = StreamProvider<List<AppNotificationModel>>((ref) {
   final authState = ref.watch(authProvider);

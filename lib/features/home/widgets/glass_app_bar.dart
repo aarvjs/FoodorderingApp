@@ -405,53 +405,6 @@ class _GlassAppBarState extends ConsumerState<GlassAppBar>
             ),
           ),
 
-          const Gap(8),
-
-          // Gold Membership Badge
-          Builder(
-            builder: (ctx) => GestureDetector(
-              onTap: () {
-                widget.onWalletTap?.call();
-                ctx.push('/premium');
-              },
-              child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    colors: [Color(0xFFFFD700), Color(0xFFFF8C00)],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  borderRadius: BorderRadius.circular(12),
-                  boxShadow: [
-                    BoxShadow(
-                      color: const Color(0xFFFFD700).withOpacity(0.35),
-                      blurRadius: 10,
-                      offset: const Offset(0, 3),
-                    ),
-                  ],
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Iconsax.award5, color: Colors.white, size: 13),
-                    const Gap(4),
-                    Text(
-                      'GOLD',
-                      style: GoogleFonts.poppins(
-                        color: Colors.white,
-                        fontSize: 9,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: 0.8,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-
           const Gap(10),
 
           // Profile Avatar

@@ -46,10 +46,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
 
   final List<Map<String, dynamic>> _exploreMore = const [
     {
-      'title': 'Offers',
-      'icon': Iconsax.ticket_discount,
-      'color': Color(0xFFFF4D4F),
-      'bg': Color(0xFFFFEEEB),
+      'title': 'Rewards',
+      'icon': Iconsax.award5,
+      'color': Color(0xFFFF9800),
+      'bg': Color(0xFFFFF3E0),
     },
     {
       'title': 'Coupons',
@@ -63,25 +63,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
       'color': Color(0xFF3B82F6),
       'bg': Color(0xFFEBF5FF),
     },
-    {
-      'title': 'Referrals',
-      'icon': Iconsax.share,
-      'color': Color(0xFF10B981),
-      'bg': Color(0xFFE8FFF5),
-    },
-    {
-      'title': 'Gift Cards',
-      'icon': Iconsax.gift,
-      'color': Color(0xFF8B5CF6),
-      'bg': Color(0xFFF5F0FF),
-    },
-    {
-      'title': 'Premium',
-      'icon': Iconsax.crown,
-      'color': Color(0xFFD97706),
-      'bg': Color(0xFFFFF8E1),
-    },
   ];
+
+
 
   @override
   void initState() {
@@ -363,7 +347,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                         return GestureDetector(
                           onTap: () {
                             final title = item['title'] as String;
-                            if (title == 'Offers' || title == 'Coupons') {
+                            if (title == 'Rewards') {
+                              context.push('/rewards');
+                            } else if (title == 'Offers' || title == 'Coupons') {
                               context.push('/offers');
                             } else if (title == 'Referrals') {
                               context.push('/referral');

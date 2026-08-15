@@ -11,6 +11,8 @@ import '../../models/address.dart';
 import '../../auth/providers/auth_provider.dart';
 
 
+
+
 class CheckoutScreen extends ConsumerStatefulWidget {
   const CheckoutScreen({super.key});
 
@@ -251,6 +253,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
 
       // Save order in Riverpod history
       ref.read(ordersProvider.notifier).placeOrder(createdOrder);
+
+
 
       // Clear user cart
       ref.read(cartProvider.notifier).clearCart();
