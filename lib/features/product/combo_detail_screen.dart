@@ -42,7 +42,7 @@ class ComboDetailScreen extends ConsumerWidget {
     final String targetRestName = restaurant?.name ?? 'Restaurant';
 
     final groups = item.customizationGroups;
-    if (groups.isNotEmpty || item.isCustomisable) {
+    if (groups.isNotEmpty || item.isCustomisable || item.isVariantEnabled) {
       showModalBottomSheet(
         context: context,
         useRootNavigator: true,

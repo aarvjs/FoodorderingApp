@@ -36,8 +36,14 @@ class _ComboProductCustomizationSheetState
     extends ConsumerState<ComboProductCustomizationSheet> {
   int _quantity = 1;
 
-  // Selected option IDs per group: groupId -> Set of option IDs
-  final Map<String, Set<String>> _selectedOptions = {};
+  // Selected Size Variant (when isVariantEnabled is true)
+  ComboItemVariant? _selectedVariant;
+
+  // Selected options in Variant Mode: varItemId -> Set of option IDs
+  final Map<String, Set<String>> _selectedVariantOptions = {};
+
+  // Selected option IDs in Standard Mode: groupId -> Set of option IDs
+  final Map<String, Set<String>> _selectedGroupOptions = {};
 
   @override
   void initState() {
@@ -46,11 +52,17 @@ class _ComboProductCustomizationSheetState
   }
 
   void _initDefaults(ComboItemModel currentItem) {
-    for (final group in currentItem.customizationGroups) {
-      if (!_selectedOptions.containsKey(group.id)) {
-        _selectedOptions[group.id] = <String>{};
-        if (group.isRequired && group.options.isNotEmpty) {
-          _selectedOptions[group.id]!.add(group.options.first.id);
+    if (currentItem.isVariantEnabled && currentItem.variants.isNotEmpty) {
+      if (_selectedVariant == null || !currentItem.variants.any((v) => v.id == _selectedVariant!.id)) {
+        _selectedVariant = currentItem.variants.first;
+      }
+    } else {
+      for (final group in currentItem.customizationGroups) {
+        if (!_selectedGroupOptions.containsKey(group.id)) {
+          _selectedGroupOptions[group.id] = <String>{};
+          if (group.isRequired && group.options.isNotEmpty) {
+            _selectedGroupOptions[group.id]!.add(group.options.first.id);
+          }
         }
       }
     }
@@ -59,11 +71,22 @@ class _ComboProductCustomizationSheetState
   double _calculateUnitPrice(ComboItemModel currentItem) {
     double total = currentItem.price;
 
-    for (final group in currentItem.customizationGroups) {
-      final selectedSet = _selectedOptions[group.id] ?? <String>{};
-      for (final option in group.options) {
-        if (selectedSet.contains(option.id)) {
-          total += option.price;
+    if (currentItem.isVariantEnabled && _selectedVariant != null) {
+      for (final varItem in _selectedVariant!.items) {
+        final selectedSet = _selectedVariantOptions[varItem.id] ?? <String>{};
+        for (final option in varItem.options) {
+          if (selectedSet.contains(option.id)) {
+            total += option.additionalPrice;
+          }
+        }
+      }
+    } else {
+      for (final group in currentItem.customizationGroups) {
+        final selectedSet = _selectedGroupOptions[group.id] ?? <String>{};
+        for (final option in group.options) {
+          if (selectedSet.contains(option.id)) {
+            total += option.price;
+          }
         }
       }
     }
@@ -71,23 +94,35 @@ class _ComboProductCustomizationSheetState
     return total;
   }
 
-  void _toggleOption(ComboCustomizationGroupModel group, ComboCustomizationOptionModel option) {
+  void _toggleVariantOption(ComboVariantItem varItem, ComboVariantOption option) {
     setState(() {
-      final currentSet = _selectedOptions[group.id] ?? <String>{};
+      final currentSet = _selectedVariantOptions[varItem.id] ?? <String>{};
+      final newSet = Set<String>.from(currentSet);
+
+      if (newSet.contains(option.id)) {
+        newSet.remove(option.id);
+      } else {
+        newSet.add(option.id);
+      }
+      _selectedVariantOptions[varItem.id] = newSet;
+    });
+  }
+
+  void _toggleGroupOption(ComboCustomizationGroupModel group, ComboCustomizationOptionModel option) {
+    setState(() {
+      final currentSet = _selectedGroupOptions[group.id] ?? <String>{};
 
       if (group.selectionType == 'SINGLE') {
-        // Single selection radio behaviour
         if (group.isRequired) {
-          _selectedOptions[group.id] = {option.id};
+          _selectedGroupOptions[group.id] = {option.id};
         } else {
           if (currentSet.contains(option.id)) {
-            _selectedOptions[group.id] = <String>{};
+            _selectedGroupOptions[group.id] = <String>{};
           } else {
-            _selectedOptions[group.id] = {option.id};
+            _selectedGroupOptions[group.id] = {option.id};
           }
         }
       } else {
-        // Multiple selection checkbox behaviour
         final newSet = Set<String>.from(currentSet);
         if (newSet.contains(option.id)) {
           if (!group.isRequired || newSet.length > group.minSelection) {
@@ -98,7 +133,7 @@ class _ComboProductCustomizationSheetState
             newSet.add(option.id);
           }
         }
-        _selectedOptions[group.id] = newSet;
+        _selectedGroupOptions[group.id] = newSet;
       }
     });
   }
@@ -106,14 +141,30 @@ class _ComboProductCustomizationSheetState
   List<String> _buildSelectedCustomizationSummaries(ComboItemModel currentItem) {
     final List<String> summaries = [];
 
-    for (final group in currentItem.customizationGroups) {
-      final selectedSet = _selectedOptions[group.id] ?? <String>{};
-      for (final option in group.options) {
-        if (selectedSet.contains(option.id)) {
-          if (option.price > 0) {
-            summaries.add('${group.name}: ${option.name} (+₹${option.price.toStringAsFixed(0)})');
-          } else {
-            summaries.add('${group.name}: ${option.name}');
+    if (currentItem.isVariantEnabled && _selectedVariant != null) {
+      summaries.add('Size: ${_selectedVariant!.name}');
+      for (final varItem in _selectedVariant!.items) {
+        final selectedSet = _selectedVariantOptions[varItem.id] ?? <String>{};
+        for (final option in varItem.options) {
+          if (selectedSet.contains(option.id)) {
+            if (option.additionalPrice > 0) {
+              summaries.add('${varItem.name}: ${option.name} (+₹${option.additionalPrice.toStringAsFixed(0)})');
+            } else {
+              summaries.add('${varItem.name}: ${option.name}');
+            }
+          }
+        }
+      }
+    } else {
+      for (final group in currentItem.customizationGroups) {
+        final selectedSet = _selectedGroupOptions[group.id] ?? <String>{};
+        for (final option in group.options) {
+          if (selectedSet.contains(option.id)) {
+            if (option.price > 0) {
+              summaries.add('${group.name}: ${option.name} (+₹${option.price.toStringAsFixed(0)})');
+            } else {
+              summaries.add('${group.name}: ${option.name}');
+            }
           }
         }
       }
@@ -122,16 +173,27 @@ class _ComboProductCustomizationSheetState
     return summaries;
   }
 
-  bool _validateRequiredGroups(BuildContext context, ComboItemModel currentItem) {
-    for (final group in currentItem.customizationGroups) {
-      final selectedSet = _selectedOptions[group.id] ?? <String>{};
-      if (group.isRequired && selectedSet.length < group.minSelection) {
+  bool _validateRequiredSelections(BuildContext context, ComboItemModel currentItem) {
+    if (currentItem.isVariantEnabled) {
+      if (_selectedVariant == null) {
         AppSnackbar.show(
           context,
-          'Please make a selection for "${group.name}".',
+          'Please select a size variant.',
           backgroundColor: Colors.red.shade700,
         );
         return false;
+      }
+    } else {
+      for (final group in currentItem.customizationGroups) {
+        final selectedSet = _selectedGroupOptions[group.id] ?? <String>{};
+        if (group.isRequired && selectedSet.length < group.minSelection) {
+          AppSnackbar.show(
+            context,
+            'Please make a selection for "${group.name}".',
+            backgroundColor: Colors.red.shade700,
+          );
+          return false;
+        }
       }
     }
     return true;
@@ -140,16 +202,32 @@ class _ComboProductCustomizationSheetState
   List<ComboCustomizationSelection> _buildSelectedCustomizationObjects(ComboItemModel currentItem) {
     final List<ComboCustomizationSelection> list = [];
 
-    for (final group in currentItem.customizationGroups) {
-      final selectedSet = _selectedOptions[group.id] ?? <String>{};
-      for (final option in group.options) {
-        if (selectedSet.contains(option.id)) {
-          list.add(ComboCustomizationSelection(
-            groupName: group.name,
-            optionId: option.id,
-            optionName: option.name,
-            additionalPrice: option.price,
-          ));
+    if (currentItem.isVariantEnabled && _selectedVariant != null) {
+      for (final varItem in _selectedVariant!.items) {
+        final selectedSet = _selectedVariantOptions[varItem.id] ?? <String>{};
+        for (final option in varItem.options) {
+          if (selectedSet.contains(option.id)) {
+            list.add(ComboCustomizationSelection(
+              groupName: varItem.name,
+              optionId: option.id,
+              optionName: option.name,
+              additionalPrice: option.additionalPrice,
+            ));
+          }
+        }
+      }
+    } else {
+      for (final group in currentItem.customizationGroups) {
+        final selectedSet = _selectedGroupOptions[group.id] ?? <String>{};
+        for (final option in group.options) {
+          if (selectedSet.contains(option.id)) {
+            list.add(ComboCustomizationSelection(
+              groupName: group.name,
+              optionId: option.id,
+              optionName: option.name,
+              additionalPrice: option.price,
+            ));
+          }
         }
       }
     }
@@ -158,11 +236,12 @@ class _ComboProductCustomizationSheetState
   }
 
   void _handleAddToCart(ComboItemModel currentItem) {
-    if (!_validateRequiredGroups(context, currentItem)) return;
+    if (!_validateRequiredSelections(context, currentItem)) return;
 
     final unitPrice = _calculateUnitPrice(currentItem);
     final customizations = _buildSelectedCustomizationSummaries(currentItem);
     final customizationObjects = _buildSelectedCustomizationObjects(currentItem);
+    final selectedSizeStr = currentItem.isVariantEnabled ? _selectedVariant?.name : null;
 
     final foodItem = FoodItem(
       id: currentItem.id,
@@ -191,6 +270,7 @@ class _ComboProductCustomizationSheetState
     final cartItem = CartItem(
       foodItem: foodItem,
       quantity: _quantity,
+      selectedSize: selectedSizeStr,
       restaurantId: widget.restaurantId,
       branchId: targetBranchId,
       restaurantName: widget.restaurantName,
@@ -208,9 +288,10 @@ class _ComboProductCustomizationSheetState
 
     Navigator.of(context).pop();
 
+    final sizeInfo = selectedSizeStr != null ? ' ($selectedSizeStr)' : '';
     TopToast.show(
       context,
-      'Added "${currentItem.name}" with customizations to cart!',
+      'Added "${currentItem.name}"$sizeInfo to cart!',
     );
   }
 
@@ -226,7 +307,6 @@ class _ComboProductCustomizationSheetState
 
     final unitPrice = _calculateUnitPrice(item);
     final totalPrice = unitPrice * _quantity;
-    final groups = item.customizationGroups;
 
     return Container(
       constraints: BoxConstraints(
@@ -341,7 +421,7 @@ class _ComboProductCustomizationSheetState
                         width: 76,
                         height: 76,
                         fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => Container(
+                        errorBuilder: (context, error, stackTrace) => Container(
                           width: 76,
                           height: 76,
                           color: AppColors.primary.withValues(alpha: 0.1),
@@ -357,7 +437,7 @@ class _ComboProductCustomizationSheetState
                 const Gap(10),
 
                 // Real-time Loading Indicator
-                if (liveItemAsync.isLoading && groups.isEmpty)
+                if (liveItemAsync.isLoading && !item.isVariantEnabled && item.customizationGroups.isEmpty)
                   const Padding(
                     padding: EdgeInsets.symmetric(vertical: 24),
                     child: Center(
@@ -365,138 +445,362 @@ class _ComboProductCustomizationSheetState
                     ),
                   ),
 
-                // Customization Groups
-                if (!liveItemAsync.isLoading && groups.isEmpty)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 24),
-                    child: Center(
-                      child: Text(
-                        'Standard combo item (Included as is)',
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.bold,
-                          color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
-                        ),
-                      ),
+                // -----------------------------------------------------
+                // VARIANT CONFIGURATION MODE (isVariantEnabled == true)
+                // -----------------------------------------------------
+                if (item.isVariantEnabled && item.variants.isNotEmpty) ...[
+                  // 1. Choose Size Selector
+                  Text(
+                    'Choose Size',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w900,
+                      color: isDark ? Colors.white : AppColors.textDark,
                     ),
-                  )
-                else
-                  ...groups.map((group) {
-                    final isSingle = group.selectionType == 'SINGLE';
-                    final selectedSet = _selectedOptions[group.id] ?? <String>{};
+                  ),
+                  const Gap(10),
 
-                    return Container(
-                      margin: const EdgeInsets.only(bottom: 18),
-                      padding: const EdgeInsets.all(14),
-                      decoration: BoxDecoration(
-                        color: isDark ? AppColors.darkBackground : Colors.grey.shade50,
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(
-                          color: isDark ? AppColors.darkDivider : Colors.grey.shade200,
-                        ),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          // Group Title & Rule Badges
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Text(
-                                group.name,
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w900,
-                                  color: isDark ? Colors.white : AppColors.textDark,
-                                ),
+                  SizedBox(
+                    height: 44,
+                    child: ListView.builder(
+                      scrollDirection: Axis.horizontal,
+                      itemCount: item.variants.length,
+                      itemBuilder: (context, vIdx) {
+                        final variant = item.variants[vIdx];
+                        final isSel = _selectedVariant?.id == variant.id;
+
+                        return GestureDetector(
+                          onTap: () {
+                            setState(() {
+                              _selectedVariant = variant;
+                            });
+                          },
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 180),
+                            margin: const EdgeInsets.only(right: 10),
+                            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+                            decoration: BoxDecoration(
+                              color: isSel
+                                  ? AppColors.primary
+                                  : (isDark ? AppColors.darkBackground : Colors.grey.shade100),
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(
+                                color: isSel
+                                    ? AppColors.primary
+                                    : (isDark ? AppColors.darkDivider : Colors.grey.shade300),
+                                width: isSel ? 1.8 : 1.0,
                               ),
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                                decoration: BoxDecoration(
-                                  color: group.isRequired
-                                      ? AppColors.primary.withValues(alpha: 0.12)
-                                      : Colors.grey.shade200,
-                                  borderRadius: BorderRadius.circular(6),
+                              boxShadow: isSel
+                                  ? [
+                                      BoxShadow(
+                                        color: AppColors.primary.withValues(alpha: 0.25),
+                                        blurRadius: 8,
+                                        offset: const Offset(0, 3),
+                                      )
+                                    ]
+                                  : null,
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  isSel ? Icons.radio_button_checked_rounded : Icons.radio_button_off_rounded,
+                                  size: 16,
+                                  color: isSel ? Colors.white : Colors.grey.shade500,
                                 ),
-                                child: Text(
-                                  group.isRequired
-                                      ? (isSingle ? 'REQUIRED • SELECT 1' : 'REQUIRED')
-                                      : (isSingle ? 'OPTIONAL • CHOOSE 1' : 'OPTIONAL (UP TO ${group.maxSelection})'),
+                                const Gap(6),
+                                Text(
+                                  variant.name,
                                   style: TextStyle(
-                                    fontSize: 9.5,
-                                    fontWeight: FontWeight.w800,
-                                    color: group.isRequired ? AppColors.primary : Colors.grey.shade700,
+                                    fontSize: 13,
+                                    fontWeight: isSel ? FontWeight.w900 : FontWeight.w700,
+                                    color: isSel
+                                        ? Colors.white
+                                        : (isDark ? Colors.grey.shade300 : AppColors.textDark),
                                   ),
                                 ),
-                              ),
-                            ],
+                              ],
+                            ),
                           ),
+                        );
+                      },
+                    ),
+                  ),
 
-                          const Gap(10),
+                  const Gap(20),
 
-                          // Option Items inside Group
-                          ...group.options.map((option) {
-                            final isSelected = selectedSet.contains(option.id);
+                  // 2. Items & Options belonging specifically to selected Size Variant
+                  if (_selectedVariant != null) ...[
+                    ..._selectedVariant!.items.map((varItem) {
+                      final selectedSet = _selectedVariantOptions[varItem.id] ?? <String>{};
 
-                            return InkWell(
-                              onTap: () => _toggleOption(group, option),
-                              borderRadius: BorderRadius.circular(10),
-                              child: Padding(
-                                padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
-                                child: Row(
-                                  children: [
-                                    // Radio / Checkbox Icon
-                                    Icon(
-                                      isSingle
-                                          ? (isSelected
-                                              ? Icons.radio_button_checked_rounded
-                                              : Icons.radio_button_off_rounded)
-                                          : (isSelected
-                                              ? Icons.check_box_rounded
-                                              : Icons.check_box_outline_blank_rounded),
-                                      size: 20,
-                                      color: isSelected
-                                          ? AppColors.primary
-                                          : (isDark ? Colors.grey.shade500 : Colors.grey.shade400),
-                                    ),
-                                    const Gap(10),
-
-                                    // Option Name
-                                    Expanded(
-                                      child: Text(
-                                        option.name,
+                      return Container(
+                        margin: const EdgeInsets.only(bottom: 18),
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: isDark ? AppColors.darkBackground : Colors.grey.shade50,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: isDark ? AppColors.darkDivider : Colors.grey.shade200,
+                          ),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // Item Header inside Size
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        varItem.name,
                                         style: TextStyle(
-                                          fontSize: 13,
-                                          fontWeight: isSelected ? FontWeight.w800 : FontWeight.w500,
-                                          color: isSelected
-                                              ? (isDark ? Colors.white : AppColors.textDark)
-                                              : (isDark ? Colors.grey.shade300 : Colors.grey.shade800),
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.w900,
+                                          color: isDark ? Colors.white : AppColors.textDark,
                                         ),
                                       ),
-                                    ),
-
-                                    // Option Additional Price
-                                    Text(
-                                      option.price > 0
-                                          ? '+₹${option.price.toStringAsFixed(0)}'
-                                          : 'Free',
-                                      style: TextStyle(
-                                        fontSize: 12.5,
-                                        fontWeight: FontWeight.w800,
-                                        color: option.price > 0
-                                            ? AppColors.primary
-                                            : const Color(0xFF10B981),
-                                      ),
-                                    ),
-                                  ],
+                                      if (varItem.description.isNotEmpty) ...[
+                                        const Gap(2),
+                                        Text(
+                                          varItem.description,
+                                          style: TextStyle(
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.w500,
+                                            color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
+                                          ),
+                                        ),
+                                      ],
+                                    ],
+                                  ),
                                 ),
-                              ),
-                            );
-                          }),
-                        ],
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: Colors.amber.shade50,
+                                    borderRadius: BorderRadius.circular(6),
+                                    border: Border.all(color: Colors.amber.shade300),
+                                  ),
+                                  child: Text(
+                                    '${_selectedVariant!.name} Item',
+                                    style: TextStyle(
+                                      fontSize: 9.5,
+                                      fontWeight: FontWeight.w800,
+                                      color: Colors.amber.shade900,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+
+                            const Gap(10),
+
+                            // Options inside Item
+                            if (varItem.options.isEmpty)
+                              Padding(
+                                padding: const EdgeInsets.symmetric(vertical: 6),
+                                child: Text(
+                                  'Standard item included',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontStyle: FontStyle.italic,
+                                    color: isDark ? Colors.grey.shade500 : Colors.grey.shade600,
+                                  ),
+                                ),
+                              )
+                            else
+                              ...varItem.options.map((option) {
+                                final isSelected = selectedSet.contains(option.id);
+
+                                return InkWell(
+                                  onTap: () => _toggleVariantOption(varItem, option),
+                                  borderRadius: BorderRadius.circular(10),
+                                  child: Padding(
+                                    padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+                                    child: Row(
+                                      children: [
+                                        // Checkbox Icon
+                                        Icon(
+                                          isSelected
+                                              ? Icons.check_box_rounded
+                                              : Icons.check_box_outline_blank_rounded,
+                                          size: 20,
+                                          color: isSelected
+                                              ? AppColors.primary
+                                              : (isDark ? Colors.grey.shade500 : Colors.grey.shade400),
+                                        ),
+                                        const Gap(10),
+
+                                        // Option Name
+                                        Expanded(
+                                          child: Text(
+                                            option.name,
+                                            style: TextStyle(
+                                              fontSize: 13,
+                                              fontWeight: isSelected ? FontWeight.w800 : FontWeight.w500,
+                                              color: isSelected
+                                                  ? (isDark ? Colors.white : AppColors.textDark)
+                                                  : (isDark ? Colors.grey.shade300 : Colors.grey.shade800),
+                                            ),
+                                          ),
+                                        ),
+
+                                        // Additional Price Tag
+                                        Text(
+                                          option.additionalPrice > 0
+                                              ? '+₹${option.additionalPrice.toStringAsFixed(0)}'
+                                              : 'Free',
+                                          style: TextStyle(
+                                            fontSize: 12.5,
+                                            fontWeight: FontWeight.w800,
+                                            color: option.additionalPrice > 0
+                                                ? AppColors.primary
+                                                : const Color(0xFF10B981),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                );
+                              }),
+                          ],
+                        ),
+                      );
+                    }),
+                  ],
+                ] else ...[
+                  // -----------------------------------------------------
+                  // STANDARD CUSTOMIZATION GROUPS (isVariantEnabled == false)
+                  // -----------------------------------------------------
+                  if (!liveItemAsync.isLoading && item.customizationGroups.isEmpty)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 24),
+                      child: Center(
+                        child: Text(
+                          'Standard combo item (Included as is)',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.bold,
+                            color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
+                          ),
+                        ),
                       ),
-                    );
-                  }),
+                    )
+                  else
+                    ...item.customizationGroups.map((group) {
+                      final isSingle = group.selectionType == 'SINGLE';
+                      final selectedSet = _selectedGroupOptions[group.id] ?? <String>{};
+
+                      return Container(
+                        margin: const EdgeInsets.only(bottom: 18),
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: isDark ? AppColors.darkBackground : Colors.grey.shade50,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: isDark ? AppColors.darkDivider : Colors.grey.shade200,
+                          ),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text(
+                                  group.name,
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w900,
+                                    color: isDark ? Colors.white : AppColors.textDark,
+                                  ),
+                                ),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: group.isRequired
+                                        ? AppColors.primary.withValues(alpha: 0.12)
+                                        : Colors.grey.shade200,
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: Text(
+                                    group.isRequired
+                                        ? (isSingle ? 'REQUIRED • SELECT 1' : 'REQUIRED')
+                                        : (isSingle ? 'OPTIONAL • CHOOSE 1' : 'OPTIONAL (UP TO ${group.maxSelection})'),
+                                    style: TextStyle(
+                                      fontSize: 9.5,
+                                      fontWeight: FontWeight.w800,
+                                      color: group.isRequired ? AppColors.primary : Colors.grey.shade700,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+
+                            const Gap(10),
+
+                            ...group.options.map((option) {
+                              final isSelected = selectedSet.contains(option.id);
+
+                              return InkWell(
+                                onTap: () => _toggleGroupOption(group, option),
+                                borderRadius: BorderRadius.circular(10),
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+                                  child: Row(
+                                    children: [
+                                      Icon(
+                                        isSingle
+                                            ? (isSelected
+                                                ? Icons.radio_button_checked_rounded
+                                                : Icons.radio_button_off_rounded)
+                                            : (isSelected
+                                                ? Icons.check_box_rounded
+                                                : Icons.check_box_outline_blank_rounded),
+                                        size: 20,
+                                        color: isSelected
+                                            ? AppColors.primary
+                                            : (isDark ? Colors.grey.shade500 : Colors.grey.shade400),
+                                      ),
+                                      const Gap(10),
+
+                                      Expanded(
+                                        child: Text(
+                                          option.name,
+                                          style: TextStyle(
+                                            fontSize: 13,
+                                            fontWeight: isSelected ? FontWeight.w800 : FontWeight.w500,
+                                            color: isSelected
+                                                ? (isDark ? Colors.white : AppColors.textDark)
+                                                : (isDark ? Colors.grey.shade300 : Colors.grey.shade800),
+                                          ),
+                                        ),
+                                      ),
+
+                                      Text(
+                                        option.price > 0
+                                            ? '+₹${option.price.toStringAsFixed(0)}'
+                                            : 'Free',
+                                        style: TextStyle(
+                                          fontSize: 12.5,
+                                          fontWeight: FontWeight.w800,
+                                          color: option.price > 0
+                                              ? AppColors.primary
+                                              : const Color(0xFF10B981),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              );
+                            }),
+                          ],
+                        ),
+                      );
+                    }),
+                ],
 
                 const Gap(20),
               ],

@@ -1,3 +1,125 @@
+class ComboVariantOption {
+  final String id;
+  final String name;
+  final double additionalPrice;
+  final bool isActive;
+
+  const ComboVariantOption({
+    required this.id,
+    required this.name,
+    required this.additionalPrice,
+    this.isActive = true,
+  });
+
+  factory ComboVariantOption.fromMap(Map<String, dynamic> data) {
+    final priceVal = data['additionalPrice'] ?? data['price'] ?? 0;
+    final double price = (priceVal is num)
+        ? priceVal.toDouble()
+        : double.tryParse(priceVal?.toString() ?? '0.0') ?? 0.0;
+    final active = data['isActive'] ?? data['isAvailable'] ?? data['active'] ?? true;
+    return ComboVariantOption(
+      id: (data['id'] ?? '').toString(),
+      name: (data['name'] ?? '').toString(),
+      additionalPrice: price,
+      isActive: active == true || active.toString().toLowerCase() == 'true',
+    );
+  }
+}
+
+class ComboVariantItem {
+  final String id;
+  final String name;
+  final String description;
+  final bool isActive;
+  final List<ComboVariantOption> options;
+
+  const ComboVariantItem({
+    required this.id,
+    required this.name,
+    this.description = '',
+    this.isActive = true,
+    required this.options,
+  });
+
+  factory ComboVariantItem.fromMap(Map<String, dynamic> data) {
+    final rawOptions = data['options'] as List? ?? [];
+    final optionsList = <ComboVariantOption>[];
+    for (final item in rawOptions) {
+      if (item is Map) {
+        final opt = ComboVariantOption.fromMap(Map<String, dynamic>.from(item));
+        if (opt.isActive) {
+          optionsList.add(opt);
+        }
+      }
+    }
+    final active = data['isActive'] ?? data['active'] ?? true;
+    return ComboVariantItem(
+      id: (data['id'] ?? '').toString(),
+      name: (data['name'] ?? '').toString(),
+      description: (data['description'] ?? '').toString(),
+      isActive: active == true || active.toString().toLowerCase() == 'true',
+      options: optionsList,
+    );
+  }
+}
+
+class ComboItemVariant {
+  final String id;
+  final String name;
+  final bool isActive;
+  final List<ComboVariantItem> items;
+
+  const ComboItemVariant({
+    required this.id,
+    required this.name,
+    this.isActive = true,
+    required this.items,
+  });
+
+  factory ComboItemVariant.fromMap(Map<String, dynamic> data) {
+    final active = data['isActive'] ?? data['active'] ?? true;
+    final rawItems = data['items'] as List? ?? [];
+    final itemsList = <ComboVariantItem>[];
+    for (final item in rawItems) {
+      if (item is Map) {
+        final varItem = ComboVariantItem.fromMap(Map<String, dynamic>.from(item));
+        if (varItem.isActive) {
+          itemsList.add(varItem);
+        }
+      }
+    }
+
+    if (itemsList.isEmpty && data['options'] is List) {
+      final rawLegacyOptions = data['options'] as List;
+      final legacyOpts = <ComboVariantOption>[];
+      for (final item in rawLegacyOptions) {
+        if (item is Map) {
+          final opt = ComboVariantOption.fromMap(Map<String, dynamic>.from(item));
+          if (opt.isActive) {
+            legacyOpts.add(opt);
+          }
+        }
+      }
+      if (legacyOpts.isNotEmpty) {
+        itemsList.add(ComboVariantItem(
+          id: 'vitem-default-${data['id'] ?? 'legacy'}',
+          name: 'Items & Extras',
+          description: '',
+          isActive: true,
+          options: legacyOpts,
+        ));
+      }
+    }
+
+    return ComboItemVariant(
+      id: (data['id'] ?? '').toString(),
+      name: (data['name'] ?? '').toString(),
+      isActive: active == true || active.toString().toLowerCase() == 'true',
+      items: itemsList,
+    );
+  }
+}
+
 class ComboCustomizationOptionModel {
   final String id;
   final String name;
@@ -101,6 +223,8 @@ class ComboItemModel {
   final int ratingCount;
   final bool isCustomisable;
   final List<ComboCustomizationGroupModel>? _customizationGroups;
+  final bool isVariantEnabled;
+  final List<ComboItemVariant> variants;
   final DateTime? createdAt;
 
   const ComboItemModel({
@@ -120,6 +244,8 @@ class ComboItemModel {
     this.ratingCount = 569,
     this.isCustomisable = true,
     List<ComboCustomizationGroupModel>? customizationGroups,
+    this.isVariantEnabled = false,
+    this.variants = const [],
     this.createdAt,
   }) : _customizationGroups = customizationGroups;
 
@@ -164,6 +290,20 @@ class ComboItemModel {
       }
     }
 
+    final bool isVariantEnabled = data['isVariantEnabled'] == true ||
+        data['isVariantEnabled'].toString().toLowerCase() == 'true';
+
+    final rawVariants = data['variants'] as List? ?? [];
+    final parsedVariants = <ComboItemVariant>[];
+    for (final item in rawVariants) {
+      if (item is Map) {
+        final variant = ComboItemVariant.fromMap(Map<String, dynamic>.from(item));
+        if (variant.isActive) {
+          parsedVariants.add(variant);
+        }
+      }
+    }
+
     DateTime? createdAt;
     if (data['createdAt'] is String) {
       createdAt = DateTime.tryParse(data['createdAt']);
@@ -184,8 +324,10 @@ class ComboItemModel {
       isVeg: isVeg,
       rating: rating,
       ratingCount: ratingCount,
-      isCustomisable: data['isCustomisable'] ?? (parsedGroups.isNotEmpty),
+      isCustomisable: data['isCustomisable'] ?? (parsedGroups.isNotEmpty || isVariantEnabled),
       customizationGroups: parsedGroups,
+      isVariantEnabled: isVariantEnabled,
+      variants: parsedVariants,
       createdAt: createdAt,
     );
   }
