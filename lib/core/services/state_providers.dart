@@ -148,8 +148,18 @@ class CartNotifier extends Notifier<CartState> {
   @override
   CartState build() => const CartState(items: []);
 
-  bool isDifferentRestaurant(String restaurantId) {
-    return state.items.isNotEmpty && state.items.first.restaurantId != restaurantId;
+  bool isDifferentRestaurant(String restaurantId, {String? branchId}) {
+    if (state.items.isEmpty) return false;
+    final firstItem = state.items.first;
+    final firstBranchId = firstItem.branchId.isNotEmpty ? firstItem.branchId : firstItem.restaurantId;
+    final firstRestId = firstItem.restaurantId;
+
+    final targetBranchId = (branchId != null && branchId.isNotEmpty) ? branchId : restaurantId;
+
+    if (branchId != null && branchId.isNotEmpty) {
+      return firstBranchId != targetBranchId && firstItem.branchId != targetBranchId;
+    }
+    return firstRestId != restaurantId && firstBranchId != restaurantId;
   }
 
   void forceAddItem(CartItem item) {
@@ -157,10 +167,16 @@ class CartNotifier extends Notifier<CartState> {
   }
 
   void addItem(CartItem item) {
-    // If adding item from a different restaurant, reset cart
-    if (state.items.isNotEmpty && state.items.first.restaurantId != item.restaurantId) {
-      state = CartState(items: [item], appliedCoupon: null, appliedOfferId: null, discountPercentage: 0.0);
-      return;
+    // If adding item from a different restaurant or branch, reset cart
+    if (state.items.isNotEmpty) {
+      final firstItem = state.items.first;
+      final firstBranchId = firstItem.branchId.isNotEmpty ? firstItem.branchId : firstItem.restaurantId;
+      final itemBranchId = item.branchId.isNotEmpty ? item.branchId : item.restaurantId;
+
+      if (firstBranchId != itemBranchId && firstItem.restaurantId != item.restaurantId) {
+        state = CartState(items: [item], appliedCoupon: null, appliedOfferId: null, discountPercentage: 0.0);
+        return;
+      }
     }
 
     final index = state.items.indexWhere((i) => i.cartKey == item.cartKey);

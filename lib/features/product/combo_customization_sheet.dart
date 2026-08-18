@@ -15,6 +15,7 @@ class ComboProductCustomizationSheet extends ConsumerStatefulWidget {
   final ComboItemModel item;
   final ComboModel combo;
   final String restaurantId;
+  final String? branchId;
   final String restaurantName;
 
   const ComboProductCustomizationSheet({
@@ -22,6 +23,7 @@ class ComboProductCustomizationSheet extends ConsumerStatefulWidget {
     required this.item,
     required this.combo,
     required this.restaurantId,
+    this.branchId,
     required this.restaurantName,
   });
 
@@ -177,12 +179,20 @@ class _ComboProductCustomizationSheetState
       category: 'Combos',
       isAvailable: true,
       restaurantId: widget.restaurantId,
+      branchId: (widget.branchId != null && widget.branchId!.isNotEmpty)
+          ? widget.branchId
+          : widget.restaurantId,
     );
+
+    final String targetBranchId = (widget.branchId != null && widget.branchId!.isNotEmpty)
+        ? widget.branchId!
+        : widget.restaurantId;
 
     final cartItem = CartItem(
       foodItem: foodItem,
       quantity: _quantity,
       restaurantId: widget.restaurantId,
+      branchId: targetBranchId,
       restaurantName: widget.restaurantName,
       isCombo: true,
       comboId: widget.combo.id,
@@ -494,84 +504,87 @@ class _ComboProductCustomizationSheetState
           ),
 
           // Bottom Action Bar with Dynamic Live Price
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-            decoration: BoxDecoration(
-              color: isDark ? AppColors.darkCard : Colors.white,
-              border: Border(
-                top: BorderSide(
-                  color: isDark ? AppColors.darkDivider : Colors.grey.shade200,
+          SafeArea(
+            top: false,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+              decoration: BoxDecoration(
+                color: isDark ? AppColors.darkCard : Colors.white,
+                border: Border(
+                  top: BorderSide(
+                    color: isDark ? AppColors.darkDivider : Colors.grey.shade200,
+                  ),
                 ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.05),
+                    blurRadius: 10,
+                    offset: const Offset(0, -3),
+                  ),
+                ],
               ),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.05),
-                  blurRadius: 10,
-                  offset: const Offset(0, -3),
-                ),
-              ],
-            ),
-            child: Row(
-              children: [
-                // Quantity Counter
-                Container(
-                  decoration: BoxDecoration(
-                    color: isDark ? AppColors.darkBackground : Colors.grey.shade100,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Row(
-                    children: [
-                      IconButton(
-                        icon: const Icon(Icons.remove, size: 16),
-                        onPressed: _quantity > 1
-                            ? () => setState(() => _quantity--)
-                            : null,
-                      ),
-                      Text(
-                        '$_quantity',
-                        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.add, size: 16),
-                        onPressed: () => setState(() => _quantity++),
-                      ),
-                    ],
-                  ),
-                ),
-
-                const Gap(14),
-
-                // Add to Cart Button with Calculated Dynamic Price
-                Expanded(
-                  child: ElevatedButton(
-                    onPressed: () => _handleAddToCart(item),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.primary,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                      elevation: 2,
+              child: Row(
+                children: [
+                  // Quantity Counter
+                  Container(
+                    decoration: BoxDecoration(
+                      color: isDark ? AppColors.darkBackground : Colors.grey.shade100,
+                      borderRadius: BorderRadius.circular(12),
                     ),
                     child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        const Icon(Iconsax.shopping_bag, size: 18),
-                        const Gap(8),
+                        IconButton(
+                          icon: const Icon(Icons.remove, size: 16),
+                          onPressed: _quantity > 1
+                              ? () => setState(() => _quantity--)
+                              : null,
+                        ),
                         Text(
-                          'Add to Cart  •  ₹${totalPrice.toStringAsFixed(0)}',
-                          style: const TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w900,
-                            letterSpacing: -0.2,
-                          ),
+                          '$_quantity',
+                          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.add, size: 16),
+                          onPressed: () => setState(() => _quantity++),
                         ),
                       ],
                     ),
                   ),
-                ),
-              ],
+
+                  const Gap(14),
+
+                  // Add to Cart Button with Calculated Dynamic Price
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: () => _handleAddToCart(item),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.primary,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        elevation: 2,
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Icon(Iconsax.shopping_bag, size: 18),
+                          const Gap(8),
+                          Text(
+                            'Add to Cart  •  ₹${totalPrice.toStringAsFixed(0)}',
+                            style: const TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: -0.2,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ],

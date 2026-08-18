@@ -62,19 +62,31 @@ class DeliveryChargeService {
       double taxPercentage = 0.0;
       bool isMaxRadiusConfigured = false;
 
-      // Try fetching from 'branches' collection
-      DocumentSnapshot branchSnap = await _firestore.collection('branches').doc(targetBranchId).get();
-      Map<String, dynamic>? branchData = branchSnap.exists ? branchSnap.data() as Map<String, dynamic>? : null;
+      Map<String, dynamic>? branchData;
 
-      // Fallback: search branch by restaurantId or query 'restaurants'
-      if (branchData == null && restaurantId.isNotEmpty) {
+      // Direct lookup in 'branches' collection by document ID
+      DocumentSnapshot branchSnap = await _firestore.collection('branches').doc(targetBranchId).get();
+      if (branchSnap.exists && branchSnap.data() != null) {
+        branchData = branchSnap.data() as Map<String, dynamic>?;
+      }
+
+      // If not found by doc ID, check if branchId field matches targetBranchId
+      if (branchData == null) {
         final querySnap = await _firestore
             .collection('branches')
-            .where('restaurantId', isEqualTo: restaurantId)
+            .where('branchId', isEqualTo: targetBranchId)
             .limit(1)
             .get();
         if (querySnap.docs.isNotEmpty) {
           branchData = querySnap.docs.first.data();
+        }
+      }
+
+      // Fallback only if targetBranchId is not a branch ID at all
+      if (branchData == null && restaurantId.isNotEmpty && restaurantId != targetBranchId) {
+        final restBranchSnap = await _firestore.collection('branches').doc(restaurantId).get();
+        if (restBranchSnap.exists && restBranchSnap.data() != null) {
+          branchData = restBranchSnap.data();
         } else {
           final restSnap = await _firestore.collection('restaurants').doc(restaurantId).get();
           if (restSnap.exists) {
@@ -89,7 +101,7 @@ class DeliveryChargeService {
 
         isMaxRadiusConfigured = branchData['maxRadiusConfigured'] == true;
         maxRadiusKm = _numToDouble(
-          branchData['maximumDeliveryRadius'] ?? branchData['deliveryRadiusKm'] ?? branchData['deliveryRadius'],
+          branchData['serviceRadiusKm'] ?? branchData['maximumDeliveryRadius'] ?? branchData['deliveryRadiusKm'] ?? branchData['deliveryRadius'] ?? branchData['radius'],
           fallback: 20.0,
         );
 
@@ -220,8 +232,10 @@ final deliveryChargeCalculationProvider = FutureProvider<DeliveryChargeCalculati
   }
 
   final firstItem = cartState.items.first;
+  final String branchId = firstItem.branchId.isNotEmpty
+      ? firstItem.branchId
+      : (firstItem.foodItem.branchId ?? firstItem.restaurantId);
   final String restId = firstItem.restaurantId;
-  final String branchId = firstItem.foodItem.branchId ?? restId;
 
   final addressState = ref.watch(addressProvider);
   final selectedAddress = addressState.selectedAddress;

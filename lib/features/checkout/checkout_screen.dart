@@ -205,8 +205,10 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     final double effectiveGrandTotal = double.parse(computedTotal.toStringAsFixed(2));
 
     final firstItem = cartState.items.first;
+    final String branchId = firstItem.branchId.isNotEmpty
+        ? firstItem.branchId
+        : (firstItem.foodItem.branchId ?? firstItem.restaurantId);
     final String restId = firstItem.restaurantId;
-    final String branchId = firstItem.foodItem.branchId ?? restId;
     final String restName = firstItem.restaurantName;
 
     setState(() {

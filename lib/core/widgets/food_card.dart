@@ -26,11 +26,22 @@ class FoodCard extends ConsumerWidget {
     final cartState = ref.read(cartProvider);
     final cartNotifier = ref.read(cartProvider.notifier);
 
+    final String targetBranchId = (foodItem.branchId != null && foodItem.branchId!.isNotEmpty)
+        ? foodItem.branchId!
+        : restaurantId;
+    final String targetRestId = (foodItem.restaurantId != null && foodItem.restaurantId!.isNotEmpty)
+        ? foodItem.restaurantId!
+        : restaurantId;
+
     final newItem = CartItem(
-      foodItem: foodItem,
+      foodItem: foodItem.copyWith(
+        branchId: targetBranchId,
+        restaurantId: targetRestId,
+      ),
       quantity: 1,
       unitPrice: foodItem.price,
-      restaurantId: restaurantId,
+      restaurantId: targetRestId,
+      branchId: targetBranchId,
       restaurantName: restaurantName,
     );
 
@@ -38,7 +49,7 @@ class FoodCard extends ConsumerWidget {
       TopToast.show(context, '${foodItem.name} added to cart');
     }
 
-    if (cartNotifier.isDifferentRestaurant(restaurantId)) {
+    if (cartNotifier.isDifferentRestaurant(targetRestId, branchId: targetBranchId)) {
       showDialog(
         context: context,
         builder: (dialogCtx) => AlertDialog(

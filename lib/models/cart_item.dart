@@ -40,6 +40,7 @@ class CartItem {
   final String? selectedSize;
   final String? customInstructions;
   final String restaurantId;
+  final String branchId;
   final String restaurantName;
 
   // Combo & Customization Extensions
@@ -55,12 +56,13 @@ class CartItem {
   final List<String> selectedCustomizations;
   final List<ComboCustomizationSelection> customizationSelections;
 
-  const CartItem({
+  CartItem({
     required this.foodItem,
     required this.quantity,
     this.selectedSize,
     this.customInstructions,
     required this.restaurantId,
+    String? branchId,
     required this.restaurantName,
     this.isCombo = false,
     this.comboId,
@@ -73,7 +75,7 @@ class CartItem {
     this.selectedAddons = const [],
     this.selectedCustomizations = const [],
     this.customizationSelections = const [],
-  });
+  }) : branchId = (branchId != null && branchId.isNotEmpty) ? branchId : restaurantId;
 
   double get displayBasePrice => basePrice > 0 ? basePrice : foodItem.price;
 
@@ -107,6 +109,7 @@ class CartItem {
     String? selectedSize,
     String? customInstructions,
     String? restaurantId,
+    String? branchId,
     String? restaurantName,
     bool? isCombo,
     String? comboId,
@@ -126,6 +129,7 @@ class CartItem {
       selectedSize: selectedSize ?? this.selectedSize,
       customInstructions: customInstructions ?? this.customInstructions,
       restaurantId: restaurantId ?? this.restaurantId,
+      branchId: branchId ?? this.branchId,
       restaurantName: restaurantName ?? this.restaurantName,
       isCombo: isCombo ?? this.isCombo,
       comboId: comboId ?? this.comboId,

@@ -1,19 +1,21 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:iconsax/iconsax.dart';
+import '../../core/services/state_providers.dart';
 import 'widgets/app_drawer.dart';
 import 'widgets/curved_nav_bar.dart';
 
-class NavBase extends StatefulWidget {
+class NavBase extends ConsumerStatefulWidget {
   final Widget child;
 
   const NavBase({super.key, required this.child});
 
   @override
-  State<NavBase> createState() => _NavBaseState();
+  ConsumerState<NavBase> createState() => _NavBaseState();
 }
 
-class _NavBaseState extends State<NavBase> {
+class _NavBaseState extends ConsumerState<NavBase> {
   static const List<CurvedNavItem> _navItems = [
     CurvedNavItem(
       icon: Iconsax.home_1,
@@ -76,6 +78,9 @@ class _NavBaseState extends State<NavBase> {
   Widget build(BuildContext context) {
     final selectedIndex = _getSelectedIndex(context);
     final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    final cartState = ref.watch(cartProvider);
+    final int cartCount = cartState.items.fold<int>(0, (sum, item) => sum + item.quantity);
     
     // Calculate system inset for gesture / 3-button navigation
     final bottomInset = MediaQuery.of(context).padding.bottom;
@@ -111,6 +116,7 @@ class _NavBaseState extends State<NavBase> {
                 onItemTapped: (index) => _onItemTapped(index, context),
                 items: _navItems,
                 isDark: isDark,
+                cartCount: cartCount,
               ),
             ),
           ),

@@ -259,18 +259,25 @@ class RestaurantRepository {
       return snapshot.docs
           .map((doc) => FoodItem.fromFirestore(doc.data(), doc.id))
           .where((item) {
+            if (!item.isAvailable) return false;
             if (id1.isEmpty && id2.isEmpty) return true;
 
-            final rMatch = (item.restaurantId != null && item.restaurantId!.isNotEmpty) &&
-                (item.restaurantId == id1 || item.restaurantId == id2);
+            final String iRestId = (item.restaurantId ?? '').trim();
+            final String iBranchId = (item.branchId ?? '').trim();
 
-            final bMatch = (item.branchId != null && item.branchId!.isNotEmpty) &&
-                (item.branchId == id1 || item.branchId == id2);
+            // If item has explicit branchId, check match with target branchId or parent restId
+            if (iBranchId.isNotEmpty && iBranchId.toLowerCase() != 'all') {
+              final bool bMatch = (id2.isNotEmpty && iBranchId == id2) || (id1.isNotEmpty && iBranchId == id1);
+              if (!bMatch) return false;
+            }
 
-            final docMatch = (item.restaurantId == null || item.restaurantId!.isEmpty) &&
-                (item.branchId == null || item.branchId!.isEmpty);
+            // If item has explicit restaurantId, check match with target restId or branchId
+            if (iRestId.isNotEmpty && iRestId.toLowerCase() != 'all') {
+              final bool rMatch = (id1.isNotEmpty && iRestId == id1) || (id2.isNotEmpty && iRestId == id2);
+              if (!rMatch) return false;
+            }
 
-            return (rMatch || bMatch || docMatch) && item.isAvailable;
+            return true;
           })
           .toList();
     });

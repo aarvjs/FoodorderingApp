@@ -123,17 +123,17 @@ class AppRoutes {
               child: ProfileScreen(),
             ),
           ),
+          GoRoute(
+            path: restaurantDetails,
+            builder: (context, state) {
+              final id = state.pathParameters['id'] ?? '';
+              return RestaurantDetailsScreen(restaurantId: id);
+            },
+          ),
         ],
       ),
 
       // Stack details routes
-      GoRoute(
-        path: restaurantDetails,
-        builder: (context, state) {
-          final id = state.pathParameters['id'] ?? '';
-          return RestaurantDetailsScreen(restaurantId: id);
-        },
-      ),
       GoRoute(
         path: productDetails,
         builder: (context, state) {

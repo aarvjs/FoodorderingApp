@@ -442,6 +442,13 @@ class _ProductDetailsScreenState extends ConsumerState<ProductDetailsScreen> {
                       text: 'Add to Cart • ₹${(finalPrice * _quantity).toStringAsFixed(0)}',
                       height: 48,
                       onPressed: () {
+                        final String targetBranchId = (restaurant?.branchId.isNotEmpty == true)
+                            ? restaurant!.branchId
+                            : (restaurant?.id.isNotEmpty == true ? restaurant!.id : widget.restaurantId);
+                        final String targetRestId = (restaurant?.restaurantId.isNotEmpty == true)
+                            ? restaurant!.restaurantId
+                            : targetBranchId;
+
                         final newItem = CartItem(
                           foodItem: foodItem.copyWith(price: finalPrice),
                           quantity: _quantity,
@@ -450,7 +457,8 @@ class _ProductDetailsScreenState extends ConsumerState<ProductDetailsScreen> {
                           customInstructions: _instructionController.text.trim().isEmpty 
                               ? null 
                               : _instructionController.text.trim(),
-                          restaurantId: restaurant?.id ?? widget.restaurantId,
+                          restaurantId: targetRestId,
+                          branchId: targetBranchId,
                           restaurantName: restaurant?.name ?? 'Restaurant',
                         );
 
@@ -460,8 +468,7 @@ class _ProductDetailsScreenState extends ConsumerState<ProductDetailsScreen> {
                           context.pop();
                         }
 
-                        final targetResId = restaurant?.id ?? widget.restaurantId;
-                        if (cartNotifier.isDifferentRestaurant(targetResId)) {
+                        if (cartNotifier.isDifferentRestaurant(targetRestId, branchId: targetBranchId)) {
                           final currentRestName = ref.read(cartProvider).items.first.restaurantName;
                           showDialog(
                             context: context,

@@ -33,17 +33,27 @@ class ComboDetailScreen extends ConsumerWidget {
       return;
     }
 
+    final String targetBranchId = (restaurant?.branchId.isNotEmpty == true)
+        ? restaurant!.branchId
+        : (restaurant?.id.isNotEmpty == true ? restaurant!.id : item.restaurantId);
+    final String targetRestId = (restaurant?.restaurantId.isNotEmpty == true)
+        ? restaurant!.restaurantId
+        : targetBranchId;
+    final String targetRestName = restaurant?.name ?? 'Restaurant';
+
     final groups = item.customizationGroups;
     if (groups.isNotEmpty || item.isCustomisable) {
       showModalBottomSheet(
         context: context,
+        useRootNavigator: true,
         isScrollControlled: true,
         backgroundColor: Colors.transparent,
         builder: (ctx) => ComboProductCustomizationSheet(
           item: item,
           combo: combo,
-          restaurantId: restaurant?.id ?? item.restaurantId,
-          restaurantName: restaurant?.name ?? 'Restaurant',
+          restaurantId: targetRestId,
+          branchId: targetBranchId,
+          restaurantName: targetRestName,
         ),
       );
     } else {
@@ -59,7 +69,8 @@ class ComboDetailScreen extends ConsumerWidget {
         ingredients: const [],
         nutrition: const {},
         reviews: const [],
-        restaurantId: restaurant?.id ?? item.restaurantId,
+        restaurantId: targetRestId,
+        branchId: targetBranchId,
         category: 'Combos',
         isAvailable: true,
       );
@@ -67,8 +78,9 @@ class ComboDetailScreen extends ConsumerWidget {
       final cartItem = CartItem(
         foodItem: foodItem,
         quantity: 1,
-        restaurantId: restaurant?.id ?? item.restaurantId,
-        restaurantName: restaurant?.name ?? 'Restaurant',
+        restaurantId: targetRestId,
+        branchId: targetBranchId,
+        restaurantName: targetRestName,
         isCombo: true,
         comboId: combo.id,
         comboName: combo.name,

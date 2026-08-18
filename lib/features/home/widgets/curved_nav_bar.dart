@@ -18,6 +18,7 @@ class CurvedNavBar extends StatelessWidget {
   final ValueChanged<int> onItemTapped;
   final List<CurvedNavItem> items;
   final bool isDark;
+  final int cartCount;
 
   const CurvedNavBar({
     super.key,
@@ -25,7 +26,43 @@ class CurvedNavBar extends StatelessWidget {
     required this.onItemTapped,
     required this.items,
     required this.isDark,
+    this.cartCount = 0,
   });
+
+  Widget _buildIconWithBadge({
+    required IconData iconData,
+    Key? key,
+    required Color color,
+    required double size,
+    required bool showBadge,
+    required int count,
+  }) {
+    final iconWidget = Icon(
+      iconData,
+      key: key,
+      color: color,
+      size: size,
+    );
+
+    if (!showBadge) return iconWidget;
+
+    final badgeString = count > 99 ? '99+' : '$count';
+
+    return Badge(
+      label: Text(
+        badgeString,
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 10,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+      backgroundColor: const Color(0xFFFF3B30),
+      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+      offset: const Offset(6, -6),
+      child: iconWidget,
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -114,11 +151,13 @@ class CurvedNavBar extends StatelessWidget {
                           child: child,
                         );
                       },
-                      child: Icon(
-                        items[selectedIndex].activeIcon,
+                      child: _buildIconWithBadge(
+                        iconData: items[selectedIndex].activeIcon,
                         key: ValueKey<int>(selectedIndex),
                         color: Colors.white,
                         size: 25,
+                        showBadge: selectedIndex == 2 && cartCount > 0,
+                        count: cartCount,
                       ),
                     ),
                   ),
@@ -175,10 +214,12 @@ class CurvedNavBar extends StatelessWidget {
                                   mainAxisAlignment: MainAxisAlignment.center,
                                   children: [
                                     const SizedBox(height: 4),
-                                    Icon(
-                                      item.icon,
+                                    _buildIconWithBadge(
+                                      iconData: item.icon,
                                       color: inactiveColor,
                                       size: 22,
+                                      showBadge: index == 2 && cartCount > 0,
+                                      count: cartCount,
                                     ),
                                     const SizedBox(height: 3),
                                     Text(

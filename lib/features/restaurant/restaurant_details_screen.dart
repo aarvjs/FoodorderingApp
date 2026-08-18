@@ -30,7 +30,6 @@ class RestaurantDetailsScreen extends ConsumerStatefulWidget {
 class _RestaurantDetailsScreenState extends ConsumerState<RestaurantDetailsScreen> {
   String? _selectedCategory;
   String? _selectedComboCategory;
-  int _activeMainTab = 0; // 0: Menu, 1: Combos
   final TextEditingController _menuSearchController = TextEditingController();
   String _menuSearchQuery = '';
 
@@ -346,86 +345,40 @@ class _RestaurantDetailsScreenState extends ConsumerState<RestaurantDetailsScree
                         const Gap(12),
                       ],
 
-                      // Segmented Main Tab Selector: Menu | Combos
+                      // Main Tab Indicator: Menu
                       Container(
                         padding: const EdgeInsets.all(4),
                         decoration: BoxDecoration(
                           color: isDark ? AppColors.darkCard : Colors.grey.shade200,
                           borderRadius: BorderRadius.circular(14),
                         ),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: GestureDetector(
-                                onTap: () => setState(() => _activeMainTab = 0),
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(vertical: 10),
-                                  decoration: BoxDecoration(
-                                    color: _activeMainTab == 0
-                                        ? AppColors.primary
-                                        : Colors.transparent,
-                                    borderRadius: BorderRadius.circular(10),
-                                  ),
-                                  child: Center(
-                                    child: Row(
-                                      mainAxisAlignment: MainAxisAlignment.center,
-                                      children: [
-                                        Icon(
-                                          Iconsax.element_4,
-                                          size: 16,
-                                          color: _activeMainTab == 0 ? Colors.white : (isDark ? Colors.grey.shade400 : AppColors.textDark),
-                                        ),
-                                        const Gap(6),
-                                        Text(
-                                          'Menu',
-                                          style: TextStyle(
-                                            fontSize: 14,
-                                            fontWeight: FontWeight.bold,
-                                            color: _activeMainTab == 0 ? Colors.white : (isDark ? Colors.grey.shade400 : AppColors.textDark),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(vertical: 10),
+                          decoration: BoxDecoration(
+                            color: AppColors.primary,
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: const Center(
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(
+                                  Iconsax.element_4,
+                                  size: 16,
+                                  color: Colors.white,
+                                ),
+                                Gap(6),
+                                Text(
+                                  'Menu',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.white,
                                   ),
                                 ),
-                              ),
+                              ],
                             ),
-                            Expanded(
-                              child: GestureDetector(
-                                onTap: () => setState(() => _activeMainTab = 1),
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(vertical: 10),
-                                  decoration: BoxDecoration(
-                                    color: _activeMainTab == 1
-                                        ? AppColors.primary
-                                        : Colors.transparent,
-                                    borderRadius: BorderRadius.circular(10),
-                                  ),
-                                  child: Center(
-                                    child: Row(
-                                      mainAxisAlignment: MainAxisAlignment.center,
-                                      children: [
-                                        Icon(
-                                          Icons.local_fire_department_rounded,
-                                          size: 16,
-                                          color: _activeMainTab == 1 ? Colors.white : (isDark ? Colors.grey.shade400 : AppColors.textDark),
-                                        ),
-                                        const Gap(6),
-                                        Text(
-                                          'Combos (${combosList.length})',
-                                          style: TextStyle(
-                                            fontSize: 14,
-                                            fontWeight: FontWeight.bold,
-                                            color: _activeMainTab == 1 ? Colors.white : (isDark ? Colors.grey.shade400 : AppColors.textDark),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ],
+                          ),
                         ),
                       ),
 
@@ -449,7 +402,7 @@ class _RestaurantDetailsScreenState extends ConsumerState<RestaurantDetailsScree
                             });
                           },
                           decoration: InputDecoration(
-                            hintText: _activeMainTab == 0 ? 'Search within restaurant menu...' : 'Search combos...',
+                            hintText: 'Search within restaurant menu...',
                             prefixIcon: Icon(Iconsax.search_normal_1, size: 18, color: isDark ? Colors.grey.shade400 : AppColors.textLight),
                             border: InputBorder.none,
                             enabledBorder: InputBorder.none,
@@ -464,133 +417,130 @@ class _RestaurantDetailsScreenState extends ConsumerState<RestaurantDetailsScree
                 ),
               ),
 
-              // Sticky Categories Header Tabs (Only in Menu Tab)
-              if (_activeMainTab == 0)
-                SliverAppBar(
-                  primary: false,
-                  pinned: true,
-                  automaticallyImplyLeading: false,
-                  backgroundColor: isDark ? AppColors.darkBackground : AppColors.background,
-                  elevation: 1,
-                  title: Container(
-                    height: 44,
-                    alignment: Alignment.centerLeft,
-                    child: ListView.builder(
-                      scrollDirection: Axis.horizontal,
-                      itemCount: availableCategories.length + 1,
-                      physics: const BouncingScrollPhysics(),
-                      itemBuilder: (context, index) {
-                        final isAll = index == 0;
-                        final catName = isAll ? 'All Menu' : availableCategories[index - 1];
-                        final isSelected = isAll 
-                            ? (_selectedCategory == null)
-                            : (_selectedCategory == catName);
+              // Sticky Categories Header Tabs
+              SliverAppBar(
+                primary: false,
+                pinned: true,
+                automaticallyImplyLeading: false,
+                backgroundColor: isDark ? AppColors.darkBackground : AppColors.background,
+                elevation: 1,
+                title: Container(
+                  height: 44,
+                  alignment: Alignment.centerLeft,
+                  child: ListView.builder(
+                    scrollDirection: Axis.horizontal,
+                    itemCount: availableCategories.length + 1,
+                    physics: const BouncingScrollPhysics(),
+                    itemBuilder: (context, index) {
+                      final isAll = index == 0;
+                      final catName = isAll ? 'All Menu' : availableCategories[index - 1];
+                      final isSelected = isAll 
+                          ? (_selectedCategory == null)
+                          : (_selectedCategory == catName);
 
-                        return GestureDetector(
-                          onTap: () {
-                            setState(() {
-                              _selectedCategory = isAll ? null : catName;
-                            });
-                          },
-                          child: Container(
-                            margin: const EdgeInsets.only(right: 10),
-                            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
-                            decoration: BoxDecoration(
-                              color: isSelected
-                                  ? (isDark ? AppColors.darkPrimary : AppColors.primary)
-                                  : (isDark ? AppColors.darkCard : Colors.white),
-                              borderRadius: BorderRadius.circular(10),
-                              border: Border.all(
+                      return GestureDetector(
+                        onTap: () {
+                          setState(() {
+                            _selectedCategory = isAll ? null : catName;
+                          });
+                        },
+                        child: Container(
+                          margin: const EdgeInsets.only(right: 10),
+                          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: isSelected
+                                ? (isDark ? AppColors.darkPrimary : AppColors.primary)
+                                : (isDark ? AppColors.darkCard : Colors.white),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(
+                              color: isSelected 
+                                  ? Colors.transparent 
+                                  : (isDark ? AppColors.darkDivider : Colors.grey.shade200),
+                            ),
+                          ),
+                          child: Center(
+                            child: Text(
+                              catName,
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.bold,
                                 color: isSelected 
-                                    ? Colors.transparent 
-                                    : (isDark ? AppColors.darkDivider : Colors.grey.shade200),
+                                    ? (isDark ? AppColors.textDark : Colors.white)
+                                    : (isDark ? Colors.white : AppColors.textDark),
                               ),
                             ),
-                            child: Center(
-                              child: Text(
-                                catName,
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.bold,
-                                  color: isSelected 
-                                      ? (isDark ? AppColors.textDark : Colors.white)
-                                      : (isDark ? Colors.white : AppColors.textDark),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ),
+
+              // Content View (Menu Dishes List)
+              SliverPadding(
+                padding: const EdgeInsets.only(left: 16, right: 16, top: 16, bottom: 100),
+                sliver: isMenuLoading
+                    ? SliverList(
+                        delegate: SliverChildBuilderDelegate(
+                          (context, index) => Padding(
+                            padding: const EdgeInsets.only(bottom: 16),
+                            child: Shimmer.fromColors(
+                              baseColor: isDark ? Colors.grey.shade800 : Colors.grey.shade300,
+                              highlightColor: isDark ? Colors.grey.shade700 : Colors.grey.shade100,
+                              child: Container(
+                                height: 110,
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(18),
                                 ),
                               ),
                             ),
                           ),
-                        );
-                      },
-                    ),
-                  ),
-                ),
-
-              // Content View (Menu Dishes List or Combos List)
-              SliverPadding(
-                padding: const EdgeInsets.only(left: 16, right: 16, top: 16, bottom: 100),
-                sliver: _activeMainTab == 1
-                    ? _buildCombosSliver(combosList, restaurant, isDark, _selectedComboCategory)
-                    : (isMenuLoading
-                        ? SliverList(
-                            delegate: SliverChildBuilderDelegate(
-                              (context, index) => Padding(
-                                padding: const EdgeInsets.only(bottom: 16),
-                                child: Shimmer.fromColors(
-                                  baseColor: isDark ? Colors.grey.shade800 : Colors.grey.shade300,
-                                  highlightColor: isDark ? Colors.grey.shade700 : Colors.grey.shade100,
-                                  child: Container(
-                                    height: 110,
-                                    decoration: BoxDecoration(
-                                      color: Colors.white,
-                                      borderRadius: BorderRadius.circular(18),
+                          childCount: 4,
+                        ),
+                      )
+                    : (filteredItems.isEmpty
+                        ? SliverToBoxAdapter(
+                            child: Center(
+                              child: Padding(
+                                padding: const EdgeInsets.all(40),
+                                child: Column(
+                                  children: [
+                                    Icon(
+                                      Iconsax.document_text,
+                                      size: 48,
+                                      color: isDark ? Colors.grey.shade600 : Colors.grey.shade400,
                                     ),
-                                  ),
+                                    const Gap(12),
+                                    Text(
+                                      'No menu items available for this outlet.',
+                                      textAlign: TextAlign.center,
+                                      style: TextStyle(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.bold,
+                                        color: isDark ? Colors.grey.shade400 : AppColors.textLight,
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ),
-                              childCount: 4,
                             ),
                           )
-                        : (filteredItems.isEmpty
-                            ? SliverToBoxAdapter(
-                                child: Center(
-                                  child: Padding(
-                                    padding: const EdgeInsets.all(40),
-                                    child: Column(
-                                      children: [
-                                        Icon(
-                                          Iconsax.document_text,
-                                          size: 48,
-                                          color: isDark ? Colors.grey.shade600 : Colors.grey.shade400,
-                                        ),
-                                        const Gap(12),
-                                        Text(
-                                          'No menu items available for this outlet.',
-                                          textAlign: TextAlign.center,
-                                          style: TextStyle(
-                                            fontSize: 14,
-                                            fontWeight: FontWeight.bold,
-                                            color: isDark ? Colors.grey.shade400 : AppColors.textLight,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                              )
-                            : SliverList(
-                                delegate: SliverChildBuilderDelegate(
-                                  (context, index) {
-                                    final foodItem = filteredItems[index];
-                                    return FoodCard(
-                                      foodItem: foodItem,
-                                      restaurantId: restaurant.id,
-                                      restaurantName: restaurant.name,
-                                      onTap: () => context.push('/product/${restaurant.id}/${foodItem.id}'),
-                                    );
-                                  },
-                                  childCount: filteredItems.length,
-                                ),
-                              ))),
+                        : SliverList(
+                            delegate: SliverChildBuilderDelegate(
+                              (context, index) {
+                                final foodItem = filteredItems[index];
+                                return FoodCard(
+                                  foodItem: foodItem,
+                                  restaurantId: restaurant.id,
+                                  restaurantName: restaurant.name,
+                                  onTap: () => context.push('/product/${restaurant.id}/${foodItem.id}'),
+                                );
+                              },
+                              childCount: filteredItems.length,
+                            ),
+                          )),
               ),
             ],
           ),
@@ -1274,104 +1224,6 @@ class _RestaurantDetailsScreenState extends ConsumerState<RestaurantDetailsScree
           ),
         ),
       ],
-    );
-  }
-
-  Widget _buildCombosSliver(List<ComboModel> combosList, Restaurant restaurant, bool isDark, String? selectedCategory) {
-    if (combosList.isEmpty) {
-      return SliverToBoxAdapter(
-        child: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(40),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(
-                  Icons.fastfood_outlined,
-                  size: 56,
-                  color: isDark ? Colors.grey.shade600 : Colors.grey.shade400,
-                ),
-                const Gap(16),
-                Text(
-                  'No Combos Configured',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: isDark ? Colors.white : AppColors.textDark,
-                  ),
-                ),
-                const Gap(6),
-                Text(
-                  'This outlet currently has no active combo banners.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: isDark ? Colors.grey.shade400 : AppColors.textLight,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      );
-    }
-
-    return SliverToBoxAdapter(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 8),
-        child: Column(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: isDark ? AppColors.darkCard : Colors.white,
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(
-                  color: isDark ? AppColors.darkDivider : Colors.grey.shade200,
-                ),
-              ),
-              child: Row(
-                children: [
-                  Container(
-                    width: 48,
-                    height: 48,
-                    decoration: BoxDecoration(
-                      color: AppColors.primary.withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    child: const Icon(Icons.local_fire_department_rounded, color: AppColors.primary, size: 26),
-                  ),
-                  const Gap(16),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          selectedCategory ?? combosList.first.name,
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w900,
-                            color: isDark ? Colors.white : AppColors.textDark,
-                          ),
-                        ),
-                        const Gap(4),
-                        Text(
-                          'Combo Category selected. Products will be available here in the next step.',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: isDark ? Colors.grey.shade400 : AppColors.textLight,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
     );
   }
 }
