@@ -14,6 +14,56 @@ class MyBookingsScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final nearbyAsync = ref.watch(nearbyRestaurantsStreamProvider);
+    final bool isTableBookingEnabled = nearbyAsync.value?.any((r) => r.hasDineIn) ?? true;
+
+    if (!isTableBookingEnabled) {
+      return Scaffold(
+        appBar: AppBar(
+          title: const Text('My Bookings 🪑', style: TextStyle(fontWeight: FontWeight.bold)),
+        ),
+        body: SafeArea(
+          child: Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24.0),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      color: Colors.red.withOpacity(0.1),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(Iconsax.calendar_remove, size: 56, color: Colors.red.shade400),
+                  ),
+                  const Gap(16),
+                  Text(
+                    'Table Service Currently Disabled',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: isDark ? Colors.white : AppColors.textDark,
+                    ),
+                  ),
+                  const Gap(8),
+                  Text(
+                    'Table reservation service is currently disabled by management for this branch.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 13,
+                      height: 1.4,
+                      color: isDark ? Colors.grey.shade400 : AppColors.textLight,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
     final bookingsAsync = ref.watch(customerBookingsStreamProvider);
 
     return DefaultTabController(

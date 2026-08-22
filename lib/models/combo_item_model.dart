@@ -382,3 +382,98 @@ class ComboItemModel {
     );
   }
 }
+
+/// Helper class for calculating Combo Variant base prices and unit prices
+class ComboCalculator {
+  /// Calculates the dynamic base price for a specific size variant based on its REQUIRED items/options.
+  /// 
+  /// If [selectedVariantOptions] is provided, calculates using the selected options within required groups.
+  /// If [selectedVariantOptions] is null or doesn't have a selection for a required group, defaults to the
+  /// configured default required choice(s) (first option for single selection, or first minSelection options for multi selection).
+  /// Optional items/groups are NEVER included in the Size Base Price.
+  static double calculateVariantBasePrice(
+    ComboItemVariant variant, [
+    Map<String, Set<String>>? selectedVariantOptions,
+  ]) {
+    double basePrice = 0.0;
+
+    for (final varItem in variant.items) {
+      if (!varItem.isActive) continue;
+
+      // Only REQUIRED items contribute to the Size Base Price
+      if (varItem.isRequired) {
+        final selectedSet = selectedVariantOptions?[varItem.id];
+
+        if (selectedSet != null && selectedSet.isNotEmpty) {
+          // Add prices of explicitly selected options in this required group
+          for (final option in varItem.options) {
+            if (option.isActive && selectedSet.contains(option.id)) {
+              basePrice += option.additionalPrice;
+            }
+          }
+        } else if (varItem.options.isNotEmpty) {
+          // Fallback to default required selection(s) if no user selection is present yet
+          final isSingle = varItem.selectionType == 'SINGLE';
+          final countToTake = isSingle ? 1 : (varItem.minSelection > 0 ? varItem.minSelection : 1);
+          final defaultOpts = varItem.options.where((o) => o.isActive).take(countToTake);
+          for (final opt in defaultOpts) {
+            basePrice += opt.additionalPrice;
+          }
+        }
+      }
+    }
+
+    return basePrice;
+  }
+
+  /// Calculates the final combo unit price.
+  /// 
+  /// When [isVariantEnabled] is true:
+  ///   UnitPrice = calculateVariantBasePrice(selectedVariant, selectedVariantOptions) + Sum(selected OPTIONAL options)
+  /// When [isVariantEnabled] is false:
+  ///   UnitPrice = currentItem.price + Sum(selected customization options)
+  static double calculateComboFinalPrice({
+    required ComboItemModel currentItem,
+    ComboItemVariant? selectedVariant,
+    Map<String, Set<String>>? selectedVariantOptions,
+    Map<String, Set<String>>? selectedGroupOptions,
+  }) {
+    if (currentItem.isVariantEnabled && selectedVariant != null) {
+      final basePrice = calculateVariantBasePrice(selectedVariant, selectedVariantOptions);
+      double optionalAdditions = 0.0;
+
+      for (final varItem in selectedVariant.items) {
+        if (!varItem.isActive) continue;
+        // Only OPTIONAL items add on top of the Size Base Price
+        if (!varItem.isRequired) {
+          final selectedSet = selectedVariantOptions?[varItem.id];
+          if (selectedSet != null && selectedSet.isNotEmpty) {
+            for (final option in varItem.options) {
+              if (option.isActive && selectedSet.contains(option.id)) {
+                optionalAdditions += option.additionalPrice;
+              }
+            }
+          }
+        }
+      }
+
+      return basePrice + optionalAdditions;
+    } else {
+      double total = currentItem.price;
+      if (selectedGroupOptions != null) {
+        for (final group in currentItem.customizationGroups) {
+          final selectedSet = selectedGroupOptions[group.id];
+          if (selectedSet != null && selectedSet.isNotEmpty) {
+            for (final option in group.options) {
+              if (option.isAvailable && selectedSet.contains(option.id)) {
+                total += option.price;
+              }
+            }
+          }
+        }
+      }
+      return total;
+    }
+  }
+}
+

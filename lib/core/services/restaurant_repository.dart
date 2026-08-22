@@ -130,25 +130,52 @@ class RestaurantRepository {
     });
   }
 
-  /// Query food items from `menuItems` collection in Firestore
+  /// Query food items strictly for a specific branch from `menuItems` collection in Firestore
   Future<List<FoodItem>> _fetchMenuForBranch(String restaurantId, String branchId) async {
     try {
-      var snap = await _firestore
-          .collection('menuItems')
-          .where('restaurantId', isEqualTo: restaurantId)
-          .get();
+      final String targetBId = branchId.isNotEmpty ? branchId.trim() : restaurantId.trim();
+      final String targetRId = restaurantId.trim();
 
-      if (snap.docs.isEmpty && branchId.isNotEmpty) {
+      QuerySnapshot<Map<String, dynamic>> snap;
+
+      if (targetBId.isNotEmpty) {
         snap = await _firestore
             .collection('menuItems')
-            .where('branchId', isEqualTo: branchId)
+            .where('branchId', isEqualTo: targetBId)
+            .get();
+
+        if (snap.docs.isEmpty) {
+          snap = await _firestore
+              .collection('menuItems')
+              .where('branchIds', arrayContains: targetBId)
+              .get();
+        }
+
+        if (snap.docs.isEmpty && targetRId.isNotEmpty && targetRId != targetBId) {
+          snap = await _firestore
+              .collection('menuItems')
+              .where('restaurantId', isEqualTo: targetRId)
+              .get();
+        }
+      } else {
+        snap = await _firestore
+            .collection('menuItems')
+            .where('restaurantId', isEqualTo: targetRId)
             .get();
       }
 
       if (snap.docs.isNotEmpty) {
         return snap.docs
             .map((doc) => FoodItem.fromFirestore(doc.data(), doc.id))
-            .where((item) => item.isAvailable)
+            .where((item) {
+              if (!item.isAvailable) return false;
+
+              final String iBranchId = (item.branchId ?? '').trim();
+              if (targetBId.isNotEmpty && iBranchId.isNotEmpty && iBranchId.toLowerCase() != 'all') {
+                return iBranchId == targetBId;
+              }
+              return true;
+            })
             .toList();
       }
 
@@ -190,8 +217,8 @@ class RestaurantRepository {
 
   /// Stream real-time active offers/coupons for a specific restaurant/branch from Firestore `offers` collection
   Stream<List<OfferModel>> streamRestaurantOffers(String restaurantId, {String? branchId}) {
-    final String rId = restaurantId.trim();
-    final String bId = (branchId ?? '').trim();
+    final String targetBranchId = (branchId != null && branchId.isNotEmpty) ? branchId.trim() : restaurantId.trim();
+    final String targetRestId = restaurantId.trim();
 
     return _firestore.collection('offers').snapshots().map((snapshot) {
       return snapshot.docs
@@ -199,20 +226,31 @@ class RestaurantRepository {
           .where((offer) {
             if (!offer.isActive) return false;
 
-            final oRestId = (offer.restaurantId ?? '').trim();
-            final oBranchId = (offer.branchId ?? '').trim();
+            final String oBranchId = (offer.branchId ?? '').trim();
+            final List<String> oBranchIds = (offer.branchIds ?? []).map((b) => b.toString().trim()).toList();
+            final String oRestId = (offer.restaurantId ?? '').trim();
 
-            final bool matchesRest = oRestId.isEmpty ||
-                oRestId.toLowerCase() == 'all' ||
-                (rId.isNotEmpty && (oRestId == rId || oRestId == bId)) ||
-                (bId.isNotEmpty && (oRestId == bId || oRestId == rId));
-
-            final bool matchesBranch = oBranchId.isEmpty ||
+            // Global coupons (applicable to all branches)
+            final bool isGlobal = oBranchId.isEmpty ||
                 oBranchId.toLowerCase() == 'all' ||
-                (bId.isNotEmpty && (oBranchId == bId || oBranchId == rId)) ||
-                (rId.isNotEmpty && (oBranchId == rId || oBranchId == bId));
+                oBranchIds.contains('all') ||
+                (oBranchId.isEmpty && oBranchIds.isEmpty && (oRestId.isEmpty || oRestId.toLowerCase() == 'all'));
 
-            return matchesRest && matchesBranch;
+            if (isGlobal) return true;
+
+            // Strict branch matching using active branch ID or parent restaurant ID
+            if (targetBranchId.isNotEmpty) {
+              final bool bMatch = (oBranchId.isNotEmpty && (oBranchId == targetBranchId || oBranchId == targetRestId)) ||
+                  oBranchIds.contains(targetBranchId) ||
+                  oBranchIds.contains(targetRestId);
+              if (bMatch) return true;
+            }
+
+            if (targetRestId.isNotEmpty && oBranchId.isEmpty && oBranchIds.isEmpty) {
+              if (oRestId == targetRestId || oRestId == targetBranchId) return true;
+            }
+
+            return false;
           })
           .toList();
     });
@@ -250,31 +288,28 @@ class RestaurantRepository {
     });
   }
 
-  /// Stream real-time menu items for a specific restaurant/branch from Firestore `menuItems` collection
+  /// Stream real-time menu items strictly for a specific restaurant/branch from Firestore `menuItems` collection
   Stream<List<FoodItem>> streamRestaurantMenu(String restaurantId, {String? branchId}) {
-    return _firestore.collection('menuItems').snapshots().map((snapshot) {
-      final String id1 = restaurantId.trim();
-      final String id2 = (branchId ?? '').trim();
+    final String targetBranchId = (branchId != null && branchId.isNotEmpty) ? branchId.trim() : restaurantId.trim();
+    final String targetRestId = restaurantId.trim();
 
+    return _firestore.collection('menuItems').snapshots().map((snapshot) {
       return snapshot.docs
           .map((doc) => FoodItem.fromFirestore(doc.data(), doc.id))
           .where((item) {
             if (!item.isAvailable) return false;
-            if (id1.isEmpty && id2.isEmpty) return true;
 
-            final String iRestId = (item.restaurantId ?? '').trim();
             final String iBranchId = (item.branchId ?? '').trim();
+            final String iRestId = (item.restaurantId ?? '').trim();
 
-            // If item has explicit branchId, check match with target branchId or parent restId
-            if (iBranchId.isNotEmpty && iBranchId.toLowerCase() != 'all') {
-              final bool bMatch = (id2.isNotEmpty && iBranchId == id2) || (id1.isNotEmpty && iBranchId == id1);
-              if (!bMatch) return false;
-            }
-
-            // If item has explicit restaurantId, check match with target restId or branchId
-            if (iRestId.isNotEmpty && iRestId.toLowerCase() != 'all') {
-              final bool rMatch = (id1.isNotEmpty && iRestId == id1) || (id2.isNotEmpty && iRestId == id2);
-              if (!rMatch) return false;
+            // Strict branch filtering: if item has branchId, it MUST match targetBranchId
+            if (targetBranchId.isNotEmpty) {
+              if (iBranchId.isNotEmpty && iBranchId.toLowerCase() != 'all') {
+                return iBranchId == targetBranchId;
+              }
+              if (iRestId.isNotEmpty && iRestId.toLowerCase() != 'all') {
+                return iRestId == targetBranchId || iRestId == targetRestId;
+              }
             }
 
             return true;

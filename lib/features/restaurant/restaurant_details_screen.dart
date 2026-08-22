@@ -15,8 +15,11 @@ import '../../auth/providers/auth_provider.dart';
 import 'package:flutter/services.dart';
 import '../../core/utils/snackbar_utils.dart';
 import '../../models/offer_model.dart';
+import '../../models/combo_item_model.dart';
+import '../../models/cart_item.dart';
 import '../home/providers/restaurant_providers.dart';
 import '../product/combo_detail_screen.dart';
+import '../product/combo_customization_sheet.dart';
 
 class RestaurantDetailsScreen extends ConsumerStatefulWidget {
   final String restaurantId;
@@ -28,13 +31,14 @@ class RestaurantDetailsScreen extends ConsumerStatefulWidget {
 }
 
 class _RestaurantDetailsScreenState extends ConsumerState<RestaurantDetailsScreen> {
-  String? _selectedCategory;
-  String? _selectedComboCategory;
+  String _selectedNavId = 'MENU'; // 'MENU' or combo.id
   final TextEditingController _menuSearchController = TextEditingController();
+  final FocusNode _searchFocusNode = FocusNode();
   String _menuSearchQuery = '';
 
   @override
   void dispose() {
+    _searchFocusNode.dispose();
     _menuSearchController.dispose();
     super.dispose();
   }
@@ -58,6 +62,82 @@ class _RestaurantDetailsScreenState extends ConsumerState<RestaurantDetailsScree
     );
   }
 
+  void _onAddComboItem(
+    ComboItemModel item,
+    ComboModel combo,
+    Restaurant restaurant,
+  ) {
+    final bool isComboActive = combo.isActive;
+    if (!isComboActive) {
+      TopToast.show(context, 'This combo is currently unavailable.');
+      return;
+    }
+
+    final String targetBranchId = (restaurant.branchId.isNotEmpty)
+        ? restaurant.branchId
+        : (restaurant.id.isNotEmpty ? restaurant.id : item.restaurantId);
+    final String targetRestId = (restaurant.restaurantId.isNotEmpty)
+        ? restaurant.restaurantId
+        : targetBranchId;
+    final String targetRestName = restaurant.name;
+
+    final groups = item.customizationGroups;
+    if (groups.isNotEmpty || item.isCustomisable || item.isVariantEnabled) {
+      showModalBottomSheet(
+        context: context,
+        useRootNavigator: true,
+        isScrollControlled: true,
+        backgroundColor: Colors.transparent,
+        builder: (ctx) => ComboProductCustomizationSheet(
+          item: item,
+          combo: combo,
+          restaurantId: targetRestId,
+          branchId: targetBranchId,
+          restaurantName: targetRestName,
+        ),
+      );
+    } else {
+      final foodItem = FoodItem(
+        id: item.id,
+        name: '${combo.name} - ${item.name}',
+        description: item.description,
+        price: item.price,
+        imageUrl: item.image,
+        isVeg: item.isVeg,
+        rating: item.rating,
+        reviewCount: item.ratingCount,
+        ingredients: const [],
+        nutrition: const {},
+        reviews: const [],
+        restaurantId: targetRestId,
+        branchId: targetBranchId,
+        category: 'Combos',
+        isAvailable: true,
+      );
+
+      final cartItem = CartItem(
+        foodItem: foodItem,
+        quantity: 1,
+        restaurantId: targetRestId,
+        branchId: targetBranchId,
+        restaurantName: targetRestName,
+        isCombo: true,
+        comboId: combo.id,
+        comboName: combo.name,
+        comboItemId: item.id,
+        unitPrice: item.price,
+        basePrice: item.price,
+      );
+
+      ref.read(cartProvider.notifier).addItem(cartItem);
+
+      TopToast.show(
+        context,
+        'Added "${item.name}" to cart!',
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -66,8 +146,7 @@ class _RestaurantDetailsScreenState extends ConsumerState<RestaurantDetailsScree
     final detailsAsync = ref.watch(restaurantDetailsStreamProvider(widget.restaurantId));
     final restaurant = detailsAsync.value;
 
-    final targetRestId = (restaurant != null && restaurant.restaurantId.isNotEmpty) ? restaurant.restaurantId : widget.restaurantId;
-    final menuAsync = ref.watch(restaurantMenuStreamProvider(targetRestId));
+    final menuAsync = ref.watch(restaurantMenuStreamProvider(widget.restaurantId));
     final combosAsync = ref.watch(restaurantCombosStreamProvider(widget.restaurantId));
     final offersAsync = ref.watch(restaurantOffersStreamProvider(widget.restaurantId));
     final List<ComboModel> combosList = combosAsync.value ?? [];
@@ -105,26 +184,19 @@ class _RestaurantDetailsScreenState extends ConsumerState<RestaurantDetailsScree
       );
     }
 
-    // Dynamic category list from restaurant & menu items
-    final Set<String> categoriesSet = {...restaurant.categories};
-    for (var item in dynamicMenu) {
-      if (item.category.isNotEmpty) categoriesSet.add(item.category);
-    }
-    final List<String> availableCategories = categoriesSet.toList();
-
-    // Filter menu items by category + search query
+    // Filter menu items by search query
+    final query = _menuSearchQuery.trim().toLowerCase();
     var filteredItems = dynamicMenu;
-    if (_selectedCategory != null) {
-      filteredItems = filteredItems.where((item) => item.category == _selectedCategory).toList();
-    }
-    if (_menuSearchQuery.isNotEmpty) {
+    if (query.isNotEmpty) {
       filteredItems = filteredItems.where((item) {
-        return item.name.toLowerCase().contains(_menuSearchQuery.toLowerCase()) ||
-            item.description.toLowerCase().contains(_menuSearchQuery.toLowerCase());
+        return item.name.toLowerCase().contains(query) ||
+            item.description.toLowerCase().contains(query) ||
+            item.category.toLowerCase().contains(query);
       }).toList();
     }
 
     return Scaffold(
+      resizeToAvoidBottomInset: false,
       body: Stack(
         children: [
           // Scrollable Content
@@ -330,80 +402,52 @@ class _RestaurantDetailsScreenState extends ConsumerState<RestaurantDetailsScree
                       // Real-time Branch Gallery Section
                       _buildBranchGallerySection(restaurant, isDark),
 
-                      const Gap(12),
-                      const Divider(),
-                      // LEVEL 1: Top Horizontal Combo Category / Collection Banners
-                      if (combosList.isNotEmpty) ...[
-                        _buildHorizontalComboCategories(
-                          combosList: combosList,
-                          restaurant: restaurant,
-                          isDark: isDark,
-                          activeCategory: _selectedComboCategory,
-                        ),
-                        const Gap(14),
-                        const Divider(),
-                        const Gap(12),
-                      ],
-
-                      // Main Tab Indicator: Menu
-                      Container(
-                        padding: const EdgeInsets.all(4),
-                        decoration: BoxDecoration(
-                          color: isDark ? AppColors.darkCard : Colors.grey.shade200,
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(vertical: 10),
-                          decoration: BoxDecoration(
-                            color: AppColors.primary,
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: const Center(
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Icon(
-                                  Iconsax.element_4,
-                                  size: 16,
-                                  color: Colors.white,
-                                ),
-                                Gap(6),
-                                Text(
-                                  'Menu',
-                                  style: TextStyle(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.white,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
-
                       const Gap(14),
+                      const Divider(),
+                      const Gap(12),
 
-                      // Menu Search Box
+                      // 1. Search Bar: "Search menu or combos"
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 14),
                         decoration: BoxDecoration(
                           color: isDark ? AppColors.darkCard : Colors.grey.shade100,
-                          borderRadius: BorderRadius.circular(12),
+                          borderRadius: BorderRadius.circular(14),
                           border: Border.all(
                             color: isDark ? AppColors.darkDivider : Colors.grey.shade200,
                           ),
                         ),
                         child: TextField(
                           controller: _menuSearchController,
+                          focusNode: _searchFocusNode,
+                          autofocus: false,
                           onChanged: (val) {
                             setState(() {
                               _menuSearchQuery = val;
                             });
                           },
                           decoration: InputDecoration(
-                            hintText: 'Search within restaurant menu...',
-                            prefixIcon: Icon(Iconsax.search_normal_1, size: 18, color: isDark ? Colors.grey.shade400 : AppColors.textLight),
+                            hintText: 'Search menu or combos',
+                            hintStyle: TextStyle(
+                              fontSize: 13.5,
+                              color: isDark ? Colors.grey.shade400 : AppColors.textLight,
+                            ),
+                            prefixIcon: Icon(
+                              Iconsax.search_normal_1,
+                              size: 18,
+                              color: isDark ? Colors.grey.shade400 : AppColors.textLight,
+                            ),
+                            suffixIcon: _menuSearchQuery.isNotEmpty
+                                ? IconButton(
+                                    icon: const Icon(Icons.clear_rounded, size: 18),
+                                    onPressed: () {
+                                      _menuSearchController.clear();
+                                      _searchFocusNode.unfocus();
+                                      setState(() {
+                                        _menuSearchQuery = '';
+                                      });
+                                    },
+                                  )
+                                : null,
                             border: InputBorder.none,
                             enabledBorder: InputBorder.none,
                             focusedBorder: InputBorder.none,
@@ -412,136 +456,96 @@ class _RestaurantDetailsScreenState extends ConsumerState<RestaurantDetailsScree
                           ),
                         ),
                       ),
+
+                      const Gap(12),
+
+                      // 2. Single Top Horizontal Navigation Row: [ Menu ] [ 🖼 Combo 1 ] [ 🖼 Combo 2 ] ...
+                      _buildTopHorizontalNav(
+                        combosList: combosList,
+                        isDark: isDark,
+                      ),
                     ],
                   ),
                 ),
               ),
 
-              // Sticky Categories Header Tabs
-              SliverAppBar(
-                primary: false,
-                pinned: true,
-                automaticallyImplyLeading: false,
-                backgroundColor: isDark ? AppColors.darkBackground : AppColors.background,
-                elevation: 1,
-                title: Container(
-                  height: 44,
-                  alignment: Alignment.centerLeft,
-                  child: ListView.builder(
-                    scrollDirection: Axis.horizontal,
-                    itemCount: availableCategories.length + 1,
-                    physics: const BouncingScrollPhysics(),
-                    itemBuilder: (context, index) {
-                      final isAll = index == 0;
-                      final catName = isAll ? 'All Menu' : availableCategories[index - 1];
-                      final isSelected = isAll 
-                          ? (_selectedCategory == null)
-                          : (_selectedCategory == catName);
-
-                      return GestureDetector(
-                        onTap: () {
-                          setState(() {
-                            _selectedCategory = isAll ? null : catName;
-                          });
-                        },
-                        child: Container(
-                          margin: const EdgeInsets.only(right: 10),
-                          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
-                          decoration: BoxDecoration(
-                            color: isSelected
-                                ? (isDark ? AppColors.darkPrimary : AppColors.primary)
-                                : (isDark ? AppColors.darkCard : Colors.white),
-                            borderRadius: BorderRadius.circular(10),
-                            border: Border.all(
-                              color: isSelected 
-                                  ? Colors.transparent 
-                                  : (isDark ? AppColors.darkDivider : Colors.grey.shade200),
-                            ),
-                          ),
-                          child: Center(
-                            child: Text(
-                              catName,
-                              style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.bold,
-                                color: isSelected 
-                                    ? (isDark ? AppColors.textDark : Colors.white)
-                                    : (isDark ? Colors.white : AppColors.textDark),
-                              ),
-                            ),
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-              ),
-
-              // Content View (Menu Dishes List)
-              SliverPadding(
-                padding: const EdgeInsets.only(left: 16, right: 16, top: 16, bottom: 100),
-                sliver: isMenuLoading
-                    ? SliverList(
-                        delegate: SliverChildBuilderDelegate(
-                          (context, index) => Padding(
-                            padding: const EdgeInsets.only(bottom: 16),
-                            child: Shimmer.fromColors(
-                              baseColor: isDark ? Colors.grey.shade800 : Colors.grey.shade300,
-                              highlightColor: isDark ? Colors.grey.shade700 : Colors.grey.shade100,
-                              child: Container(
-                                height: 110,
-                                decoration: BoxDecoration(
-                                  color: Colors.white,
-                                  borderRadius: BorderRadius.circular(18),
+              // Content View (Menu Items or Selected Combo Items List)
+              if (_selectedNavId == 'MENU') ...[
+                SliverPadding(
+                  padding: const EdgeInsets.only(left: 16, right: 16, top: 8, bottom: 100),
+                  sliver: isMenuLoading
+                      ? SliverList(
+                          delegate: SliverChildBuilderDelegate(
+                            (context, index) => Padding(
+                              padding: const EdgeInsets.only(bottom: 16),
+                              child: Shimmer.fromColors(
+                                baseColor: isDark ? Colors.grey.shade800 : Colors.grey.shade300,
+                                highlightColor: isDark ? Colors.grey.shade700 : Colors.grey.shade100,
+                                child: Container(
+                                  height: 110,
+                                  decoration: BoxDecoration(
+                                    color: Colors.white,
+                                    borderRadius: BorderRadius.circular(18),
+                                  ),
                                 ),
                               ),
                             ),
+                            childCount: 4,
                           ),
-                          childCount: 4,
-                        ),
-                      )
-                    : (filteredItems.isEmpty
-                        ? SliverToBoxAdapter(
-                            child: Center(
-                              child: Padding(
-                                padding: const EdgeInsets.all(40),
-                                child: Column(
-                                  children: [
-                                    Icon(
-                                      Iconsax.document_text,
-                                      size: 48,
-                                      color: isDark ? Colors.grey.shade600 : Colors.grey.shade400,
-                                    ),
-                                    const Gap(12),
-                                    Text(
-                                      'No menu items available for this outlet.',
-                                      textAlign: TextAlign.center,
-                                      style: TextStyle(
-                                        fontSize: 14,
-                                        fontWeight: FontWeight.bold,
-                                        color: isDark ? Colors.grey.shade400 : AppColors.textLight,
+                        )
+                      : (filteredItems.isEmpty
+                          ? SliverToBoxAdapter(
+                              child: Center(
+                                child: Padding(
+                                  padding: const EdgeInsets.all(40),
+                                  child: Column(
+                                    children: [
+                                      Icon(
+                                        Iconsax.document_text,
+                                        size: 48,
+                                        color: isDark ? Colors.grey.shade600 : Colors.grey.shade400,
                                       ),
-                                    ),
-                                  ],
+                                      const Gap(12),
+                                      Text(
+                                        _menuSearchQuery.isNotEmpty
+                                            ? 'No menu products matching "$_menuSearchQuery"'
+                                            : 'No menu items available for this outlet.',
+                                        textAlign: TextAlign.center,
+                                        style: TextStyle(
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.bold,
+                                          color: isDark ? Colors.grey.shade400 : AppColors.textLight,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
                                 ),
                               ),
-                            ),
-                          )
-                        : SliverList(
-                            delegate: SliverChildBuilderDelegate(
-                              (context, index) {
-                                final foodItem = filteredItems[index];
-                                return FoodCard(
-                                  foodItem: foodItem,
-                                  restaurantId: restaurant.id,
-                                  restaurantName: restaurant.name,
-                                  onTap: () => context.push('/product/${restaurant.id}/${foodItem.id}'),
-                                );
-                              },
-                              childCount: filteredItems.length,
-                            ),
-                          )),
-              ),
+                            )
+                          : SliverList(
+                              delegate: SliverChildBuilderDelegate(
+                                (context, index) {
+                                  final foodItem = filteredItems[index];
+                                  return FoodCard(
+                                    foodItem: foodItem,
+                                    restaurantId: restaurant.id,
+                                    restaurantName: restaurant.name,
+                                    onTap: () => context.push('/product/${restaurant.id}/${foodItem.id}'),
+                                  );
+                                },
+                                childCount: filteredItems.length,
+                              ),
+                            )),
+                ),
+              ] else ...[
+                // Selected Combo Products Sliver
+                _buildSelectedComboSliver(
+                  comboId: _selectedNavId,
+                  combosList: combosList,
+                  restaurant: restaurant,
+                  isDark: isDark,
+                ),
+              ],
             ],
           ),
         ],
@@ -1095,135 +1099,432 @@ class _RestaurantDetailsScreenState extends ConsumerState<RestaurantDetailsScree
     );
   }
 
-  Widget _buildHorizontalComboCategories({
+  Widget _buildTopHorizontalNav({
+    required List<ComboModel> combosList,
+    required bool isDark,
+  }) {
+    return SizedBox(
+      height: 42,
+      child: ListView.builder(
+        scrollDirection: Axis.horizontal,
+        physics: const BouncingScrollPhysics(),
+        itemCount: combosList.length + 1,
+        itemBuilder: (context, index) {
+          if (index == 0) {
+            final isSelected = _selectedNavId == 'MENU';
+            return GestureDetector(
+              onTap: () {
+                _searchFocusNode.unfocus();
+                setState(() {
+                  _selectedNavId = 'MENU';
+                });
+              },
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 180),
+                margin: const EdgeInsets.only(right: 8),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                decoration: BoxDecoration(
+                  color: isSelected
+                      ? AppColors.primary
+                      : (isDark ? AppColors.darkCard : Colors.grey.shade100),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(
+                    color: isSelected
+                        ? AppColors.primary
+                        : (isDark ? AppColors.darkDivider : Colors.grey.shade300),
+                    width: isSelected ? 1.6 : 1.0,
+                  ),
+                  boxShadow: isSelected
+                      ? [
+                          BoxShadow(
+                            color: AppColors.primary.withValues(alpha: 0.25),
+                            blurRadius: 6,
+                            offset: const Offset(0, 2),
+                          )
+                        ]
+                      : null,
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Iconsax.element_4,
+                      size: 15,
+                      color: isSelected ? Colors.white : (isDark ? Colors.grey.shade300 : AppColors.textDark),
+                    ),
+                    const Gap(6),
+                    Text(
+                      'Menu',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: isSelected ? FontWeight.w900 : FontWeight.w700,
+                        color: isSelected ? Colors.white : (isDark ? Colors.grey.shade300 : AppColors.textDark),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }
+
+          final combo = combosList[index - 1];
+          final isSelected = _selectedNavId == combo.id;
+
+          return GestureDetector(
+            onTap: () {
+              _searchFocusNode.unfocus();
+              setState(() {
+                _selectedNavId = combo.id;
+              });
+            },
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 180),
+              margin: const EdgeInsets.only(right: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: isSelected
+                    ? AppColors.primary
+                    : (isDark ? AppColors.darkCard : Colors.grey.shade100),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(
+                  color: isSelected
+                      ? AppColors.primary
+                      : (isDark ? AppColors.darkDivider : Colors.grey.shade300),
+                  width: isSelected ? 1.6 : 1.0,
+                ),
+                boxShadow: isSelected
+                    ? [
+                        BoxShadow(
+                          color: AppColors.primary.withValues(alpha: 0.25),
+                          blurRadius: 6,
+                          offset: const Offset(0, 2),
+                        )
+                      ]
+                    : null,
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: Image.network(
+                      combo.image,
+                      width: 24,
+                      height: 24,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => Container(
+                        width: 24,
+                        height: 24,
+                        color: isSelected ? Colors.white24 : Colors.grey.shade300,
+                        child: Icon(
+                          Icons.fastfood,
+                          size: 14,
+                          color: isSelected ? Colors.white : AppColors.primary,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const Gap(6),
+                  Text(
+                    combo.name,
+                    style: TextStyle(
+                      fontSize: 12.5,
+                      fontWeight: isSelected ? FontWeight.w900 : FontWeight.w700,
+                      color: isSelected
+                          ? Colors.white
+                          : (isDark ? Colors.grey.shade300 : AppColors.textDark),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildSelectedComboSliver({
+    required String comboId,
     required List<ComboModel> combosList,
     required Restaurant restaurant,
     required bool isDark,
-    required String? activeCategory,
   }) {
-    if (combosList.isEmpty) return const SizedBox.shrink();
+    final combo = combosList.firstWhere(
+      (c) => c.id == comboId,
+      orElse: () => combosList.isNotEmpty ? combosList.first : const ComboModel(id: '', name: '', image: '', restaurantId: '', branchIds: []),
+    );
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
-          child: Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(6),
-                decoration: BoxDecoration(
-                  color: AppColors.primary.withValues(alpha: 0.12),
-                  shape: BoxShape.circle,
+    if (combo.id.isEmpty) {
+      return SliverToBoxAdapter(
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(40),
+            child: Text(
+              'Combo unavailable.',
+              style: TextStyle(fontSize: 14, color: isDark ? Colors.grey.shade400 : AppColors.textLight),
+            ),
+          ),
+        ),
+      );
+    }
+
+    return SliverPadding(
+      padding: const EdgeInsets.only(left: 16, right: 16, top: 8, bottom: 100),
+      sliver: Consumer(
+        builder: (context, ref, child) {
+          final comboItemsAsync = ref.watch(comboItemsStreamProvider(combo.id));
+          final comboItems = comboItemsAsync.value ?? [];
+
+          if (comboItemsAsync.isLoading && comboItems.isEmpty) {
+            return SliverList(
+              delegate: SliverChildBuilderDelegate(
+                (context, index) => Padding(
+                  padding: const EdgeInsets.only(bottom: 14),
+                  child: Shimmer.fromColors(
+                    baseColor: isDark ? Colors.grey.shade800 : Colors.grey.shade300,
+                    highlightColor: isDark ? Colors.grey.shade700 : Colors.grey.shade100,
+                    child: Container(
+                      height: 110,
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(18),
+                      ),
+                    ),
+                  ),
                 ),
-                child: const Icon(Icons.local_fire_department_rounded, size: 16, color: AppColors.primary),
+                childCount: 3,
+              ),
+            );
+          }
+
+          final query = _menuSearchQuery.trim().toLowerCase();
+          final filteredComboItems = query.isEmpty
+              ? comboItems
+              : comboItems.where((item) {
+                  return item.name.toLowerCase().contains(query) ||
+                      item.description.toLowerCase().contains(query);
+                }).toList();
+
+          if (filteredComboItems.isEmpty) {
+            return SliverToBoxAdapter(
+              child: Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(40),
+                  child: Column(
+                    children: [
+                      Icon(
+                        Icons.fastfood_outlined,
+                        size: 48,
+                        color: isDark ? Colors.grey.shade600 : Colors.grey.shade400,
+                      ),
+                      const Gap(12),
+                      Text(
+                        query.isNotEmpty
+                            ? 'No products in "${combo.name}" matching "$query"'
+                            : 'No products in "${combo.name}" yet.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                          color: isDark ? Colors.grey.shade400 : AppColors.textLight,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          }
+
+          return SliverList(
+            delegate: SliverChildBuilderDelegate(
+              (context, index) {
+                final item = filteredComboItems[index];
+                return _buildComboItemTile(
+                  item: item,
+                  combo: combo,
+                  restaurant: restaurant,
+                  isDark: isDark,
+                );
+              },
+              childCount: filteredComboItems.length,
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildComboItemTile({
+    required ComboItemModel item,
+    required ComboModel combo,
+    required Restaurant restaurant,
+    required bool isDark,
+  }) {
+    return Container(
+      key: ValueKey(item.id),
+      margin: const EdgeInsets.only(bottom: 14),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: isDark ? AppColors.darkCard : Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: isDark ? AppColors.darkDivider : Colors.grey.shade200,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: item.isVeg ? Colors.green.shade50 : Colors.red.shade50,
+                    borderRadius: BorderRadius.circular(4),
+                    border: Border.all(
+                      color: item.isVeg ? Colors.green.shade600 : Colors.red.shade600,
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.circle,
+                        size: 7,
+                        color: item.isVeg ? Colors.green.shade700 : Colors.red.shade700,
+                      ),
+                      const Gap(4),
+                      Text(
+                        item.foodType.isNotEmpty ? item.foodType : (item.isVeg ? 'Veg' : 'Non Veg'),
+                        style: TextStyle(
+                          fontSize: 9.5,
+                          fontWeight: FontWeight.w800,
+                          color: item.isVeg ? Colors.green.shade800 : Colors.red.shade800,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const Gap(6),
+                Text(
+                  item.name,
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w900,
+                    color: isDark ? Colors.white : AppColors.textDark,
+                    letterSpacing: -0.3,
+                  ),
+                ),
+                if (item.description.isNotEmpty) ...[
+                  const Gap(4),
+                  Text(
+                    item.description,
+                    style: TextStyle(
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w500,
+                      color: isDark ? Colors.grey.shade400 : AppColors.textLight,
+                      height: 1.3,
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+                const Gap(6),
+                Row(
+                  children: [
+                    Text(
+                      '₹${item.price.toStringAsFixed(0)}',
+                      style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w900,
+                        color: AppColors.primary,
+                      ),
+                    ),
+                    const Gap(8),
+                    const Icon(Icons.star_rounded, size: 14, color: Color(0xFFEAB308)),
+                    const Gap(2),
+                    Text(
+                      '${item.rating.toStringAsFixed(1)} (${item.ratingCount})',
+                      style: TextStyle(
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.bold,
+                        color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+
+          const Gap(12),
+
+          Column(
+            children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(14),
+                child: Image.network(
+                  item.image,
+                  height: 76,
+                  width: 76,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) => Container(
+                    height: 76,
+                    width: 76,
+                    color: AppColors.primary.withValues(alpha: 0.08),
+                    child: const Icon(Icons.fastfood, size: 28, color: AppColors.primary),
+                  ),
+                ),
               ),
               const Gap(8),
-              Text(
-                "Combos",
-                style: TextStyle(
-                  fontSize: 17,
-                  fontWeight: FontWeight.w900,
-                  color: isDark ? Colors.white : AppColors.textDark,
-                  letterSpacing: -0.3,
+              ElevatedButton(
+                onPressed: () => _onAddComboItem(item, combo, restaurant),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: combo.isActive ? AppColors.primary : Colors.grey.shade400,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                  minimumSize: const Size(76, 32),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  elevation: 1,
+                ),
+                child: const Text(
+                  'ADD',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 0.5,
+                  ),
                 ),
               ),
-            ],
-          ),
-        ),
-        const Gap(10),
-        SizedBox(
-          height: 148,
-          child: ListView.builder(
-            scrollDirection: Axis.horizontal,
-            physics: const BouncingScrollPhysics(),
-            itemCount: combosList.length,
-            itemBuilder: (context, index) {
-              final combo = combosList[index];
-              final isSelected = activeCategory == combo.name || (activeCategory == null && index == 0);
-
-              return GestureDetector(
-                onTap: () {
-                  setState(() {
-                    _selectedComboCategory = combo.name;
-                  });
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (ctx) => ComboDetailScreen(
-                        combo: combo,
-                        restaurant: restaurant,
-                      ),
-                    ),
-                  );
-                },
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 200),
-                  width: 116,
-                  margin: const EdgeInsets.only(right: 12, top: 2, bottom: 4),
-                  padding: const EdgeInsets.all(7),
-                  decoration: BoxDecoration(
-                    color: isDark
-                        ? (isSelected ? AppColors.primary.withValues(alpha: 0.2) : AppColors.darkCard)
-                        : (isSelected ? const Color(0xFFFFF4F0) : Colors.white),
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(
-                      color: isSelected
-                          ? AppColors.primary
-                          : (isDark ? AppColors.darkDivider : Colors.grey.shade200),
-                      width: isSelected ? 2.2 : 1.0,
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: isSelected
-                            ? AppColors.primary.withValues(alpha: 0.25)
-                            : Colors.black.withValues(alpha: 0.04),
-                        blurRadius: isSelected ? 10 : 6,
-                        offset: const Offset(0, 3),
-                      ),
-                    ],
-                  ),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      // Banner image
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(12),
-                        child: Image.network(
-                          combo.image,
-                          height: 72,
-                          width: double.infinity,
-                          fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) => Container(
-                            height: 72,
-                            color: AppColors.primary.withValues(alpha: 0.1),
-                            child: const Icon(Icons.fastfood, size: 28, color: AppColors.primary),
-                          ),
-                        ),
-                      ),
-                      const Gap(8),
-                      // Combo Name
-                      Text(
-                        combo.name,
-                        textAlign: TextAlign.center,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 11.5,
-                          fontWeight: isSelected ? FontWeight.w900 : FontWeight.bold,
-                          color: isSelected
-                              ? (isDark ? Colors.white : AppColors.primary)
-                              : (isDark ? Colors.grey.shade300 : AppColors.textDark),
-                          height: 1.15,
-                        ),
-                      ),
-                    ],
+              if (item.isCustomisable || item.customizationGroups.isNotEmpty || item.isVariantEnabled) ...[
+                const Gap(3),
+                Text(
+                  'CUSTOMISABLE',
+                  style: TextStyle(
+                    fontSize: 8.5,
+                    fontWeight: FontWeight.w800,
+                    color: isDark ? Colors.grey.shade400 : Colors.grey.shade500,
+                    letterSpacing: 0.3,
                   ),
                 ),
-              );
-            },
+              ],
+            ],
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }

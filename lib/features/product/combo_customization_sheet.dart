@@ -51,25 +51,55 @@ class _ComboProductCustomizationSheetState
     _initDefaults(widget.item);
   }
 
+  void _onVariantSelected(ComboItemVariant variant) {
+    setState(() {
+      _selectedVariant = variant;
+      _selectedVariantOptions.clear();
+
+      for (final varItem in variant.items) {
+        if (!varItem.isActive) continue;
+        _selectedVariantOptions[varItem.id] = <String>{};
+
+        if (varItem.isRequired && varItem.options.isNotEmpty) {
+          final isSingle = varItem.selectionType == 'SINGLE';
+          if (isSingle) {
+            _selectedVariantOptions[varItem.id]!.add(varItem.options.first.id);
+          } else {
+            final countToTake = varItem.minSelection > 0 ? varItem.minSelection : 1;
+            final defaultOpts = varItem.options.take(countToTake);
+            for (final opt in defaultOpts) {
+              _selectedVariantOptions[varItem.id]!.add(opt.id);
+            }
+          }
+        }
+      }
+    });
+  }
+
   void _initDefaults(ComboItemModel currentItem) {
     if (currentItem.isVariantEnabled && currentItem.variants.isNotEmpty) {
       if (_selectedVariant == null || !currentItem.variants.any((v) => v.id == _selectedVariant!.id)) {
         _selectedVariant = currentItem.variants.first;
+        _selectedVariantOptions.clear();
       }
       if (_selectedVariant != null) {
         for (final varItem in _selectedVariant!.items) {
+          if (!varItem.isActive) continue;
           final isSingle = varItem.selectionType == 'SINGLE';
-          final isReq = varItem.isRequired && varItem.minSelection >= 1;
+          final isReq = varItem.isRequired;
 
           if (!_selectedVariantOptions.containsKey(varItem.id)) {
             _selectedVariantOptions[varItem.id] = <String>{};
             if (isReq && varItem.options.isNotEmpty) {
-              _selectedVariantOptions[varItem.id]!.add(varItem.options.first.id);
-            }
-          } else {
-            final currentSet = _selectedVariantOptions[varItem.id]!;
-            if (isSingle && currentSet.length > 1) {
-              _selectedVariantOptions[varItem.id] = {currentSet.first};
+              if (isSingle) {
+                _selectedVariantOptions[varItem.id]!.add(varItem.options.first.id);
+              } else {
+                final countToTake = varItem.minSelection > 0 ? varItem.minSelection : 1;
+                final defaultOpts = varItem.options.take(countToTake);
+                for (final opt in defaultOpts) {
+                  _selectedVariantOptions[varItem.id]!.add(opt.id);
+                }
+              }
             }
           }
         }
@@ -95,29 +125,12 @@ class _ComboProductCustomizationSheetState
   }
 
   double _calculateUnitPrice(ComboItemModel currentItem) {
-    double total = currentItem.price;
-
-    if (currentItem.isVariantEnabled && _selectedVariant != null) {
-      for (final varItem in _selectedVariant!.items) {
-        final selectedSet = _selectedVariantOptions[varItem.id] ?? <String>{};
-        for (final option in varItem.options) {
-          if (selectedSet.contains(option.id)) {
-            total += option.additionalPrice;
-          }
-        }
-      }
-    } else {
-      for (final group in currentItem.customizationGroups) {
-        final selectedSet = _selectedGroupOptions[group.id] ?? <String>{};
-        for (final option in group.options) {
-          if (selectedSet.contains(option.id)) {
-            total += option.price;
-          }
-        }
-      }
-    }
-
-    return total;
+    return ComboCalculator.calculateComboFinalPrice(
+      currentItem: currentItem,
+      selectedVariant: _selectedVariant,
+      selectedVariantOptions: _selectedVariantOptions,
+      selectedGroupOptions: _selectedGroupOptions,
+    );
   }
 
   void _toggleVariantOption(ComboVariantItem varItem, ComboVariantOption option) {
@@ -335,6 +348,10 @@ class _ComboProductCustomizationSheetState
     final customizationObjects = _buildSelectedCustomizationObjects(currentItem);
     final selectedSizeStr = currentItem.isVariantEnabled ? _selectedVariant?.name : null;
 
+    final double calculatedBasePrice = currentItem.isVariantEnabled && _selectedVariant != null
+        ? ComboCalculator.calculateVariantBasePrice(_selectedVariant!, _selectedVariantOptions)
+        : currentItem.price;
+
     final foodItem = FoodItem(
       id: currentItem.id,
       name: '${widget.combo.name} - ${currentItem.name}',
@@ -370,7 +387,7 @@ class _ComboProductCustomizationSheetState
       comboId: widget.combo.id,
       comboName: widget.combo.name,
       comboItemId: currentItem.id,
-      basePrice: currentItem.price,
+      basePrice: calculatedBasePrice,
       unitPrice: unitPrice,
       selectedCustomizations: customizations,
       customizationSelections: customizationObjects,
@@ -491,13 +508,32 @@ class _ComboProductCustomizationSheetState
                             ),
                           ],
                           const Gap(6),
-                          Text(
-                            'Base Price: ₹${item.price.toStringAsFixed(0)}',
-                            style: const TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w800,
-                              color: AppColors.primary,
-                            ),
+                          Builder(
+                            builder: (context) {
+                              if (item.isVariantEnabled && _selectedVariant != null) {
+                                final variantBasePrice = ComboCalculator.calculateVariantBasePrice(
+                                  _selectedVariant!,
+                                  _selectedVariantOptions,
+                                );
+                                return Text(
+                                  'Base Price: ₹${variantBasePrice.toStringAsFixed(0)}',
+                                  style: const TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w800,
+                                    color: AppColors.primary,
+                                  ),
+                                );
+                              } else {
+                                return Text(
+                                  'Base Price: ₹${item.price.toStringAsFixed(0)}',
+                                  style: const TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w800,
+                                    color: AppColors.primary,
+                                  ),
+                                );
+                              }
+                            },
                           ),
                         ],
                       ),
@@ -563,9 +599,7 @@ class _ComboProductCustomizationSheetState
 
                         return GestureDetector(
                           onTap: () {
-                            setState(() {
-                              _selectedVariant = variant;
-                            });
+                            _onVariantSelected(variant);
                           },
                           child: AnimatedContainer(
                             duration: const Duration(milliseconds: 180),

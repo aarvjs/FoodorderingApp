@@ -93,10 +93,14 @@ final restaurantDetailsStreamProvider = StreamProvider.family<Restaurant?, Strin
   return repo.streamRestaurantDetails(id, userLat: userLat, userLng: userLng);
 });
 
-/// Stream provider family for restaurant menu items
-final restaurantMenuStreamProvider = StreamProvider.family<List<FoodItem>, String>((ref, restaurantId) {
+/// Stream provider family for restaurant menu items strictly scoped to branch
+final restaurantMenuStreamProvider = StreamProvider.family<List<FoodItem>, String>((ref, idOrBranchId) {
   final repo = ref.watch(restaurantRepositoryProvider);
-  return repo.streamRestaurantMenu(restaurantId);
+  final detailsAsync = ref.watch(restaurantDetailsStreamProvider(idOrBranchId));
+  final restaurant = detailsAsync.value;
+  final parentRestId = restaurant?.restaurantId;
+  final branchId = (restaurant?.branchId.isNotEmpty == true) ? restaurant!.branchId : (restaurant?.id ?? idOrBranchId);
+  return repo.streamRestaurantMenu(parentRestId ?? idOrBranchId, branchId: branchId);
 });
 
 /// Stream provider family for available restaurant tables

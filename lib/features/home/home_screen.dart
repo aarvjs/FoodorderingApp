@@ -326,114 +326,223 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
 
                   const Gap(14),
 
-                  // Explore More Grid
+                  // Explore More Grid (Rewards & Coupons)
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
-                    child: GridView.builder(
-                      shrinkWrap: true,
-                      physics: const NeverScrollableScrollPhysics(),
-                      gridDelegate:
-                          const SliverGridDelegateWithFixedCrossAxisCount(
-                        crossAxisCount: 3,
-                        childAspectRatio: 1.05,
-                        crossAxisSpacing: 10,
-                        mainAxisSpacing: 10,
-                      ),
-                      itemCount: _exploreMore.length,
-                      itemBuilder: (context, index) {
-                        final item = _exploreMore[index];
-                        final itemColor = item['color'] as Color;
-                        final itemBg = item['bg'] as Color;
-                        return GestureDetector(
-                          onTap: () {
-                            final title = item['title'] as String;
-                            if (title == 'Rewards') {
-                              context.push('/rewards');
-                            } else if (title == 'Offers' || title == 'Coupons') {
-                              context.push('/offers');
-                            } else if (title == 'Referrals') {
-                              context.push('/referral');
-                            } else if (title == 'Collections') {
-                              if (allRestaurants.isNotEmpty) {
-                                context.push('/restaurant/${allRestaurants.first.id}');
-                              } else {
-                                context.push('/search');
-                              }
-                            } else if (title == 'Premium') {
-                              context.push('/premium');
-                            } else {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text('Opening $title...'),
-                                  behavior: SnackBarBehavior.floating,
-                                  shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(12)),
+                    child: Row(
+                      children: [
+                        // Rewards Card
+                        Expanded(
+                          child: GestureDetector(
+                            onTap: () => context.push('/rewards'),
+                            child: Container(
+                              height: 105,
+                              padding: const EdgeInsets.all(14),
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  colors: isDark
+                                      ? [const Color(0xFF3E2723), const Color(0xFF261410)]
+                                      : [const Color(0xFFFFF3E0), const Color(0xFFFFE0B2)],
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
                                 ),
-                              );
-                            }
-                          },
-                          child: AnimatedContainer(
-                            duration: const Duration(milliseconds: 200),
-                            decoration: BoxDecoration(
-                              color: isDark
-                                  ? const Color(0xFF1E1E1E)
-                                  : itemBg.withOpacity(0.7),
-                              borderRadius: BorderRadius.circular(20),
-                              border: Border.all(
-                                color: isDark
-                                    ? Colors.white.withOpacity(0.05)
-                                    : itemColor.withOpacity(0.15),
+                                borderRadius: BorderRadius.circular(22),
+                                border: Border.all(
+                                  color: isDark ? const Color(0xFFFF9800).withOpacity(0.3) : const Color(0xFFFF9800).withOpacity(0.3),
+                                  width: 1.5,
+                                ),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: const Color(0xFFFF9800).withOpacity(0.12),
+                                    blurRadius: 12,
+                                    offset: const Offset(0, 4),
+                                  ),
+                                ],
                               ),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: itemColor.withOpacity(0.1),
-                                  blurRadius: 12,
-                                  offset: const Offset(0, 4),
-                                ),
-                              ],
+                              child: Stack(
+                                children: [
+                                  Positioned(
+                                    right: -10,
+                                    bottom: -10,
+                                    child: Icon(
+                                      Iconsax.award5,
+                                      size: 64,
+                                      color: const Color(0xFFFF9800).withOpacity(0.12),
+                                    ),
+                                  ),
+                                  Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Row(
+                                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                        children: [
+                                          Container(
+                                            padding: const EdgeInsets.all(8),
+                                            decoration: BoxDecoration(
+                                              color: const Color(0xFFFF9800).withOpacity(0.2),
+                                              borderRadius: BorderRadius.circular(12),
+                                            ),
+                                            child: const Icon(
+                                              Iconsax.award5,
+                                              size: 20,
+                                              color: Color(0xFFFF9800),
+                                            ),
+                                          ),
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                            decoration: BoxDecoration(
+                                              color: const Color(0xFFFF9800),
+                                              borderRadius: BorderRadius.circular(20),
+                                            ),
+                                            child: Text(
+                                              'POINTS',
+                                              style: GoogleFonts.poppins(
+                                                fontSize: 9,
+                                                fontWeight: FontWeight.w800,
+                                                color: Colors.white,
+                                                letterSpacing: 0.5,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            'Rewards 🎁',
+                                            style: GoogleFonts.poppins(
+                                              fontSize: 14,
+                                              fontWeight: FontWeight.w800,
+                                              color: isDark ? Colors.white : AppColors.textDark,
+                                            ),
+                                          ),
+                                          Text(
+                                            'Earn & Redeem',
+                                            style: GoogleFonts.poppins(
+                                              fontSize: 10,
+                                              fontWeight: FontWeight.w600,
+                                              color: isDark ? Colors.grey.shade400 : AppColors.textLight,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
                             ),
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Container(
-                                  padding: const EdgeInsets.all(10),
-                                  decoration: BoxDecoration(
-                                    color: itemColor.withOpacity(0.12),
-                                    shape: BoxShape.circle,
-                                  ),
-                                  child: Icon(
-                                    item['icon'] as IconData,
-                                    size: 22,
-                                    color: itemColor,
-                                  ),
+                          ).animate().fadeIn(duration: 400.ms).scale(begin: const Offset(0.9, 0.9)),
+                        ),
+
+                        const Gap(12),
+
+                        // Coupons Card
+                        Expanded(
+                          child: GestureDetector(
+                            onTap: () => context.push('/offers'),
+                            child: Container(
+                              height: 105,
+                              padding: const EdgeInsets.all(14),
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  colors: isDark
+                                      ? [const Color(0xFF3B1215), const Color(0xFF240A0C)]
+                                      : [const Color(0xFFFFEBEE), const Color(0xFFFFCDD2)],
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
                                 ),
-                                const Gap(8),
-                                Text(
-                                  item['title'] as String,
-                                  textAlign: TextAlign.center,
-                                  style: GoogleFonts.poppins(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w700,
-                                    color: isDark
-                                        ? Colors.white
-                                        : AppColors.textDark,
-                                  ),
+                                borderRadius: BorderRadius.circular(22),
+                                border: Border.all(
+                                  color: isDark ? const Color(0xFFE91D25).withOpacity(0.3) : const Color(0xFFE91D25).withOpacity(0.3),
+                                  width: 1.5,
                                 ),
-                              ],
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: const Color(0xFFE91D25).withOpacity(0.12),
+                                    blurRadius: 12,
+                                    offset: const Offset(0, 4),
+                                  ),
+                                ],
+                              ),
+                              child: Stack(
+                                children: [
+                                  Positioned(
+                                    right: -10,
+                                    bottom: -10,
+                                    child: Icon(
+                                      Iconsax.discount_shape,
+                                      size: 64,
+                                      color: const Color(0xFFE91D25).withOpacity(0.12),
+                                    ),
+                                  ),
+                                  Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Row(
+                                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                        children: [
+                                          Container(
+                                            padding: const EdgeInsets.all(8),
+                                            decoration: BoxDecoration(
+                                              color: const Color(0xFFE91D25).withOpacity(0.2),
+                                              borderRadius: BorderRadius.circular(12),
+                                            ),
+                                            child: const Icon(
+                                              Iconsax.discount_shape,
+                                              size: 20,
+                                              color: Color(0xFFE91D25),
+                                            ),
+                                          ),
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                            decoration: BoxDecoration(
+                                              color: const Color(0xFFE91D25),
+                                              borderRadius: BorderRadius.circular(20),
+                                            ),
+                                            child: Text(
+                                              'OFFERS',
+                                              style: GoogleFonts.poppins(
+                                                fontSize: 9,
+                                                fontWeight: FontWeight.w800,
+                                                color: Colors.white,
+                                                letterSpacing: 0.5,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            'Coupons 🏷️',
+                                            style: GoogleFonts.poppins(
+                                              fontSize: 14,
+                                              fontWeight: FontWeight.w800,
+                                              color: isDark ? Colors.white : AppColors.textDark,
+                                            ),
+                                          ),
+                                          Text(
+                                            'Branch Deals',
+                                            style: GoogleFonts.poppins(
+                                              fontSize: 10,
+                                              fontWeight: FontWeight.w600,
+                                              color: isDark ? Colors.grey.shade400 : AppColors.textLight,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
                             ),
-                          ),
-                        )
-                            .animate(
-                                delay:
-                                    Duration(milliseconds: index * 70 + 300))
-                            .fadeIn(duration: 400.ms)
-                            .scale(
-                              begin: const Offset(0.85, 0.85),
-                              end: const Offset(1, 1),
-                              duration: 400.ms,
-                              curve: Curves.easeOut,
-                            );
-                      },
+                          ).animate().fadeIn(duration: 400.ms, delay: 100.ms).scale(begin: const Offset(0.9, 0.9)),
+                        ),
+                      ],
                     ),
                   ),
 

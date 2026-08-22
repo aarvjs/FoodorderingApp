@@ -8,6 +8,7 @@ import '../../../core/config/app_colors.dart';
 import '../../../auth/providers/auth_provider.dart';
 import '../../address/providers/address_provider.dart';
 import '../../address/widgets/address_selection_bottom_sheet.dart';
+import '../providers/restaurant_providers.dart';
 
 class AppDrawer extends ConsumerWidget {
   const AppDrawer({super.key});
@@ -261,10 +262,17 @@ class AppDrawer extends ConsumerWidget {
                         Navigator.pop(context);
                         context.go('/orders');
                       }, isDark),
-                      _buildMenuItem(Iconsax.calendar_tick, 'My Table Bookings', () {
-                        Navigator.pop(context);
-                        context.push('/bookings');
-                      }, isDark),
+                      Builder(
+                        builder: (context) {
+                          final nearbyAsync = ref.watch(nearbyRestaurantsStreamProvider);
+                          final bool hasDineIn = nearbyAsync.value?.any((r) => r.hasDineIn) ?? true;
+                          if (!hasDineIn) return const SizedBox.shrink();
+                          return _buildMenuItem(Iconsax.calendar_tick, 'My Table Bookings', () {
+                            Navigator.pop(context);
+                            context.push('/bookings');
+                          }, isDark);
+                        },
+                      ),
                       _buildMenuItem(Iconsax.heart, 'Favorites', () {
                         Navigator.pop(context);
                         context.push('/home');

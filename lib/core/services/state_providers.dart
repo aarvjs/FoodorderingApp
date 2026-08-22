@@ -400,19 +400,32 @@ class CartNotifier extends Notifier<CartState> {
           );
         }
 
-        // Check Restaurant ID & Branch ID scope
+        // Strict Restaurant ID & Branch ID validation
         final String oRestId = (data['restaurantId'] ?? '').toString().trim();
         final String oBranchId = (data['branchId'] ?? '').toString().trim();
+        final List<String> oBranchIds = (data['branchIds'] is List)
+            ? (data['branchIds'] as List).map((e) => e.toString().trim()).toList()
+            : [];
 
-        if (currentRestId.isNotEmpty) {
-          final bool isGlobalRest = oRestId.isEmpty || oRestId.toUpperCase() == 'ALL';
-          final bool isGlobalBranch = oBranchId.isEmpty || oBranchId.toUpperCase() == 'ALL';
-          final bool matchesRest = oRestId == currentRestId || oBranchId == currentRestId || oBranchId == currentBranchId;
+        final String activeBranchId = state.items.first.branchId.isNotEmpty
+            ? state.items.first.branchId
+            : state.items.first.restaurantId;
+        final String activeParentRestId = state.items.first.restaurantId;
 
-          if (!isGlobalRest && !isGlobalBranch && !matchesRest) {
+        final bool isGlobal = oBranchId.isEmpty ||
+            oBranchId.toUpperCase() == 'ALL' ||
+            oBranchIds.contains('ALL') ||
+            (oBranchId.isEmpty && oBranchIds.isEmpty && (oRestId.isEmpty || oRestId.toUpperCase() == 'ALL'));
+
+        if (!isGlobal) {
+          final bool matchesBranchId = oBranchId == activeBranchId || oBranchId == activeParentRestId;
+          final bool matchesBranchIds = oBranchIds.contains(activeBranchId) || oBranchIds.contains(activeParentRestId);
+          final bool matchesRestId = oBranchId.isEmpty && oBranchIds.isEmpty && (oRestId == activeParentRestId || oRestId == activeBranchId);
+
+          if (!matchesBranchId && !matchesBranchIds && !matchesRestId) {
             return const CouponApplyResult(
               isSuccess: false,
-              message: 'This offer is not valid for this restaurant branch.',
+              message: 'This coupon is not valid for this branch.',
             );
           }
         }

@@ -14,6 +14,7 @@ class OfferModel {
   final List<Color> accentColors;
   final String? restaurantId;
   final String? branchId;
+  final List<String> branchIds;
   final bool isActive;
   final String? discountType;
   final String? startDate;
@@ -45,6 +46,7 @@ class OfferModel {
     this.accentColors = const [Color(0xFFFF4D4F), Color(0xFFFF7043)],
     this.restaurantId,
     this.branchId,
+    this.branchIds = const [],
     this.isActive = true,
     this.discountType,
     this.startDate,
@@ -122,6 +124,12 @@ class OfferModel {
       excludedList = rawExcluded.map((e) => e.toString()).toList();
     }
 
+    final rawBranchIds = data['branchIds'];
+    List<String> bIdsList = [];
+    if (rawBranchIds is List) {
+      bIdsList = rawBranchIds.map((e) => e.toString().trim()).toList();
+    }
+
     OfferBadgeType badgeType = OfferBadgeType.flat50;
     if (type.contains('FREE') || title.toLowerCase().contains('free')) {
       badgeType = OfferBadgeType.freeDelivery;
@@ -158,6 +166,7 @@ class OfferModel {
       accentColors: colorGradients[hash % colorGradients.length],
       restaurantId: data['restaurantId']?.toString(),
       branchId: data['branchId']?.toString(),
+      branchIds: bIdsList,
       isActive: isAct,
       discountType: type.isNotEmpty ? type : (data['discountType']?.toString()),
       startDate: sDate,

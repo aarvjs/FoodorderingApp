@@ -11,6 +11,7 @@ import '../../auth/providers/auth_provider.dart';
 import '../address/providers/address_provider.dart';
 import '../address/widgets/address_selection_bottom_sheet.dart';
 import '../address/widgets/add_edit_address_modal.dart';
+import '../home/providers/restaurant_providers.dart';
 
 class ProfileScreen extends ConsumerStatefulWidget {
   const ProfileScreen({super.key});
@@ -664,12 +665,24 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                       trailing: const Icon(Icons.chevron_right_rounded),
                       onTap: () => context.push('/offers'),
                     ),
-                    const Divider(height: 1),
-                    ListTile(
-                      leading: const Icon(Icons.table_restaurant_rounded, color: AppColors.primary),
-                      title: const Text('My Table Bookings', style: TextStyle(fontWeight: FontWeight.bold)),
-                      trailing: const Icon(Icons.chevron_right_rounded),
-                      onTap: () => context.push('/bookings'),
+                    Builder(
+                      builder: (context) {
+                        final nearbyAsync = ref.watch(nearbyRestaurantsStreamProvider);
+                        final bool hasDineIn = nearbyAsync.value?.any((r) => r.hasDineIn) ?? true;
+                        if (!hasDineIn) return const SizedBox.shrink();
+                        return Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Divider(height: 1),
+                            ListTile(
+                              leading: const Icon(Icons.table_restaurant_rounded, color: AppColors.primary),
+                              title: const Text('My Table Bookings', style: TextStyle(fontWeight: FontWeight.bold)),
+                              trailing: const Icon(Icons.chevron_right_rounded),
+                              onTap: () => context.push('/bookings'),
+                            ),
+                          ],
+                        );
+                      },
                     ),
                     const Divider(height: 1),
                     ListTile(

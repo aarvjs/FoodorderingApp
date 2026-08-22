@@ -93,7 +93,10 @@ class _CouponSelectionBottomSheetState extends ConsumerState<CouponSelectionBott
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final cartState = ref.watch(cartProvider);
     final cartNotifier = ref.read(cartProvider.notifier);
-    final offersAsync = ref.watch(restaurantOffersStreamProvider(widget.restaurantId));
+    final activeBranchId = (cartState.items.isNotEmpty && cartState.items.first.branchId.isNotEmpty)
+        ? cartState.items.first.branchId
+        : widget.restaurantId;
+    final offersAsync = ref.watch(restaurantOffersStreamProvider(activeBranchId));
 
     return Container(
       constraints: BoxConstraints(

@@ -128,7 +128,9 @@ class Restaurant {
       address: (docData['address'] ?? docData['location']?['formattedAddress'] ?? '').toString(),
       minimumOrder: parseDouble(docData['minimumOrder']),
       deliveryCharges: parseDouble(docData['deliveryCharges']),
-      hasDineIn: docData['hasDineIn'] ?? docData['hasTableService'] ?? true,
+      hasDineIn: docData['tableBookingEnabled'] == null
+          ? (docData['hasDineIn'] ?? docData['hasTableService'] ?? true)
+          : (docData['tableBookingEnabled'] == true),
       hasTakeaway: docData['hasTakeaway'] ?? true,
       hasDelivery: docData['hasDelivery'] ?? true,
     );

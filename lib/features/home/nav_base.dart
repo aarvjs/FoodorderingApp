@@ -96,6 +96,7 @@ class _NavBaseState extends ConsumerState<NavBase> {
     );
 
     return Scaffold(
+      resizeToAvoidBottomInset: false,
       drawer: const AppDrawer(),
       body: Stack(
         children: [
