@@ -155,7 +155,7 @@ class _CartScreenState extends ConsumerState<CartScreen> {
                       borderRadius: BorderRadius.circular(20),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withOpacity(0.02),
+                          color: Colors.black.withValues(alpha: 0.02),
                           blurRadius: 10,
                           offset: const Offset(0, 4),
                         ),
@@ -690,7 +690,7 @@ class _CartScreenState extends ConsumerState<CartScreen> {
                       borderRadius: BorderRadius.circular(20),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withOpacity(0.01),
+                          color: Colors.black.withValues(alpha: 0.01),
                           blurRadius: 10,
                           offset: const Offset(0, 4),
                         ),

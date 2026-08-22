@@ -59,10 +59,25 @@ class OrderRepository {
     required double discount,
     required double grandTotal,
     String paymentMethod = 'CASH_ON_DELIVERY',
+    String paymentGateway = 'COD',
+    String paymentStatus = 'PENDING',
+    String? transactionId,
+    String? paidAt,
     String? appliedCoupon,
     String? appliedOfferId,
-
   }) async {
+    // Idempotency check: prevent duplicate orders for the same transaction ID
+    if (transactionId != null && transactionId.isNotEmpty) {
+      final existingSnap = await _firestore
+          .collection(_collectionName)
+          .where('transactionId', isEqualTo: transactionId)
+          .get();
+      if (existingSnap.docs.isNotEmpty) {
+        final doc = existingSnap.docs.first;
+        return Order.fromFirestore(doc.data(), doc.id);
+      }
+    }
+
     final docRef = _firestore.collection(_collectionName).doc();
     final nowIso = DateTime.now().toIso8601String();
     final randomNum = Random().nextInt(900000) + 100000;
@@ -110,6 +125,10 @@ class OrderRepository {
       };
     }).toList();
 
+    final finalPaymentStatus = paymentStatus != 'PENDING'
+        ? paymentStatus
+        : (paymentMethod == 'ONLINE' ? 'SUCCESS' : 'COD_PENDING');
+
     final orderData = {
       'id': docRef.id,
       'orderNumber': orderNum,
@@ -130,17 +149,18 @@ class OrderRepository {
       'taxPercentage': taxPercentage,
       'gstPercentage': taxPercentage,
       'deliveryFee': deliveryFee,
-
       'deliveryCharge': deliveryFee,
       'deliveryDistanceKm': deliveryDistanceKm,
       'distanceKm': deliveryDistanceKm,
       'discount': discount,
-
       'appliedCoupon': appliedCoupon ?? '',
       'totalAmount': grandTotal,
       'grandTotal': grandTotal,
       'paymentMethod': paymentMethod,
-      'paymentStatus': 'PENDING',
+      'paymentGateway': paymentGateway,
+      'paymentStatus': finalPaymentStatus,
+      'transactionId': ?transactionId,
+      'paidAt': ?paidAt,
       'orderType': 'DELIVERY',
       'status': 'PENDING',
       'createdAt': nowIso,

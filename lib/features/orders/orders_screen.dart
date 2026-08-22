@@ -279,9 +279,38 @@ class OrdersScreen extends ConsumerWidget {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(
-                    'Payment: ${order.paymentMethod}',
-                    style: const TextStyle(fontSize: 12, color: AppColors.textLight),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        order.paymentMethod == 'ONLINE' || order.paymentGateway == 'PAYU'
+                            ? 'Payment Method: Online • Gateway: PayU'
+                            : 'Payment Method: Cash on Delivery • Gateway: COD',
+                        style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.textLight),
+                      ),
+                      const Gap(2),
+                      Row(
+                        children: [
+                          Text(
+                            'Status: ${order.paymentStatus}',
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                              color: order.paymentStatus == 'SUCCESS' || order.paymentStatus == 'COD_COMPLETED'
+                                  ? Colors.green
+                                  : (order.paymentStatus == 'FAILED' ? Colors.red : AppColors.textLight),
+                            ),
+                          ),
+                          if (order.transactionId != null && order.transactionId!.isNotEmpty) ...[
+                            const Text(' • ', style: TextStyle(fontSize: 10, color: AppColors.textLight)),
+                            Text(
+                              'Txn: ${order.transactionId}',
+                              style: const TextStyle(fontSize: 10, color: AppColors.textLight),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ],
                   ),
                   Row(
                     children: [

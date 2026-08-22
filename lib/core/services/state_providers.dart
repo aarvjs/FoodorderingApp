@@ -84,11 +84,12 @@ class CartState {
   });
 
   double get subtotal {
-    return items.fold(0.0, (total, item) => total + (item.foodItem.price * item.quantity));
+    return items.fold(0.0, (total, item) => total + item.totalPrice);
   }
 
   double get couponDiscount {
-    return subtotal * discountPercentage;
+    if (subtotal <= 0) return 0.0;
+    return double.parse((subtotal * discountPercentage).toStringAsFixed(2));
   }
 
   double get deliveryFee {
@@ -99,9 +100,9 @@ class CartState {
 
   double get gstTax {
     if (items.isEmpty || taxPercentage <= 0) return 0.0;
-    final taxableAmount = subtotal - couponDiscount;
+    final taxableAmount = (subtotal - couponDiscount).clamp(0.0, double.infinity);
     if (taxableAmount <= 0) return 0.0;
-    return taxableAmount * (taxPercentage / 100.0);
+    return double.parse((taxableAmount * (taxPercentage / 100.0)).toStringAsFixed(2));
   }
 
   double get total {

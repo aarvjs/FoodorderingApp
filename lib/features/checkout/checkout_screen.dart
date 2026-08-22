@@ -7,6 +7,7 @@ import '../../core/config/app_colors.dart';
 import '../../core/widgets/custom_button.dart';
 import '../../core/services/state_providers.dart';
 import '../../core/services/delivery_charge_service.dart';
+import '../../core/services/payu_service.dart';
 import '../../models/address.dart';
 import '../../auth/providers/auth_provider.dart';
 
@@ -21,15 +22,14 @@ class CheckoutScreen extends ConsumerStatefulWidget {
 }
 
 class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
-  String _selectedPaymentMethod = 'COD';
+  String _selectedPaymentMethod = 'ONLINE';
   String? _selectedAddressId;
   bool _isPlacingOrder = false;
   final TextEditingController _deliveryAddressController = TextEditingController();
 
   final List<Map<String, dynamic>> _paymentMethods = [
+    {'id': 'ONLINE', 'name': 'Online Payment — PayU', 'icon': Iconsax.card_pos},
     {'id': 'COD', 'name': 'Cash on Delivery (COD)', 'icon': Iconsax.wallet_3},
-    {'id': 'UPI', 'name': 'UPI (Google Pay / PhonePe)', 'icon': Iconsax.mobile},
-    {'id': 'Card', 'name': 'Credit or Debit Card', 'icon': Iconsax.card},
   ];
 
   @override
@@ -215,6 +215,146 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       _isPlacingOrder = true;
     });
 
+    if (_selectedPaymentMethod == 'ONLINE') {
+      final txnId = PayUService.generateTransactionId();
+      final payuService = PayUService();
+
+      await payuService.startPayment(
+        transactionId: txnId,
+        amount: effectiveGrandTotal,
+        customerName: customerName,
+        customerPhone: customerPhone,
+        productInfo: 'Food Order - ${cartState.items.length} items',
+        onSuccess: (response) async {
+          // Verify transaction with Next.js backend
+          final verifyRes = await PayUService.verifyPaymentWithServer(
+            transactionId: txnId,
+            payuResponse: response,
+          );
+
+          if (!mounted) return;
+
+          if (verifyRes['verified'] == true || verifyRes['paymentStatus'] == 'SUCCESS') {
+            await _finalizePaidOrder(
+              restId: restId,
+              branchId: branchId,
+              restName: restName,
+              customerId: customerId,
+              customerName: customerName,
+              customerPhone: customerPhone,
+              manualAddress: manualAddress,
+              lat: lat,
+              lng: lng,
+              cartState: cartState,
+              effectiveGstAmount: effectiveGstAmount,
+              taxPercentage: taxPercentage,
+              effectiveDeliveryFee: effectiveDeliveryFee,
+              effectiveDistanceKm: effectiveDistanceKm,
+              effectiveGrandTotal: effectiveGrandTotal,
+              paymentMethod: 'ONLINE',
+              paymentGateway: 'PAYU',
+              paymentStatus: 'SUCCESS',
+              transactionId: txnId,
+            );
+          } else {
+            setState(() {
+              _isPlacingOrder = false;
+            });
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(verifyRes['message'] ?? 'Payment verification failed. Please try again.'),
+                backgroundColor: AppColors.error,
+                behavior: SnackBarBehavior.floating,
+              ),
+            );
+          }
+        },
+        onFailure: (response) {
+          if (!mounted) return;
+          setState(() {
+            _isPlacingOrder = false;
+          });
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Payment failed. You can retry payment with a new transaction ID.'),
+              backgroundColor: AppColors.error,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        },
+        onCancel: (response) {
+          if (!mounted) return;
+          setState(() {
+            _isPlacingOrder = false;
+          });
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Payment cancelled. Your cart remains intact.'),
+              backgroundColor: Colors.orange,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        },
+        onError: (response) {
+          if (!mounted) return;
+          setState(() {
+            _isPlacingOrder = false;
+          });
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(response['message'] ?? 'Payment gateway error occurred.'),
+              backgroundColor: AppColors.error,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        },
+      );
+    } else {
+      // Cash on Delivery flow
+      await _finalizePaidOrder(
+        restId: restId,
+        branchId: branchId,
+        restName: restName,
+        customerId: customerId,
+        customerName: customerName,
+        customerPhone: customerPhone,
+        manualAddress: manualAddress,
+        lat: lat,
+        lng: lng,
+        cartState: cartState,
+        effectiveGstAmount: effectiveGstAmount,
+        taxPercentage: taxPercentage,
+        effectiveDeliveryFee: effectiveDeliveryFee,
+        effectiveDistanceKm: effectiveDistanceKm,
+        effectiveGrandTotal: effectiveGrandTotal,
+        paymentMethod: 'CASH_ON_DELIVERY',
+        paymentGateway: 'COD',
+        paymentStatus: 'COD_PENDING',
+      );
+    }
+  }
+
+  Future<void> _finalizePaidOrder({
+    required String restId,
+    required String branchId,
+    required String restName,
+    required String customerId,
+    required String customerName,
+    required String customerPhone,
+    required String manualAddress,
+    required double lat,
+    required double lng,
+    required CartState cartState,
+    required double effectiveGstAmount,
+    required double taxPercentage,
+    required double effectiveDeliveryFee,
+    required double effectiveDistanceKm,
+    required double effectiveGrandTotal,
+    required String paymentMethod,
+    required String paymentGateway,
+    required String paymentStatus,
+    String? transactionId,
+  }) async {
     try {
       final orderRepo = ref.read(orderRepositoryProvider);
       final createdOrder = await orderRepo.createOrder(
@@ -236,12 +376,14 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         deliveryDistanceKm: effectiveDistanceKm,
         discount: cartState.couponDiscount,
         grandTotal: effectiveGrandTotal,
-        paymentMethod: _selectedPaymentMethod,
+        paymentMethod: paymentMethod,
+        paymentGateway: paymentGateway,
+        paymentStatus: paymentStatus,
+        transactionId: transactionId,
+        paidAt: paymentStatus == 'SUCCESS' ? DateTime.now().toIso8601String() : null,
         appliedCoupon: cartState.appliedCoupon,
         appliedOfferId: cartState.appliedOfferId,
       );
-
-
 
       // Create in-app notification document
       final notificationRepo = ref.read(notificationRepositoryProvider);
@@ -249,16 +391,14 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         userId: customerId,
         orderId: createdOrder.id,
         title: 'Order Placed! 🛵',
-        body: 'Your order #${createdOrder.orderNumber} for $restName has been placed successfully via Cash on Delivery.',
+        body: 'Your order #${createdOrder.orderNumber} for $restName has been placed successfully (${paymentGateway == 'PAYU' ? 'Online Paid via PayU' : 'Cash on Delivery'}).',
         type: 'delivery',
       );
 
       // Save order in Riverpod history
       ref.read(ordersProvider.notifier).placeOrder(createdOrder);
 
-
-
-      // Clear user cart
+      // Clear user cart only after successful order creation
       ref.read(cartProvider.notifier).clearCart();
 
       if (!mounted) return;
@@ -267,7 +407,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         _isPlacingOrder = false;
       });
 
-      // Go to success
+      // Go to success screen
       context.go('/order-success');
     } catch (e) {
       if (!mounted) return;
@@ -383,7 +523,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                                           Container(
                                             padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                             decoration: BoxDecoration(
-                                              color: AppColors.success.withOpacity(0.15),
+                                              color: AppColors.success.withValues(alpha: 0.15),
                                               borderRadius: BorderRadius.circular(4),
                                             ),
                                             child: const Text(
@@ -507,7 +647,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                       borderRadius: BorderRadius.circular(20),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withOpacity(0.01),
+                          color: Colors.black.withValues(alpha: 0.01),
                           blurRadius: 10,
                           offset: const Offset(0, 4),
                         ),
@@ -649,7 +789,9 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                   ),
                 ),
                 child: CustomButton(
-                  text: isOutsideRadius ? 'Outside Delivery Area' : 'Confirm & Place Order (COD)',
+                  text: isOutsideRadius
+                      ? 'Outside Delivery Area'
+                      : (_selectedPaymentMethod == 'ONLINE' ? 'Pay Now & Place Order (PayU)' : 'Confirm & Place Order (COD)'),
                   isLoading: _isPlacingOrder,
                   onPressed: isOutsideRadius
                       ? () {

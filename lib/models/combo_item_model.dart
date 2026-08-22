@@ -31,6 +31,10 @@ class ComboVariantItem {
   final String name;
   final String description;
   final bool isActive;
+  final String selectionType; // 'SINGLE' or 'MULTI'
+  final bool isRequired;
+  final int minSelection;
+  final int maxSelection;
   final List<ComboVariantOption> options;
 
   const ComboVariantItem({
@@ -38,6 +42,10 @@ class ComboVariantItem {
     required this.name,
     this.description = '',
     this.isActive = true,
+    this.selectionType = 'SINGLE',
+    this.isRequired = true,
+    this.minSelection = 1,
+    this.maxSelection = 1,
     required this.options,
   });
 
@@ -53,11 +61,26 @@ class ComboVariantItem {
       }
     }
     final active = data['isActive'] ?? data['active'] ?? true;
+    final selTypeRaw = (data['selectionType'] ?? data['type'] ?? 'single').toString().toUpperCase();
+    final selType = selTypeRaw.contains('MULTI') ? 'MULTI' : 'SINGLE';
+    final isReq = data['isRequired'] ?? data['required'] ?? true;
+    final isReqBool = isReq == true || isReq.toString().toLowerCase() == 'true';
+    final minSel = (data['minSelection'] is num)
+        ? (data['minSelection'] as num).toInt()
+        : (isReqBool ? 1 : 0);
+    final maxSel = (data['maxSelection'] is num)
+        ? (data['maxSelection'] as num).toInt()
+        : (selType == 'SINGLE' ? 1 : 5);
+
     return ComboVariantItem(
       id: (data['id'] ?? '').toString(),
       name: (data['name'] ?? '').toString(),
       description: (data['description'] ?? '').toString(),
       isActive: active == true || active.toString().toLowerCase() == 'true',
+      selectionType: selType,
+      isRequired: isReqBool,
+      minSelection: minSel,
+      maxSelection: maxSel,
       options: optionsList,
     );
   }
@@ -67,17 +90,36 @@ class ComboItemVariant {
   final String id;
   final String name;
   final bool isActive;
+  final String selectionType; // 'SINGLE' or 'MULTI'
+  final bool isRequired;
+  final int minSelection;
+  final int maxSelection;
   final List<ComboVariantItem> items;
 
   const ComboItemVariant({
     required this.id,
     required this.name,
     this.isActive = true,
+    this.selectionType = 'SINGLE',
+    this.isRequired = true,
+    this.minSelection = 1,
+    this.maxSelection = 1,
     required this.items,
   });
 
   factory ComboItemVariant.fromMap(Map<String, dynamic> data) {
     final active = data['isActive'] ?? data['active'] ?? true;
+    final selTypeRaw = (data['selectionType'] ?? data['type'] ?? 'single').toString().toUpperCase();
+    final selType = selTypeRaw.contains('MULTI') ? 'MULTI' : 'SINGLE';
+    final isReq = data['isRequired'] ?? data['required'] ?? true;
+    final isReqBool = isReq == true || isReq.toString().toLowerCase() == 'true';
+    final minSel = (data['minSelection'] is num)
+        ? (data['minSelection'] as num).toInt()
+        : (isReqBool ? 1 : 0);
+    final maxSel = (data['maxSelection'] is num)
+        ? (data['maxSelection'] as num).toInt()
+        : (selType == 'SINGLE' ? 1 : 5);
+
     final rawItems = data['items'] as List? ?? [];
     final itemsList = <ComboVariantItem>[];
     for (final item in rawItems) {
@@ -106,6 +148,10 @@ class ComboItemVariant {
           name: 'Items & Extras',
           description: '',
           isActive: true,
+          selectionType: 'SINGLE',
+          isRequired: true,
+          minSelection: 1,
+          maxSelection: 1,
           options: legacyOpts,
         ));
       }
@@ -115,6 +161,10 @@ class ComboItemVariant {
       id: (data['id'] ?? '').toString(),
       name: (data['name'] ?? '').toString(),
       isActive: active == true || active.toString().toLowerCase() == 'true',
+      selectionType: selType,
+      isRequired: isReqBool,
+      minSelection: minSel,
+      maxSelection: maxSel,
       items: itemsList,
     );
   }

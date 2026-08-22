@@ -22,8 +22,11 @@ class Order {
   final double deliveryDistanceKm;
   final double discount;
   final double totalAmount;
-  final String paymentMethod; // "CASH_ON_DELIVERY" or "UPI"
-  final String paymentStatus; // "PENDING" or "PAID"
+  final String paymentMethod; // "CASH_ON_DELIVERY", "COD", "ONLINE"
+  final String paymentGateway; // "PAYU", "COD"
+  final String paymentStatus; // "PENDING", "COD_PENDING", "SUCCESS", "PAID"
+  final String? transactionId;
+  final DateTime? paidAt;
   final String status; // "PENDING", "ACCEPTED", "PREPARING", "READY", "OUT_FOR_DELIVERY", "DELIVERED", "REJECTED", "CANCELLED"
   final int? estimatedPrepMinutes;
   final String? rejectionReason;
@@ -56,7 +59,10 @@ class Order {
 
 
     required this.paymentMethod,
+    this.paymentGateway = 'COD',
     this.paymentStatus = 'PENDING',
+    this.transactionId,
+    this.paidAt,
     required this.status,
     this.estimatedPrepMinutes,
     this.rejectionReason,
@@ -234,7 +240,16 @@ class Order {
 
       totalAmount: _numToDouble(data['totalAmount'] ?? data['grandTotal']),
       paymentMethod: (data['paymentMethod'] ?? 'CASH_ON_DELIVERY').toString(),
+      paymentGateway: (data['paymentGateway'] ?? (data['paymentMethod'] == 'ONLINE' ? 'PAYU' : 'COD')).toString(),
       paymentStatus: (data['paymentStatus'] ?? 'PENDING').toString(),
+      transactionId: data['transactionId']?.toString(),
+      paidAt: data['paidAt'] != null
+          ? (data['paidAt'] is String
+              ? DateTime.tryParse(data['paidAt'])
+              : (data['paidAt'] is Map && data['paidAt']['seconds'] != null
+                  ? DateTime.fromMillisecondsSinceEpoch((data['paidAt']['seconds'] as int) * 1000)
+                  : null))
+          : null,
       status: (data['status'] ?? 'PENDING').toString(),
       estimatedPrepMinutes: data['estimatedPrepMinutes'] != null
           ? (data['estimatedPrepMinutes'] as num).toInt()
@@ -282,7 +297,10 @@ class Order {
     double? discount,
     double? totalAmount,
     String? paymentMethod,
+    String? paymentGateway,
     String? paymentStatus,
+    String? transactionId,
+    DateTime? paidAt,
     String? status,
     int? estimatedPrepMinutes,
     String? rejectionReason,
@@ -311,7 +329,10 @@ class Order {
       discount: discount ?? this.discount,
       totalAmount: totalAmount ?? this.totalAmount,
       paymentMethod: paymentMethod ?? this.paymentMethod,
+      paymentGateway: paymentGateway ?? this.paymentGateway,
       paymentStatus: paymentStatus ?? this.paymentStatus,
+      transactionId: transactionId ?? this.transactionId,
+      paidAt: paidAt ?? this.paidAt,
       status: status ?? this.status,
       estimatedPrepMinutes: estimatedPrepMinutes ?? this.estimatedPrepMinutes,
       rejectionReason: rejectionReason ?? this.rejectionReason,

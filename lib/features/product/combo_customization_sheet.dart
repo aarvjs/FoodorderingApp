@@ -56,12 +56,38 @@ class _ComboProductCustomizationSheetState
       if (_selectedVariant == null || !currentItem.variants.any((v) => v.id == _selectedVariant!.id)) {
         _selectedVariant = currentItem.variants.first;
       }
+      if (_selectedVariant != null) {
+        for (final varItem in _selectedVariant!.items) {
+          final isSingle = varItem.selectionType == 'SINGLE';
+          final isReq = varItem.isRequired && varItem.minSelection >= 1;
+
+          if (!_selectedVariantOptions.containsKey(varItem.id)) {
+            _selectedVariantOptions[varItem.id] = <String>{};
+            if (isReq && varItem.options.isNotEmpty) {
+              _selectedVariantOptions[varItem.id]!.add(varItem.options.first.id);
+            }
+          } else {
+            final currentSet = _selectedVariantOptions[varItem.id]!;
+            if (isSingle && currentSet.length > 1) {
+              _selectedVariantOptions[varItem.id] = {currentSet.first};
+            }
+          }
+        }
+      }
     } else {
       for (final group in currentItem.customizationGroups) {
+        final isSingle = group.selectionType == 'SINGLE';
+        final isReq = group.isRequired && group.minSelection >= 1;
+
         if (!_selectedGroupOptions.containsKey(group.id)) {
           _selectedGroupOptions[group.id] = <String>{};
-          if (group.isRequired && group.options.isNotEmpty) {
+          if (isReq && group.options.isNotEmpty) {
             _selectedGroupOptions[group.id]!.add(group.options.first.id);
+          }
+        } else {
+          final currentSet = _selectedGroupOptions[group.id]!;
+          if (isSingle && currentSet.length > 1) {
+            _selectedGroupOptions[group.id] = {currentSet.first};
           }
         }
       }
@@ -97,23 +123,58 @@ class _ComboProductCustomizationSheetState
   void _toggleVariantOption(ComboVariantItem varItem, ComboVariantOption option) {
     setState(() {
       final currentSet = _selectedVariantOptions[varItem.id] ?? <String>{};
-      final newSet = Set<String>.from(currentSet);
+      final isSingle = varItem.selectionType == 'SINGLE';
+      final isReq = varItem.isRequired && varItem.minSelection >= 1;
 
-      if (newSet.contains(option.id)) {
-        newSet.remove(option.id);
+      if (isSingle) {
+        if (isReq) {
+          // Single + Required (Min >= 1): Radio button - selecting another option replaces previous
+          _selectedVariantOptions[varItem.id] = {option.id};
+        } else {
+          // Single + Optional (Min = 0): Unselect if already selected, or replace with new single option
+          if (currentSet.contains(option.id)) {
+            _selectedVariantOptions[varItem.id] = <String>{};
+          } else {
+            _selectedVariantOptions[varItem.id] = {option.id};
+          }
+        }
       } else {
-        newSet.add(option.id);
+        // Multi-selection
+        final newSet = Set<String>.from(currentSet);
+        if (newSet.contains(option.id)) {
+          if (!isReq || newSet.length > varItem.minSelection) {
+            newSet.remove(option.id);
+          } else {
+            AppSnackbar.show(
+              context,
+              'Please keep at least ${varItem.minSelection} option(s) selected for "${varItem.name}".',
+              backgroundColor: Colors.amber.shade900,
+            );
+          }
+        } else {
+          if (newSet.length < varItem.maxSelection) {
+            newSet.add(option.id);
+          } else {
+            AppSnackbar.show(
+              context,
+              'You can select maximum ${varItem.maxSelection} option(s) for "${varItem.name}".',
+              backgroundColor: Colors.amber.shade900,
+            );
+          }
+        }
+        _selectedVariantOptions[varItem.id] = newSet;
       }
-      _selectedVariantOptions[varItem.id] = newSet;
     });
   }
 
   void _toggleGroupOption(ComboCustomizationGroupModel group, ComboCustomizationOptionModel option) {
     setState(() {
       final currentSet = _selectedGroupOptions[group.id] ?? <String>{};
+      final isSingle = group.selectionType == 'SINGLE';
+      final isReq = group.isRequired && group.minSelection >= 1;
 
-      if (group.selectionType == 'SINGLE') {
-        if (group.isRequired) {
+      if (isSingle) {
+        if (isReq) {
           _selectedGroupOptions[group.id] = {option.id};
         } else {
           if (currentSet.contains(option.id)) {
@@ -125,12 +186,24 @@ class _ComboProductCustomizationSheetState
       } else {
         final newSet = Set<String>.from(currentSet);
         if (newSet.contains(option.id)) {
-          if (!group.isRequired || newSet.length > group.minSelection) {
+          if (!isReq || newSet.length > group.minSelection) {
             newSet.remove(option.id);
+          } else {
+            AppSnackbar.show(
+              context,
+              'Please keep at least ${group.minSelection} option(s) selected for "${group.name}".',
+              backgroundColor: Colors.amber.shade900,
+            );
           }
         } else {
           if (newSet.length < group.maxSelection) {
             newSet.add(option.id);
+          } else {
+            AppSnackbar.show(
+              context,
+              'You can select maximum ${group.maxSelection} option(s) for "${group.name}".',
+              backgroundColor: Colors.amber.shade900,
+            );
           }
         }
         _selectedGroupOptions[group.id] = newSet;
@@ -182,6 +255,25 @@ class _ComboProductCustomizationSheetState
           backgroundColor: Colors.red.shade700,
         );
         return false;
+      }
+      for (final varItem in _selectedVariant!.items) {
+        final selectedSet = _selectedVariantOptions[varItem.id] ?? <String>{};
+        if (varItem.isRequired && selectedSet.length < varItem.minSelection) {
+          AppSnackbar.show(
+            context,
+            'Please select at least ${varItem.minSelection} option(s) for "${varItem.name}".',
+            backgroundColor: Colors.red.shade700,
+          );
+          return false;
+        }
+        if (selectedSet.length > varItem.maxSelection) {
+          AppSnackbar.show(
+            context,
+            'You can select maximum ${varItem.maxSelection} option(s) for "${varItem.name}".',
+            backgroundColor: Colors.red.shade700,
+          );
+          return false;
+        }
       }
     } else {
       for (final group in currentItem.customizationGroups) {
@@ -532,6 +624,7 @@ class _ComboProductCustomizationSheetState
                   if (_selectedVariant != null) ...[
                     ..._selectedVariant!.items.map((varItem) {
                       final selectedSet = _selectedVariantOptions[varItem.id] ?? <String>{};
+                      final isSingle = varItem.selectionType == 'SINGLE';
 
                       return Container(
                         margin: const EdgeInsets.only(bottom: 18),
@@ -579,16 +672,19 @@ class _ComboProductCustomizationSheetState
                                 Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                                   decoration: BoxDecoration(
-                                    color: Colors.amber.shade50,
+                                    color: varItem.isRequired
+                                        ? AppColors.primary.withValues(alpha: 0.12)
+                                        : Colors.grey.shade200,
                                     borderRadius: BorderRadius.circular(6),
-                                    border: Border.all(color: Colors.amber.shade300),
                                   ),
                                   child: Text(
-                                    '${_selectedVariant!.name} Item',
+                                    varItem.isRequired
+                                        ? (isSingle ? 'REQUIRED • CHOOSE 1' : 'REQUIRED (MIN ${varItem.minSelection})')
+                                        : (isSingle ? 'OPTIONAL' : 'OPTIONAL (MAX ${varItem.maxSelection})'),
                                     style: TextStyle(
                                       fontSize: 9.5,
                                       fontWeight: FontWeight.w800,
-                                      color: Colors.amber.shade900,
+                                      color: varItem.isRequired ? AppColors.primary : Colors.grey.shade700,
                                     ),
                                   ),
                                 ),
@@ -621,11 +717,15 @@ class _ComboProductCustomizationSheetState
                                     padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
                                     child: Row(
                                       children: [
-                                        // Checkbox Icon
+                                        // Radio vs Checkbox Icon based on Selection Type
                                         Icon(
-                                          isSelected
-                                              ? Icons.check_box_rounded
-                                              : Icons.check_box_outline_blank_rounded,
+                                          isSingle
+                                              ? (isSelected
+                                                  ? Icons.radio_button_checked_rounded
+                                                  : Icons.radio_button_off_rounded)
+                                              : (isSelected
+                                                  ? Icons.check_box_rounded
+                                                  : Icons.check_box_outline_blank_rounded),
                                           size: 20,
                                           color: isSelected
                                               ? AppColors.primary
