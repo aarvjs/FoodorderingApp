@@ -71,6 +71,8 @@ class CartState {
   final String? appliedCoupon;
   final String? appliedOfferId;
   final double discountPercentage;
+  final int appliedRewardPoints;
+  final double pointValue;
   final double? overrideDeliveryFee;
   final double taxPercentage;
 
@@ -79,6 +81,8 @@ class CartState {
     this.appliedCoupon,
     this.appliedOfferId,
     this.discountPercentage = 0.0,
+    this.appliedRewardPoints = 0,
+    this.pointValue = 0.25,
     this.overrideDeliveryFee,
     this.taxPercentage = 0.0,
   });
@@ -89,7 +93,23 @@ class CartState {
 
   double get couponDiscount {
     if (subtotal <= 0) return 0.0;
-    return double.parse((subtotal * discountPercentage).toStringAsFixed(2));
+    final val = (subtotal * discountPercentage).clamp(0.0, subtotal);
+    return double.parse(val.toStringAsFixed(2));
+  }
+
+  double get maxRewardEligibleSubtotal {
+    return (subtotal - couponDiscount).clamp(0.0, double.infinity);
+  }
+
+  double get rewardDiscount {
+    if (subtotal <= 0 || appliedRewardPoints <= 0) return 0.0;
+    final rawVal = appliedRewardPoints * pointValue;
+    final clamped = rawVal.clamp(0.0, maxRewardEligibleSubtotal);
+    return double.parse(clamped.toStringAsFixed(2));
+  }
+
+  double get totalDiscount {
+    return double.parse((couponDiscount + rewardDiscount).toStringAsFixed(2));
   }
 
   double get deliveryFee {
@@ -100,14 +120,14 @@ class CartState {
 
   double get gstTax {
     if (items.isEmpty || taxPercentage <= 0) return 0.0;
-    final taxableAmount = (subtotal - couponDiscount).clamp(0.0, double.infinity);
+    final taxableAmount = (subtotal - couponDiscount - rewardDiscount).clamp(0.0, double.infinity);
     if (taxableAmount <= 0) return 0.0;
     return double.parse((taxableAmount * (taxPercentage / 100.0)).toStringAsFixed(2));
   }
 
   double get total {
     if (items.isEmpty) return 0.0;
-    final calculated = subtotal - couponDiscount + deliveryFee + gstTax;
+    final calculated = (subtotal - couponDiscount - rewardDiscount + deliveryFee + gstTax).clamp(0.0, double.infinity);
     return double.parse(calculated.toStringAsFixed(2));
   }
 
@@ -116,20 +136,26 @@ class CartState {
     String? appliedCoupon,
     String? appliedOfferId,
     double? discountPercentage,
+    int? appliedRewardPoints,
+    double? pointValue,
     double? overrideDeliveryFee,
     double? taxPercentage,
     bool clearCoupon = false,
+    bool clearReward = false,
   }) {
     return CartState(
       items: items ?? this.items,
       appliedCoupon: clearCoupon ? null : (appliedCoupon ?? this.appliedCoupon),
       appliedOfferId: clearCoupon ? null : (appliedOfferId ?? this.appliedOfferId),
       discountPercentage: clearCoupon ? 0.0 : (discountPercentage ?? this.discountPercentage),
+      appliedRewardPoints: clearReward ? 0 : (appliedRewardPoints ?? this.appliedRewardPoints),
+      pointValue: pointValue ?? this.pointValue,
       overrideDeliveryFee: overrideDeliveryFee ?? this.overrideDeliveryFee,
       taxPercentage: taxPercentage ?? this.taxPercentage,
     );
   }
 }
+
 
 
 
@@ -509,19 +535,30 @@ class CartNotifier extends Notifier<CartState> {
     );
   }
 
-  void removeCoupon() {
-    state = CartState(
-      items: state.items,
-      appliedCoupon: null,
-      appliedOfferId: null,
-      discountPercentage: 0.0,
+  void applyRewardPoints(int points, double pointValue) {
+    if (points <= 0) {
+      removeRewardPoints();
+      return;
+    }
+    state = state.copyWith(
+      appliedRewardPoints: points,
+      pointValue: pointValue,
     );
   }
 
+  void removeRewardPoints() {
+    state = state.copyWith(clearReward: true);
+  }
+
+  void removeCoupon() {
+    state = state.copyWith(clearCoupon: true);
+  }
+
   void clearCart() {
-    state = const CartState(items: [], appliedCoupon: null, appliedOfferId: null, discountPercentage: 0.0);
+    state = const CartState(items: [], appliedCoupon: null, appliedOfferId: null, discountPercentage: 0.0, appliedRewardPoints: 0);
   }
 }
+
 
 final cartProvider = NotifierProvider<CartNotifier, CartState>(() {
   return CartNotifier();

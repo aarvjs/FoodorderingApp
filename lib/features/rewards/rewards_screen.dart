@@ -14,79 +14,88 @@ class RewardsScreen extends ConsumerStatefulWidget {
 }
 
 class _RewardsScreenState extends ConsumerState<RewardsScreen> {
-  bool _isSyncing = false;
   int _unclaimedPoints = 0;
+  bool _isSyncing = false;
+  double _pointValue = 0.25;
+
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _checkUnclaimedAndSync(showToast: false);
+      _loadConfigAndSync();
     });
   }
 
-  Future<void> _checkUnclaimedAndSync({bool showToast = true}) async {
+  Future<void> _loadConfigAndSync() async {
     final userModel = ref.read(authProvider).userModel;
     final userId = userModel?.uid ?? '';
     if (userId.isEmpty) return;
 
-    if (mounted) {
-      setState(() {
-        _isSyncing = true;
-      });
-    }
-
     try {
       final repo = ref.read(rewardRepositoryProvider);
+      final config = await repo.getRewardConfigByBranch('ALL', '');
+      if (config != null) {
+        setState(() {
+          _pointValue = config.pointValue;
+        });
+      }
+    } catch (_) {}
 
+    await _checkUnclaimedAndSync(showToast: false);
+  }
+
+  Future<void> _checkUnclaimedAndSync({bool showToast = false}) async {
+    final userModel = ref.read(authProvider).userModel;
+    final userId = userModel?.uid ?? '';
+    if (userId.isEmpty) return;
+
+    setState(() {
+      if (showToast) _isSyncing = true;
+    });
+
+
+    final repo = ref.read(rewardRepositoryProvider);
+
+    try {
       if (showToast) {
-        // Explicit claim action
-        final claimed = await repo.syncAndAwardDeliveredOrders(userId);
-        final remaining = await repo.getUnclaimedRewardPoints(userId);
-
+        final awardedCount = await repo.syncAndAwardDeliveredOrders(userId);
         if (mounted) {
-          setState(() {
-            _unclaimedPoints = remaining;
-            _isSyncing = false;
-          });
-
-          ScaffoldMessenger.of(context).clearSnackBars();
-          if (claimed > 0) {
+          if (awardedCount > 0) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                content: Text('🎉 Claimed $claimed reward points from your delivered orders!'),
+                content: Text('🎉 Claimed $awardedCount reward points from delivered orders!'),
                 backgroundColor: const Color(0xFF16A34A),
                 behavior: SnackBarBehavior.floating,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               ),
             );
           } else {
             ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: const Text('All reward points for your delivered orders are up to date!'),
+              const SnackBar(
+                content: Text('All delivered order rewards are up to date!'),
                 behavior: SnackBarBehavior.floating,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               ),
             );
           }
         }
-      } else {
-        // Initial silent check
-        final pending = await repo.getUnclaimedRewardPoints(userId);
-        if (mounted) {
-          setState(() {
-            _unclaimedPoints = pending;
-            _isSyncing = false;
-          });
-        }
       }
-    } catch (_) {
+
+      final unclaimed = await repo.getUnclaimedRewardPoints(userId);
+      if (mounted) {
+        setState(() {
+          _unclaimedPoints = unclaimed;
+        });
+      }
+    } catch (e) {
+      debugPrint('[RewardsScreen] Error checking unclaimed points: $e');
+    } finally {
       if (mounted) {
         setState(() {
           _isSyncing = false;
         });
       }
     }
+
   }
 
   @override
@@ -97,43 +106,26 @@ class _RewardsScreenState extends ConsumerState<RewardsScreen> {
     final hasPendingClaim = _unclaimedPoints > 0;
 
     return Scaffold(
-      backgroundColor: isDark ? AppColors.darkBackground : const Color(0xFFF8FAFC),
       appBar: AppBar(
-        backgroundColor: isDark ? AppColors.darkCard : Colors.white,
-        elevation: 0,
-        centerTitle: false,
-        title: Text(
-          'Rewards & Points',
-          style: TextStyle(
-            color: isDark ? Colors.white : AppColors.textDark,
-            fontWeight: FontWeight.bold,
-            fontSize: 18,
-          ),
+        title: const Text(
+          'Reward Wallet',
+          style: TextStyle(fontWeight: FontWeight.bold),
         ),
         actions: [
           IconButton(
-            icon: _isSyncing
-                ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Iconsax.refresh, size: 20),
+            icon: Icon(
+              Icons.refresh_rounded,
+              color: isDark ? AppColors.darkPrimary : AppColors.primary,
+            ),
             tooltip: 'Sync Rewards',
             onPressed: _isSyncing ? null : () => _checkUnclaimedAndSync(showToast: true),
           ),
+          const SizedBox(width: 8),
         ],
-        leading: IconButton(
-          icon: Icon(Icons.arrow_back_ios_new_rounded,
-              color: isDark ? Colors.white : AppColors.textDark, size: 20),
-          onPressed: () => Navigator.of(context).maybePop(),
-        ),
       ),
-      body: RefreshIndicator(
-        onRefresh: () => _checkUnclaimedAndSync(showToast: true),
-        color: AppColors.primary,
+      body: SafeArea(
         child: SingleChildScrollView(
-          physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+          physics: const BouncingScrollPhysics(),
           padding: const EdgeInsets.all(16.0),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -160,7 +152,7 @@ class _RewardsScreenState extends ConsumerState<RewardsScreen> {
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         const Text(
-                          'YOUR BALANCE',
+                          'YOUR REWARD WALLET',
                           style: TextStyle(
                             color: Colors.white70,
                             fontSize: 11,
@@ -169,8 +161,7 @@ class _RewardsScreenState extends ConsumerState<RewardsScreen> {
                           ),
                         ),
                         Container(
-                          padding:
-                              const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                           decoration: BoxDecoration(
                             color: Colors.white.withValues(alpha: 0.2),
                             borderRadius: BorderRadius.circular(12),
@@ -180,7 +171,7 @@ class _RewardsScreenState extends ConsumerState<RewardsScreen> {
                               Icon(Iconsax.star1, color: Color(0xFFFFD700), size: 14),
                               SizedBox(width: 4),
                               Text(
-                                'Perfect Rewards',
+                                'Member Benefits',
                                 style: TextStyle(
                                   color: Colors.white,
                                   fontSize: 10,
@@ -194,34 +185,51 @@ class _RewardsScreenState extends ConsumerState<RewardsScreen> {
                     ),
                     const SizedBox(height: 12),
                     pointsAsync.when(
-                      data: (pts) => Row(
-                        crossAxisAlignment: CrossAxisAlignment.baseline,
-                        textBaseline: TextBaseline.alphabetic,
-                        children: [
-                          const Text(
-                            '⭐ ',
-                            style: TextStyle(fontSize: 28),
-                          ),
-                          Text(
-                            '$pts',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 38,
-                              fontWeight: FontWeight.w900,
-                              letterSpacing: -0.5,
+                      data: (pts) {
+                        final rupeeValue = pts * _pointValue;
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.baseline,
+                              textBaseline: TextBaseline.alphabetic,
+                              children: [
+                                const Text(
+                                  '⭐ ',
+                                  style: TextStyle(fontSize: 28),
+                                ),
+                                Text(
+                                  '$pts',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 38,
+                                    fontWeight: FontWeight.w900,
+                                    letterSpacing: -0.5,
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                const Text(
+                                  'Points',
+                                  style: TextStyle(
+                                    color: Colors.white70,
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
                             ),
-                          ),
-                          const SizedBox(width: 8),
-                          const Text(
-                            'Points',
-                            style: TextStyle(
-                              color: Colors.white70,
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
+                            const SizedBox(height: 4),
+                            Text(
+                              'Equivalent Cash Value: ₹${rupeeValue.toStringAsFixed(2)} (1 Pt = ₹${_pointValue.toStringAsFixed(2)})',
+                              style: const TextStyle(
+                                color: Color(0xFFFFE082),
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
-                          ),
-                        ],
-                      ),
+                          ],
+                        );
+                      },
                       loading: () => const Padding(
                         padding: EdgeInsets.symmetric(vertical: 8.0),
                         child: SizedBox(
@@ -240,35 +248,29 @@ class _RewardsScreenState extends ConsumerState<RewardsScreen> {
                         ),
                       ),
                     ),
-                    const SizedBox(height: 14),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                            decoration: BoxDecoration(
-                              color: Colors.black.withValues(alpha: 0.15),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Row(
-                              children: [
-                                const Icon(Iconsax.info_circle, color: Colors.white70, size: 14),
-                                const SizedBox(width: 6),
-                                Expanded(
-                                  child: Text(
-                                    'Points credited upon delivery of qualifying menu product orders.',
-                                    style: TextStyle(
-                                      color: Colors.white.withValues(alpha: 0.9),
-                                      fontSize: 10.5,
-                                      fontWeight: FontWeight.w500,
-                                    ),
-                                  ),
-                                ),
-                              ],
+                    const SizedBox(height: 16),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Iconsax.info_circle, color: Colors.white70, size: 14),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              'Points credited automatically when orders reach Delivered status.',
+                              style: TextStyle(
+                                color: Colors.white.withValues(alpha: 0.9),
+                                fontSize: 10.5,
+                                fontWeight: FontWeight.w500,
+                              ),
                             ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   ],
                 ),
@@ -409,7 +411,7 @@ class _RewardsScreenState extends ConsumerState<RewardsScreen> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text(
-                    'Reward History',
+                    'Reward Ledger & History',
                     style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
@@ -417,7 +419,7 @@ class _RewardsScreenState extends ConsumerState<RewardsScreen> {
                     ),
                   ),
                   Text(
-                    'Delivered Orders',
+                    'All Transactions',
                     style: TextStyle(
                       fontSize: 11,
                       fontWeight: FontWeight.w600,
@@ -460,7 +462,7 @@ class _RewardsScreenState extends ConsumerState<RewardsScreen> {
                           ),
                           const SizedBox(height: 12),
                           Text(
-                            'No Claimed Rewards Yet',
+                            'No Reward Activity Yet',
                             style: TextStyle(
                               fontSize: 14,
                               fontWeight: FontWeight.bold,
@@ -469,7 +471,7 @@ class _RewardsScreenState extends ConsumerState<RewardsScreen> {
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            'Order menu items above the minimum branch threshold. Points are credited once delivered!',
+                            'Order menu items above minimum branch slab thresholds. Points will credit after order delivery!',
                             textAlign: TextAlign.center,
                             style: TextStyle(
                               fontSize: 11,
@@ -490,6 +492,26 @@ class _RewardsScreenState extends ConsumerState<RewardsScreen> {
                       final tx = transactions[index];
                       final formattedDate =
                           DateFormat('dd MMM yyyy, hh:mm a').format(tx.createdAt);
+                      final type = (tx.type.isNotEmpty ? tx.type : (tx.points >= 0 ? 'EARNED' : 'REDEEMED')).toUpperCase();
+                      final isEarned = type == 'EARNED';
+                      final isRefund = type == 'REFUNDED';
+
+                      Color badgeBg = const Color(0xFFDCFCE7);
+                      Color badgeText = const Color(0xFF15803D);
+                      IconData iconData = Iconsax.award5;
+                      Color iconColor = const Color(0xFFD97706);
+
+                      if (!isEarned && !isRefund) {
+                        badgeBg = const Color(0xFFFFEDD5);
+                        badgeText = const Color(0xFFC2410C);
+                        iconData = Iconsax.ticket_discount;
+                        iconColor = const Color(0xFFEA580C);
+                      } else if (isRefund) {
+                        badgeBg = const Color(0xFFDBEAFE);
+                        badgeText = const Color(0xFF1D4ED8);
+                        iconData = Iconsax.refresh_circle;
+                        iconColor = const Color(0xFF2563EB);
+                      }
 
                       return Container(
                         padding: const EdgeInsets.all(14),
@@ -508,14 +530,14 @@ class _RewardsScreenState extends ConsumerState<RewardsScreen> {
                               width: 44,
                               height: 44,
                               decoration: BoxDecoration(
-                                color: const Color(0xFFFFF8E1),
+                                color: badgeBg.withValues(alpha: 0.5),
                                 borderRadius: BorderRadius.circular(12),
                               ),
-                              child: const Center(
+                              child: Center(
                                 child: Icon(
-                                  Iconsax.award5,
-                                  color: Color(0xFFD97706),
-                                  size: 24,
+                                  iconData,
+                                  color: iconColor,
+                                  size: 22,
                                 ),
                               ),
                             ),
@@ -525,22 +547,26 @@ class _RewardsScreenState extends ConsumerState<RewardsScreen> {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
-                                    '+${tx.points} Points Earned',
-                                    style: const TextStyle(
-                                      fontSize: 13,
+                                    tx.description.isNotEmpty
+                                        ? tx.description
+                                        : (isEarned
+                                            ? '+${tx.points} Points Earned'
+                                            : '${tx.points} Points Redeemed'),
+                                    style: TextStyle(
+                                      fontSize: 12.5,
                                       fontWeight: FontWeight.bold,
-                                      color: Color(0xFF16A34A),
+                                      color: isDark ? Colors.white : AppColors.textDark,
                                     ),
                                   ),
                                   const SizedBox(height: 2),
                                   Text(
-                                    'Order #${tx.orderNumber} • ${tx.branchName}',
+                                    'Order #${tx.orderNumber.isNotEmpty ? tx.orderNumber : tx.orderId} • ${tx.branchName.isNotEmpty ? tx.branchName : "Restaurant"}',
                                     style: TextStyle(
                                       fontSize: 11,
-                                      fontWeight: FontWeight.w600,
+                                      fontWeight: FontWeight.w500,
                                       color: isDark
-                                          ? Colors.grey.shade300
-                                          : AppColors.textDark,
+                                          ? Colors.grey.shade400
+                                          : AppColors.textLight,
                                     ),
                                   ),
                                   const SizedBox(height: 2),
@@ -556,17 +582,18 @@ class _RewardsScreenState extends ConsumerState<RewardsScreen> {
                                 ],
                               ),
                             ),
+                            const SizedBox(width: 8),
                             Container(
                               padding: const EdgeInsets.symmetric(
                                   horizontal: 10, vertical: 6),
                               decoration: BoxDecoration(
-                                color: const Color(0xFFDCFCE7),
+                                color: badgeBg,
                                 borderRadius: BorderRadius.circular(10),
                               ),
                               child: Text(
-                                '+${tx.points} pts',
-                                style: const TextStyle(
-                                  color: Color(0xFF15803D),
+                                tx.points > 0 ? '+${tx.points} pts' : '${tx.points} pts',
+                                style: TextStyle(
+                                  color: badgeText,
                                   fontSize: 11,
                                   fontWeight: FontWeight.w800,
                                 ),

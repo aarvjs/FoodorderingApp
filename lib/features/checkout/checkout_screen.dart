@@ -199,9 +199,9 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     final double effectiveDeliveryFee = deliveryCalcResult?.deliveryFee ?? cartState.deliveryFee;
     final double effectiveDistanceKm = deliveryCalcResult?.distanceKm ?? 0.0;
     final double taxPercentage = deliveryCalcResult?.taxPercentage ?? 0.0;
-    final double taxableAmount = (cartState.subtotal - cartState.couponDiscount).clamp(0.0, double.infinity);
+    final double taxableAmount = (cartState.subtotal - cartState.couponDiscount - cartState.rewardDiscount).clamp(0.0, double.infinity);
     final double effectiveGstAmount = taxPercentage > 0 ? double.parse((taxableAmount * (taxPercentage / 100.0)).toStringAsFixed(2)) : 0.0;
-    final double computedTotal = cartState.subtotal - cartState.couponDiscount + effectiveDeliveryFee + effectiveGstAmount;
+    final double computedTotal = (cartState.subtotal - cartState.couponDiscount - cartState.rewardDiscount + effectiveDeliveryFee + effectiveGstAmount).clamp(0.0, double.infinity);
     final double effectiveGrandTotal = double.parse(computedTotal.toStringAsFixed(2));
 
     final firstItem = cartState.items.first;
@@ -376,6 +376,9 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         deliveryDistanceKm: effectiveDistanceKm,
         discount: cartState.couponDiscount,
         grandTotal: effectiveGrandTotal,
+        rewardPointsUsed: cartState.appliedRewardPoints,
+        rewardDiscountAmount: cartState.rewardDiscount,
+        rewardBranchId: branchId,
         paymentMethod: paymentMethod,
         paymentGateway: paymentGateway,
         paymentStatus: paymentStatus,
@@ -384,6 +387,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         appliedCoupon: cartState.appliedCoupon,
         appliedOfferId: cartState.appliedOfferId,
       );
+
 
       // Create in-app notification document
       final notificationRepo = ref.read(notificationRepositoryProvider);
@@ -714,6 +718,14 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                             isDark,
                             isDiscount: true,
                           ),
+                        if (cartState.rewardDiscount > 0)
+                          _buildRecapRow(
+                            'Reward Points Discount (${cartState.appliedRewardPoints} Pts)',
+                            '- ₹${cartState.rewardDiscount.toStringAsFixed(2)}',
+                            isDark,
+                            isDiscount: true,
+                          ),
+
                         _buildRecapRow(
                           deliveryCalcResult?.distanceKm != null && deliveryCalcResult!.distanceKm > 0
                               ? 'Delivery Charge (${deliveryCalcResult.distanceKm.toStringAsFixed(1)} km)'

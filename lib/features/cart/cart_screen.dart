@@ -11,6 +11,7 @@ import '../../core/services/state_providers.dart';
 import '../../core/services/delivery_charge_service.dart';
 import '../address/widgets/address_selection_bottom_sheet.dart';
 
+import '../rewards/repositories/reward_repository.dart';
 import 'widgets/coupon_selection_bottom_sheet.dart';
 
 class CartScreen extends ConsumerStatefulWidget {
@@ -81,16 +82,19 @@ class _CartScreenState extends ConsumerState<CartScreen> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final cartState = ref.watch(cartProvider);
     final cartNotifier = ref.read(cartProvider.notifier);
+    final userPointsAsync = ref.watch(userRewardPointsStreamProvider);
+    final userAvailablePoints = userPointsAsync.value ?? 0;
 
     final deliveryCalcAsync = ref.watch(deliveryChargeCalculationProvider);
     final deliveryCalcResult = deliveryCalcAsync.value;
     final double effectiveDeliveryFee = deliveryCalcResult?.deliveryFee ?? cartState.deliveryFee;
     final double taxPercentage = deliveryCalcResult?.taxPercentage ?? 0.0;
-    final double taxableAmount = (cartState.subtotal - cartState.couponDiscount).clamp(0.0, double.infinity);
+    final double taxableAmount = (cartState.subtotal - cartState.couponDiscount - cartState.rewardDiscount).clamp(0.0, double.infinity);
     final double effectiveGstAmount = taxPercentage > 0 ? double.parse((taxableAmount * (taxPercentage / 100.0)).toStringAsFixed(2)) : 0.0;
-    final double calculatedTotal = cartState.subtotal - cartState.couponDiscount + effectiveDeliveryFee + effectiveGstAmount;
+    final double calculatedTotal = (cartState.subtotal - cartState.couponDiscount - cartState.rewardDiscount + effectiveDeliveryFee + effectiveGstAmount).clamp(0.0, double.infinity);
     final double effectiveGrandTotal = double.parse(calculatedTotal.toStringAsFixed(2));
     final bool isOutsideRadius = deliveryCalcResult?.isOutsideRadius == true;
+
 
 
 
@@ -607,6 +611,153 @@ class _CartScreenState extends ConsumerState<CartScreen> {
                     ),
                   ),
 
+                  const Gap(16),
+
+                  // Reward Points Integration Card
+                  Container(
+                    decoration: BoxDecoration(
+                      color: isDark ? AppColors.darkCard : Colors.white,
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(
+                        color: cartState.appliedRewardPoints > 0
+                            ? const Color(0xFFF59E0B)
+                            : (isDark ? AppColors.darkDivider : Colors.grey.shade100),
+                        width: cartState.appliedRewardPoints > 0 ? 1.5 : 1.0,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: cartState.appliedRewardPoints > 0
+                              ? const Color(0xFFF59E0B).withValues(alpha: 0.08)
+                              : Colors.black.withValues(alpha: 0.02),
+                          blurRadius: 10,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(7),
+                              decoration: const BoxDecoration(
+                                color: Color(0xFFFEF3C7),
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(
+                                Iconsax.award5,
+                                color: Color(0xFFD97706),
+                                size: 18,
+                              ),
+                            ),
+                            const Gap(10),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text(
+                                    'Use Reward Points',
+                                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                                  ),
+                                  Text(
+                                    userAvailablePoints > 0
+                                        ? 'Available: $userAvailablePoints Pts • Max Value: ₹${(userAvailablePoints * cartState.pointValue).toStringAsFixed(2)}'
+                                        : 'No reward points available currently',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w600,
+                                      color: isDark ? Colors.grey.shade400 : AppColors.textLight,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            if (userAvailablePoints > 0) ...[
+                              if (cartState.appliedRewardPoints > 0)
+                                TextButton(
+                                  onPressed: () {
+                                    cartNotifier.removeRewardPoints();
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                        content: Text('Reward points removed.'),
+                                        behavior: SnackBarBehavior.floating,
+                                      ),
+                                    );
+                                  },
+                                  style: TextButton.styleFrom(
+                                    foregroundColor: AppColors.error,
+                                    textStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                                  ),
+                                  child: const Text('Remove'),
+                                )
+                              else
+                                ElevatedButton(
+                                  onPressed: () async {
+                                    final branchId = cartState.items.first.branchId.isNotEmpty
+                                        ? cartState.items.first.branchId
+                                        : cartState.items.first.restaurantId;
+                                    final config = await ref
+                                        .read(rewardRepositoryProvider)
+                                        .getRewardConfigByBranch(branchId, cartState.items.first.restaurantId);
+                                    final pVal = config?.pointValue ?? 0.25;
+
+                                    cartNotifier.applyRewardPoints(userAvailablePoints, pVal);
+                                    if (context.mounted) {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(
+                                          content: Text('🎉 Applied $userAvailablePoints reward points! Saved ₹${cartState.rewardDiscount.toStringAsFixed(2)}'),
+                                          backgroundColor: const Color(0xFF16A34A),
+                                          behavior: SnackBarBehavior.floating,
+                                        ),
+                                      );
+                                    }
+                                  },
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: const Color(0xFFF59E0B),
+                                    foregroundColor: Colors.white,
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                                    elevation: 0,
+                                  ),
+                                  child: const Text('Apply', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                                ),
+                            ],
+                          ],
+                        ),
+
+                        if (cartState.appliedRewardPoints > 0) ...[
+                          const Gap(10),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFFFFBEB),
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(color: const Color(0xFFFCD34D)),
+                            ),
+                            child: Row(
+                              children: [
+                                const Icon(Icons.check_circle_rounded, color: Color(0xFFD97706), size: 14),
+                                const Gap(6),
+                                Expanded(
+                                  child: Text(
+                                    'Applied ${cartState.appliedRewardPoints} Points • Saved ₹${cartState.rewardDiscount.toStringAsFixed(2)}',
+                                    style: const TextStyle(
+                                      color: Color(0xFF92400E),
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 11.5,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+
                   const Gap(20),
 
                   // Delivery Instructions
@@ -713,6 +864,13 @@ class _CartScreenState extends ConsumerState<CartScreen> {
                             isDark,
                             isDiscount: true,
                           ),
+                        if (cartState.rewardDiscount > 0)
+                          _buildBillRow(
+                            'Reward Points Discount (${cartState.appliedRewardPoints} Pts)', 
+                            '- ₹${cartState.rewardDiscount.toStringAsFixed(2)}', 
+                            isDark,
+                            isDiscount: true,
+                          ),
                         _buildBillRow(
                           deliveryCalcAsync.value?.distanceKm != null && deliveryCalcAsync.value!.distanceKm > 0
                               ? 'Delivery Charges (${deliveryCalcAsync.value!.distanceKm.toStringAsFixed(1)} km)'
@@ -734,6 +892,7 @@ class _CartScreenState extends ConsumerState<CartScreen> {
                           children: [
                             const Text(
                               'Grand Total',
+
                               style: TextStyle(fontWeight: FontWeight.w900, fontSize: 18),
                             ),
                             Text(

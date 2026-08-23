@@ -3,8 +3,10 @@ import 'package:flutter/foundation.dart';
 import 'package:cloud_firestore/cloud_firestore.dart' hide Order;
 import '../../models/order.dart';
 import '../../models/cart_item.dart';
+import '../../features/rewards/repositories/reward_repository.dart';
 
 class OrderRepository {
+
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   static const String _collectionName = 'orders';
 
@@ -55,9 +57,12 @@ class OrderRepository {
     double taxPercentage = 0.0,
     required double deliveryFee,
     double deliveryDistanceKm = 0.0,
-
     required double discount,
     required double grandTotal,
+    int rewardPointsUsed = 0,
+    double rewardDiscountAmount = 0.0,
+    String? rewardTransactionId,
+    String? rewardBranchId,
     String paymentMethod = 'CASH_ON_DELIVERY',
     String paymentGateway = 'COD',
     String paymentStatus = 'PENDING',
@@ -82,6 +87,27 @@ class OrderRepository {
     final nowIso = DateTime.now().toIso8601String();
     final randomNum = Random().nextInt(900000) + 100000;
     final orderNum = 'ORD-$randomNum';
+
+    // 1. Process atomic reward redemption if points were applied
+    String? generatedRewardTxId = rewardTransactionId;
+    if (rewardPointsUsed > 0 && customerId.isNotEmpty) {
+      try {
+        final rewardRepo = RewardRepository(firestore: _firestore);
+        generatedRewardTxId = await rewardRepo.redeemRewardPoints(
+          userId: customerId,
+          orderId: docRef.id,
+          orderNumber: orderNum,
+          pointsToRedeem: rewardPointsUsed,
+          monetaryValue: rewardDiscountAmount,
+          restaurantId: restaurantId,
+          branchId: branchId.isNotEmpty ? branchId : restaurantId,
+          branchName: branchName.isNotEmpty ? branchName : restaurantName,
+        );
+      } catch (e) {
+        debugPrint('[OrderRepository] Reward redemption error: $e');
+        rethrow;
+      }
+    }
 
     final int totalQuantity = items.fold<int>(0, (total, i) => total + i.quantity);
 
@@ -153,14 +179,18 @@ class OrderRepository {
       'deliveryDistanceKm': deliveryDistanceKm,
       'distanceKm': deliveryDistanceKm,
       'discount': discount,
+      'rewardPointsUsed': rewardPointsUsed,
+      'rewardDiscountAmount': rewardDiscountAmount,
+      'rewardTransactionId': generatedRewardTxId ?? '',
+      'rewardBranchId': rewardBranchId ?? (branchId.isNotEmpty ? branchId : restaurantId),
       'appliedCoupon': appliedCoupon ?? '',
       'totalAmount': grandTotal,
       'grandTotal': grandTotal,
       'paymentMethod': paymentMethod,
       'paymentGateway': paymentGateway,
       'paymentStatus': finalPaymentStatus,
-      'transactionId': ?transactionId,
-      'paidAt': ?paidAt,
+      'transactionId': transactionId,
+      'paidAt': paidAt,
       'orderType': 'DELIVERY',
       'status': 'PENDING',
       'createdAt': nowIso,
@@ -296,6 +326,53 @@ class OrderRepository {
 
       await docRef.update(updates);
 
+      // Restore any redeemed reward points on order cancellation
+      try {
+        final custId = (data['customerId'] ?? data['userId'] ?? '').toString();
+        final orderNum = (data['orderNumber'] ?? orderId).toString();
+        final int redeemedPts = (data['rewardPointsUsed'] is num)
+            ? (data['rewardPointsUsed'] as num).toInt()
+            : int.tryParse(data['rewardPointsUsed']?.toString() ?? '0') ?? 0;
+
+        if (redeemedPts > 0 && custId.isNotEmpty) {
+          final userRef = _firestore.collection('users').doc(custId);
+          final resTxRef = _firestore.collection('reward_transactions').doc();
+          final userSnap = await userRef.get();
+          final currentPts = userSnap.exists
+              ? (userSnap.data()?['rewardPoints'] is num
+                  ? (userSnap.data()?['rewardPoints'] as num).toInt()
+                  : int.tryParse(userSnap.data()?['rewardPoints']?.toString() ?? '0') ?? 0)
+              : 0;
+
+          final newBal = currentPts + redeemedPts;
+          await resTxRef.set({
+            'id': resTxRef.id,
+            'transactionId': resTxRef.id,
+            'userId': custId,
+            'customerId': custId,
+            'orderId': orderId,
+            'orderNumber': orderNum,
+            'points': redeemedPts,
+            'monetaryValue': data['rewardDiscountAmount'] ?? 0,
+            'restaurantId': data['restaurantId'] ?? '',
+            'branchId': data['branchId'] ?? '',
+            'type': 'REFUNDED',
+            'transactionType': 'REFUNDED',
+            'remainingBalance': newBal,
+            'description': 'Restored $redeemedPts redeemed points for cancelled Order #$orderNum',
+            'createdAt': nowIso,
+            'timestamp': nowIso,
+          });
+
+          await userRef.set({
+            'rewardPoints': FieldValue.increment(redeemedPts),
+            'updatedAt': nowIso,
+          }, SetOptions(merge: true));
+        }
+      } catch (err) {
+        debugPrint('Reward point cancellation reversal notice: $err');
+      }
+
       // Create notification record for admins/managers
       try {
         final notifRef = _firestore.collection('notifications').doc();
@@ -321,3 +398,4 @@ class OrderRepository {
     }
   }
 }
+

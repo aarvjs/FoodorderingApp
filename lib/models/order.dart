@@ -22,6 +22,10 @@ class Order {
   final double deliveryDistanceKm;
   final double discount;
   final double totalAmount;
+  final int rewardPointsUsed;
+  final double rewardDiscountAmount;
+  final String? rewardTransactionId;
+  final String? rewardBranchId;
   final String paymentMethod; // "CASH_ON_DELIVERY", "COD", "ONLINE"
   final String paymentGateway; // "PAYU", "COD"
   final String paymentStatus; // "PENDING", "COD_PENDING", "SUCCESS", "PAID"
@@ -56,8 +60,10 @@ class Order {
     this.deliveryDistanceKm = 0.0,
     this.discount = 0.0,
     required this.totalAmount,
-
-
+    this.rewardPointsUsed = 0,
+    this.rewardDiscountAmount = 0.0,
+    this.rewardTransactionId,
+    this.rewardBranchId,
     required this.paymentMethod,
     this.paymentGateway = 'COD',
     this.paymentStatus = 'PENDING',
@@ -72,6 +78,7 @@ class Order {
     this.cancelledAt,
     required this.orderDate,
   });
+
 
   /// Map raw status code to active timeline step index
   /// 0: Placed / Pending
@@ -237,8 +244,13 @@ class Order {
 
       deliveryDistanceKm: _numToDouble(data['deliveryDistanceKm'] ?? data['distanceKm']),
       discount: _numToDouble(data['discount']),
-
       totalAmount: _numToDouble(data['totalAmount'] ?? data['grandTotal']),
+      rewardPointsUsed: (data['rewardPointsUsed'] is num)
+          ? (data['rewardPointsUsed'] as num).toInt()
+          : (int.tryParse(data['rewardPointsUsed']?.toString() ?? '0') ?? 0),
+      rewardDiscountAmount: _numToDouble(data['rewardDiscountAmount']),
+      rewardTransactionId: data['rewardTransactionId']?.toString(),
+      rewardBranchId: data['rewardBranchId']?.toString(),
       paymentMethod: (data['paymentMethod'] ?? 'CASH_ON_DELIVERY').toString(),
       paymentGateway: (data['paymentGateway'] ?? (data['paymentMethod'] == 'ONLINE' ? 'PAYU' : 'COD')).toString(),
       paymentStatus: (data['paymentStatus'] ?? 'PENDING').toString(),
@@ -296,6 +308,10 @@ class Order {
     double? deliveryFee,
     double? discount,
     double? totalAmount,
+    int? rewardPointsUsed,
+    double? rewardDiscountAmount,
+    String? rewardTransactionId,
+    String? rewardBranchId,
     String? paymentMethod,
     String? paymentGateway,
     String? paymentStatus,
@@ -328,6 +344,10 @@ class Order {
       deliveryFee: deliveryFee ?? this.deliveryFee,
       discount: discount ?? this.discount,
       totalAmount: totalAmount ?? this.totalAmount,
+      rewardPointsUsed: rewardPointsUsed ?? this.rewardPointsUsed,
+      rewardDiscountAmount: rewardDiscountAmount ?? this.rewardDiscountAmount,
+      rewardTransactionId: rewardTransactionId ?? this.rewardTransactionId,
+      rewardBranchId: rewardBranchId ?? this.rewardBranchId,
       paymentMethod: paymentMethod ?? this.paymentMethod,
       paymentGateway: paymentGateway ?? this.paymentGateway,
       paymentStatus: paymentStatus ?? this.paymentStatus,
@@ -344,3 +364,4 @@ class Order {
     );
   }
 }
+

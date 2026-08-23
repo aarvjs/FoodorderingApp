@@ -6,24 +6,36 @@ class RewardTransactionModel {
   final String orderId;
   final String orderNumber;
   final int points;
+  final double monetaryValue;
   final double qualifyingAmount;
   final String restaurantId;
   final String branchId;
   final String branchName;
+  final String type; // "EARNED", "REDEEMED", "REFUNDED", "EXPIRED", "ADJUSTMENT"
+  final int remainingBalance;
+  final String description;
   final DateTime createdAt;
 
   const RewardTransactionModel({
     required this.id,
     required this.userId,
-    required this.orderId,
-    required this.orderNumber,
+    this.orderId = '',
+    this.orderNumber = '',
     required this.points,
+    this.monetaryValue = 0.0,
     this.qualifyingAmount = 0.0,
-    required this.restaurantId,
-    required this.branchId,
-    required this.branchName,
+    this.restaurantId = '',
+    this.branchId = '',
+    this.branchName = '',
+    this.type = 'EARNED',
+    this.remainingBalance = 0,
+    this.description = '',
     required this.createdAt,
   });
+
+  bool get isEarned => type.toUpperCase() == 'EARNED';
+  bool get isRedeemed => type.toUpperCase() == 'REDEEMED';
+  bool get isRefunded => type.toUpperCase() == 'REFUNDED';
 
   factory RewardTransactionModel.fromFirestore(Map<String, dynamic> data, String id) {
     DateTime parseDate(dynamic val) {
@@ -53,30 +65,45 @@ class RewardTransactionModel {
       return 0.0;
     }
 
+    final rawType = (data['type'] ?? data['transactionType'] ?? 'EARNED').toString().toUpperCase();
+
     return RewardTransactionModel(
       id: id,
       userId: (data['userId'] ?? data['customerId'] ?? '').toString(),
       orderId: (data['orderId'] ?? '').toString(),
       orderNumber: (data['orderNumber'] ?? '').toString(),
       points: parseInt(data['points']),
+      monetaryValue: parseDouble(data['monetaryValue'] ?? data['discountAmount']),
       qualifyingAmount: parseDouble(data['qualifyingAmount'] ?? data['eligibleMenuTotal']),
       restaurantId: (data['restaurantId'] ?? '').toString(),
       branchId: (data['branchId'] ?? '').toString(),
       branchName: (data['branchName'] ?? 'Branch').toString(),
-      createdAt: parseDate(data['createdAt']),
+      type: rawType,
+      remainingBalance: parseInt(data['remainingBalance']),
+      description: (data['description'] ?? '').toString(),
+      createdAt: parseDate(data['createdAt'] ?? data['timestamp']),
     );
   }
 
   Map<String, dynamic> toMap() => {
         'id': id,
+        'transactionId': id,
         'userId': userId,
+        'customerId': userId,
         'orderId': orderId,
         'orderNumber': orderNumber,
         'points': points,
+        'monetaryValue': monetaryValue,
         'qualifyingAmount': qualifyingAmount,
         'restaurantId': restaurantId,
         'branchId': branchId,
         'branchName': branchName,
+        'type': type,
+        'transactionType': type,
+        'remainingBalance': remainingBalance,
+        'description': description,
         'createdAt': Timestamp.fromDate(createdAt),
+        'timestamp': Timestamp.fromDate(createdAt),
       };
 }
+
