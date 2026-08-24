@@ -1,4 +1,6 @@
+import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+
 
 import '../features/splash/splash_screen.dart';
 import '../features/onboarding/onboarding_screen.dart';
@@ -54,9 +56,13 @@ class AppRoutes {
   static const String bookings = '/bookings';
   static const String referral = '/referral';
 
+  static final GlobalKey<NavigatorState> rootNavigatorKey = GlobalKey<NavigatorState>();
+
   static final GoRouter router = GoRouter(
+    navigatorKey: rootNavigatorKey,
     initialLocation: splash,
     debugLogDiagnostics: true,
+
     routes: [
       GoRoute(
         path: splash,

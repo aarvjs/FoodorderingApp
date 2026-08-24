@@ -273,10 +273,6 @@ class AppDrawer extends ConsumerWidget {
                           }, isDark);
                         },
                       ),
-                      _buildMenuItem(Iconsax.heart, 'Favorites', () {
-                        Navigator.pop(context);
-                        context.push('/home');
-                      }, isDark),
                       _buildMenuItem(Iconsax.ticket_discount, 'Coupons & Offers', () {
                         Navigator.pop(context);
                         context.push('/offers');
@@ -288,10 +284,7 @@ class AppDrawer extends ConsumerWidget {
                         Navigator.pop(context);
                         context.push('/notifications');
                       }, isDark),
-                      _buildMenuItem(Iconsax.crown, 'Gold Premium', () {
-                        Navigator.pop(context);
-                        context.push('/premium');
-                      }, isDark, isGold: true),
+
 
                       const Divider(height: 24, indent: 16, endIndent: 16),
 

@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart';
 
 class AppNotificationModel {
   final String id;
@@ -49,19 +50,10 @@ class NotificationRepository {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   static const String _collectionName = 'notifications';
 
-  /// Stream real-time notifications for a customer
+  /// Stream real-time notifications for a customer (strictly user isolated)
   Stream<List<AppNotificationModel>> streamCustomerNotifications(String userId) {
     if (userId.isEmpty) {
-      return _firestore
-          .collection(_collectionName)
-          .snapshots()
-          .map((snapshot) {
-        final list = snapshot.docs
-            .map((doc) => AppNotificationModel.fromFirestore(doc.data(), doc.id))
-            .toList();
-        list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
-        return list;
-      });
+      return Stream.value([]);
     }
 
     return _firestore
@@ -96,5 +88,44 @@ class NotificationRepository {
       'read': false,
       'createdAt': DateTime.now().toIso8601String(),
     });
+  }
+
+  /// Mark all unread notifications as read for a customer
+  Future<void> markNotificationsAsRead(String userId) async {
+    if (userId.isEmpty) return;
+    try {
+      final snapshot = await _firestore
+          .collection(_collectionName)
+          .where('userId', isEqualTo: userId)
+          .where('read', isEqualTo: false)
+          .get();
+
+      final batch = _firestore.batch();
+      for (final doc in snapshot.docs) {
+        batch.update(doc.reference, {'read': true});
+      }
+      await batch.commit();
+    } catch (e) {
+      debugPrint('Failed to mark notifications as read: $e');
+    }
+  }
+
+  /// Delete all notifications belonging strictly to the logged-in user
+  Future<void> deleteAllNotifications(String userId) async {
+    if (userId.isEmpty) return;
+    try {
+      final snapshot = await _firestore
+          .collection(_collectionName)
+          .where('userId', isEqualTo: userId)
+          .get();
+
+      final batch = _firestore.batch();
+      for (final doc in snapshot.docs) {
+        batch.delete(doc.reference);
+      }
+      await batch.commit();
+    } catch (e) {
+      debugPrint('Failed to delete notifications: $e');
+    }
   }
 }

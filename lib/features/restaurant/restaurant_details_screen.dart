@@ -1,5 +1,7 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
 import 'package:go_router/go_router.dart';
 import 'package:iconsax/iconsax.dart';
 import 'package:gap/gap.dart';
@@ -18,8 +20,8 @@ import '../../models/offer_model.dart';
 import '../../models/combo_item_model.dart';
 import '../../models/cart_item.dart';
 import '../home/providers/restaurant_providers.dart';
-import '../product/combo_detail_screen.dart';
 import '../product/combo_customization_sheet.dart';
+
 
 class RestaurantDetailsScreen extends ConsumerStatefulWidget {
   final String restaurantId;
@@ -36,12 +38,59 @@ class _RestaurantDetailsScreenState extends ConsumerState<RestaurantDetailsScree
   final FocusNode _searchFocusNode = FocusNode();
   String _menuSearchQuery = '';
 
+  bool _calculateIsOpen(Restaurant restaurant) {
+    if (!restaurant.isOpen) return false;
+
+    try {
+      final now = DateTime.now();
+      final openTime = _parseTimeOfDay(restaurant.openingTime);
+      final closeTime = _parseTimeOfDay(restaurant.closingTime);
+
+      if (openTime == null || closeTime == null) return restaurant.isOpen;
+
+      final currentMinutes = now.hour * 60 + now.minute;
+      final openMinutes = openTime.hour * 60 + openTime.minute;
+      final closeMinutes = closeTime.hour * 60 + closeTime.minute;
+
+      if (closeMinutes > openMinutes) {
+        return currentMinutes >= openMinutes && currentMinutes <= closeMinutes;
+      } else {
+        return currentMinutes >= openMinutes || currentMinutes <= closeMinutes;
+      }
+    } catch (e) {
+      return restaurant.isOpen;
+    }
+  }
+
+  TimeOfDay? _parseTimeOfDay(String timeStr) {
+    if (timeStr.isEmpty) return null;
+    try {
+      final cleaned = timeStr.trim().toUpperCase();
+      final isPM = cleaned.contains('PM');
+      final isAM = cleaned.contains('AM');
+      final digitsOnly = cleaned.replaceAll(RegExp(r'[^0-9:]'), '');
+      final parts = digitsOnly.split(':');
+      if (parts.isEmpty || parts[0].isEmpty) return null;
+
+      int hour = int.parse(parts[0]);
+      int minute = parts.length > 1 && parts[1].isNotEmpty ? int.parse(parts[1]) : 0;
+
+      if (isPM && hour < 12) hour += 12;
+      if (isAM && hour == 12) hour = 0;
+
+      return TimeOfDay(hour: hour, minute: minute);
+    } catch (e) {
+      return null;
+    }
+  }
+
   @override
   void dispose() {
     _searchFocusNode.dispose();
     _menuSearchController.dispose();
     super.dispose();
   }
+
 
   void _openTableBookingModal(Restaurant restaurant) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -203,23 +252,16 @@ class _RestaurantDetailsScreenState extends ConsumerState<RestaurantDetailsScree
           CustomScrollView(
             physics: const BouncingScrollPhysics(),
             slivers: [
-              // Custom Sliver App Bar with Large Banner Image
+              // Custom Sliver App Bar with Dynamic Image Slider
               SliverAppBar(
                 expandedHeight: 220,
                 pinned: true,
                 stretch: true,
                 backgroundColor: isDark ? AppColors.darkBackground : AppColors.background,
                 flexibleSpace: FlexibleSpaceBar(
-                  background: Hero(
-                    tag: 'restaurant_banner_${restaurant.id}',
-                    child: Image.network(
-                      restaurant.bannerUrl,
-                      fit: BoxFit.cover,
-                      errorBuilder: (context, error, stackTrace) => Container(
-                        color: Colors.grey.shade800,
-                        child: const Icon(Icons.restaurant, size: 48, color: Colors.white),
-                      ),
-                    ),
+                  background: _RestaurantHeaderSlider(
+                    restaurant: restaurant,
+                    isDark: isDark,
                   ),
                 ),
                 leading: CircleAvatar(
@@ -229,25 +271,8 @@ class _RestaurantDetailsScreenState extends ConsumerState<RestaurantDetailsScree
                     onPressed: () => context.pop(),
                   ),
                 ),
-                actions: [
-                  CircleAvatar(
-                    backgroundColor: Colors.black.withOpacity(0.4),
-                    child: IconButton(
-                      icon: Icon(
-                        ref.watch(favoritesProvider).contains(restaurant.id)
-                            ? Icons.favorite
-                            : Icons.favorite_border,
-                        color: ref.watch(favoritesProvider).contains(restaurant.id)
-                            ? Colors.red
-                            : Colors.white,
-                        size: 20,
-                      ),
-                      onPressed: () {
-                        ref.read(favoritesProvider.notifier).toggleFavorite(restaurant.id);
-                      },
-                    ),
-                  ),
-                  const Gap(12),
+                actions: const [
+                  Gap(12),
                 ],
               ),
 
@@ -258,41 +283,47 @@ class _RestaurantDetailsScreenState extends ConsumerState<RestaurantDetailsScree
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      // 1. Restaurant Name & Rating Badge
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
+                                // Restaurant Name (Visually prominent)
                                 Text(
                                   restaurant.name,
                                   style: TextStyle(
-                                    fontSize: 24,
+                                    fontSize: 22,
                                     fontWeight: FontWeight.w900,
                                     color: isDark ? Colors.white : AppColors.textDark,
                                     letterSpacing: -0.5,
                                   ),
                                 ),
-                                if (!restaurant.isOpen)
-                                  Container(
-                                    margin: const EdgeInsets.only(top: 4),
-                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                                    decoration: BoxDecoration(
-                                      color: Colors.red.withOpacity(0.15),
-                                      borderRadius: BorderRadius.circular(6),
-                                      border: Border.all(color: Colors.red.withOpacity(0.4)),
+
+                                // Branch Name (Subtle underneath)
+                                if (restaurant.branchName.isNotEmpty && restaurant.branchName != restaurant.name) ...[
+                                  const Gap(3),
+                                  Text(
+                                    '📍 ${restaurant.branchName}',
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w600,
+                                      color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
                                     ),
-                                    child: const Text(
-                                      'CURRENTLY CLOSED',
-                                      style: TextStyle(color: Colors.red, fontSize: 10, fontWeight: FontWeight.bold),
-                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
                                   ),
+                                ],
                               ],
                             ),
                           ),
+                          const Gap(8),
+                          // Rating Badge
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                            padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
                             decoration: BoxDecoration(
                               color: AppColors.success,
                               borderRadius: BorderRadius.circular(10),
@@ -303,28 +334,145 @@ class _RestaurantDetailsScreenState extends ConsumerState<RestaurantDetailsScree
                                   '${restaurant.rating}',
                                   style: const TextStyle(
                                     color: Colors.white,
-                                    fontSize: 14,
+                                    fontSize: 13.5,
                                     fontWeight: FontWeight.bold,
                                   ),
                                 ),
                                 const Gap(3),
-                                const Icon(Icons.star, color: Colors.white, size: 14),
+                                const Icon(Icons.star, color: Colors.white, size: 13),
                               ],
                             ),
                           ),
                         ],
                       ),
-                      const Gap(4),
-                      Text(
-                        restaurant.categories.join(' • '),
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: isDark ? Colors.grey.shade400 : AppColors.textLight,
+
+                      // Categories / Cuisine list
+                      if (restaurant.categories.isNotEmpty) ...[
+                        const Gap(6),
+                        Text(
+                          restaurant.categories.join(' • '),
+                          style: TextStyle(
+                            fontSize: 12.5,
+                            color: isDark ? Colors.grey.shade400 : AppColors.textLight,
+                          ),
                         ),
+                      ],
+
+                      // 2. Description
+                      if (restaurant.description.isNotEmpty) ...[
+                        const Gap(8),
+                        Text(
+                          restaurant.description,
+                          style: TextStyle(
+                            fontSize: 12.5,
+                            color: isDark ? Colors.grey.shade300 : Colors.grey.shade800,
+                            height: 1.35,
+                          ),
+                        ),
+                      ],
+
+                      const Gap(12),
+
+                      // 3. Contact + Timing + OPEN/CLOSED Status in one clean horizontal row
+                      Builder(
+                        builder: (context) {
+                          final bool isCalculatedOpen = _calculateIsOpen(restaurant);
+                          return Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                            decoration: BoxDecoration(
+                              color: isDark ? AppColors.darkCard : Colors.grey.shade50,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: isDark ? AppColors.darkDivider : Colors.grey.shade200,
+                              ),
+                            ),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                // 📞 Branch Contact Number
+                                Flexible(
+                                  flex: 5,
+                                  child: Row(
+                                    children: [
+                                      const Icon(Icons.phone_in_talk_rounded, size: 14, color: AppColors.primary),
+                                      const Gap(6),
+                                      Expanded(
+                                        child: Text(
+                                          restaurant.phone.isNotEmpty ? restaurant.phone : 'N/A',
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w700,
+                                            color: isDark ? Colors.white : AppColors.textDark,
+                                          ),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+
+                                const Gap(8),
+
+                                // 🕒 Operating Timing & Status Badge
+                                Flexible(
+                                  flex: 6,
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.end,
+                                    children: [
+                                      const Icon(Icons.access_time_rounded, size: 14, color: AppColors.primary),
+                                      const Gap(4),
+                                      Flexible(
+                                        child: Text(
+                                          isCalculatedOpen
+                                              ? '${restaurant.openingTime} – ${restaurant.closingTime}'
+                                              : 'Opens ${restaurant.openingTime}',
+                                          style: TextStyle(
+                                            fontSize: 11.5,
+                                            fontWeight: FontWeight.w600,
+                                            color: isDark ? Colors.grey.shade300 : AppColors.textDark,
+                                          ),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                      const Gap(6),
+                                      // Status Badge
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                                        decoration: BoxDecoration(
+                                          color: isCalculatedOpen
+                                              ? const Color(0xFF10B981).withValues(alpha: 0.15)
+                                              : Colors.red.withValues(alpha: 0.15),
+                                          borderRadius: BorderRadius.circular(6),
+                                          border: Border.all(
+                                            color: isCalculatedOpen
+                                                ? const Color(0xFF10B981).withValues(alpha: 0.4)
+                                                : Colors.red.withValues(alpha: 0.4),
+                                          ),
+                                        ),
+                                        child: Text(
+                                          isCalculatedOpen ? 'OPEN' : 'CLOSED',
+                                          style: TextStyle(
+                                            color: isCalculatedOpen ? const Color(0xFF047857) : Colors.red,
+                                            fontSize: 10,
+                                            fontWeight: FontWeight.w900,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        },
                       ),
+
                       const Gap(12),
                       const Divider(),
                       const Gap(12),
+
 
                       // Logistics stats row
                       Row(
@@ -335,6 +483,7 @@ class _RestaurantDetailsScreenState extends ConsumerState<RestaurantDetailsScree
                           _buildOfferBadgePill(offersAsync, restaurant, isDark),
                         ],
                       ),
+
 
                       // Table Booking Card (if enabled)
                       if (restaurant.hasDineIn) ...[
@@ -557,12 +706,42 @@ class _RestaurantDetailsScreenState extends ConsumerState<RestaurantDetailsScree
     final offersList = offersAsync.value ?? [];
     final int offersCount = offersList.length;
 
-    String labelText = 'OFFERS';
+    String labelText = '';
     if (offersCount > 0) {
       labelText = '$offersCount OFFER${offersCount > 1 ? 'S' : ''}';
-    } else if (restaurant.offerText.isNotEmpty) {
+    } else if (restaurant.offerText.isNotEmpty && !restaurant.offerText.contains('50% OFF')) {
       labelText = restaurant.offerText;
     }
+
+    if (labelText.isEmpty) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: isDark ? AppColors.darkCard : Colors.grey.shade100,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: isDark ? AppColors.darkDivider : Colors.grey.shade300,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Iconsax.ticket, size: 13, color: isDark ? Colors.grey.shade400 : Colors.grey.shade600),
+            const Gap(4),
+            Text(
+              'No offers available',
+              style: TextStyle(
+                color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+
 
     return InkWell(
       onTap: () => _showOffersBottomSheet(offersAsync, isDark),
@@ -1861,3 +2040,156 @@ class _TableBookingBottomSheetState extends ConsumerState<_TableBookingBottomShe
     );
   }
 }
+
+class _RestaurantHeaderSlider extends StatefulWidget {
+  final Restaurant restaurant;
+  final bool isDark;
+
+  const _RestaurantHeaderSlider({
+    required this.restaurant,
+    required this.isDark,
+  });
+
+  @override
+  State<_RestaurantHeaderSlider> createState() => _RestaurantHeaderSliderState();
+}
+
+class _RestaurantHeaderSliderState extends State<_RestaurantHeaderSlider> {
+  final PageController _pageController = PageController();
+  int _currentIndex = 0;
+  Timer? _autoSlideTimer;
+
+  List<String> _getImages() {
+    try {
+      final list = widget.restaurant.sliderImages;
+      if (list.isNotEmpty) {
+        return list;
+      }
+    } catch (_) {}
+    return const [
+      'https://images.unsplash.com/photo-1513104890138-7c749659a591?w=800&q=80&auto=format&fit=crop',
+      'https://images.unsplash.com/photo-1574071318508-1cdbab80d002?w=800&q=80&auto=format&fit=crop',
+      'https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?w=800&q=80&auto=format&fit=crop',
+    ];
+  }
+
+
+
+  @override
+  void initState() {
+    super.initState();
+    _startAutoSlide();
+  }
+
+  void _startAutoSlide() {
+    _autoSlideTimer?.cancel();
+    _autoSlideTimer = Timer.periodic(const Duration(seconds: 3), (timer) {
+      final images = _getImages();
+      if (images.length > 1 && _pageController.hasClients) {
+        final nextIndex = (_currentIndex + 1) % images.length;
+        _pageController.animateToPage(
+          nextIndex,
+          duration: const Duration(milliseconds: 450),
+          curve: Curves.easeInOut,
+        );
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _autoSlideTimer?.cancel();
+    _pageController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final images = _getImages();
+
+    if (images.isEmpty) {
+      return Container(
+        color: Colors.grey.shade900,
+        child: const Center(
+          child: Icon(Icons.restaurant, size: 48, color: Colors.white),
+        ),
+      );
+    }
+
+    if (images.length == 1) {
+      return Hero(
+        tag: 'restaurant_banner_${widget.restaurant.id}',
+        child: Image.network(
+          images.first,
+          fit: BoxFit.cover,
+          errorBuilder: (_, __, ___) => Container(
+            color: Colors.grey.shade900,
+            child: const Center(child: Icon(Icons.restaurant, size: 48, color: Colors.white)),
+          ),
+        ),
+      );
+    }
+
+    return Stack(
+      children: [
+        PageView.builder(
+          controller: _pageController,
+          itemCount: images.length,
+          onPageChanged: (idx) {
+            setState(() {
+              _currentIndex = idx;
+            });
+          },
+          itemBuilder: (context, index) {
+            return Image.network(
+              images[index],
+              fit: BoxFit.cover,
+              errorBuilder: (_, __, ___) => Container(
+                color: Colors.grey.shade900,
+                child: const Center(child: Icon(Icons.restaurant, size: 48, color: Colors.white)),
+              ),
+            );
+          },
+        ),
+
+        // Gradient Overlay at top & bottom for clarity
+        Positioned.fill(
+          child: Container(
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                colors: [Colors.black45, Colors.transparent, Colors.black38],
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+              ),
+            ),
+          ),
+        ),
+
+        // Carousel Page Indicators (Dots)
+        Positioned(
+          bottom: 12,
+          left: 0,
+          right: 0,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: List.generate(images.length, (index) {
+              final bool isSelected = index == _currentIndex;
+              return AnimatedContainer(
+                duration: const Duration(milliseconds: 250),
+                margin: const EdgeInsets.symmetric(horizontal: 3),
+                height: 6,
+                width: isSelected ? 20 : 6,
+                decoration: BoxDecoration(
+                  color: isSelected ? Colors.white : Colors.white.withValues(alpha: 0.5),
+                  borderRadius: BorderRadius.circular(3),
+                ),
+              );
+            }),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+

@@ -32,37 +32,41 @@ class ComboRepository {
             final String? cBranchId = combo.branchId?.trim();
             final List<String> cBranchIds = combo.branchIds.map((b) => b.trim()).toList();
 
-            // Candidate target IDs
-            final Set<String> targetIds = {
-              if (targetRestId.isNotEmpty) targetRestId,
-              if (targetBranchId.isNotEmpty) targetBranchId,
-            };
+            // 1. Restaurant matching check (if targetRestId is specified)
+            final bool matchesRestaurant = targetRestId.isEmpty ||
+                cRestId.isEmpty ||
+                cRestId.toLowerCase() == 'all' ||
+                cRestId == targetRestId ||
+                (targetBranchId.isNotEmpty && cRestId == targetBranchId);
 
-            // 1. Specific match: matches combo's restaurantId, branchId, or branchIds list
-            final bool matchesTarget = targetIds.isNotEmpty && targetIds.any((id) =>
-                (cRestId.isNotEmpty && cRestId == id) ||
-                (cBranchId != null && cBranchId.isNotEmpty && cBranchId == id) ||
-                cBranchIds.contains(id));
+            if (!matchesRestaurant) return false;
 
-            // 2. Global / Unassigned combo
-            final bool hasExplicitAll = cRestId == 'all' ||
-                cBranchId == 'all' ||
-                cBranchIds.contains('all');
+            // 2. Strict Branch matching check when a target branch ID is specified (e.g. nearest branch)
+            if (targetBranchId.isNotEmpty) {
+              final bool matchesSpecificBranch =
+                  (cBranchId != null && cBranchId.isNotEmpty && (cBranchId == targetBranchId || cBranchId.toLowerCase() == 'all')) ||
+                  cBranchIds.contains(targetBranchId) ||
+                  cBranchIds.any((b) => b.toLowerCase() == 'all');
 
-            final bool hasNoAssignment = cRestId.isEmpty &&
-                (cBranchId == null || cBranchId.isEmpty) &&
-                (cBranchIds.isEmpty || (cBranchIds.length == 1 && cBranchIds.first.isEmpty));
+              final bool hasNoBranchAssignment =
+                  (cBranchId == null || cBranchId.isEmpty) &&
+                  (cBranchIds.isEmpty || (cBranchIds.length == 1 && cBranchIds.first.isEmpty));
 
-            final bool isGlobal = hasExplicitAll || hasNoAssignment;
+              // If combo has explicit branch assignment(s) and NONE of them match targetBranchId, exclude it!
+              if (!matchesSpecificBranch && !hasNoBranchAssignment) {
+                return false;
+              }
+            }
 
-            return matchesTarget || isGlobal;
+            return true;
           })
           .toList();
 
-      debugPrint('[ComboRepository] Total matched combos returned to UI: ${list.length}');
+      debugPrint('[ComboRepository] Total matched combos returned for branch "$targetBranchId": ${list.length}');
       return list;
     });
   }
+
 
   /// Stream dedicated combo items belonging specifically to a comboId from Firestore `comboItems` collection
   Stream<List<ComboItemModel>> streamComboItems(String comboId) {

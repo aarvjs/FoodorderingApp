@@ -5,15 +5,19 @@ import 'core/config/app_theme.dart';
 import 'core/services/state_providers.dart';
 import 'routes/app_routes.dart';
 
+import 'core/services/notification_service.dart';
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp();
+  await NotificationService().initialize(key: AppRoutes.rootNavigatorKey);
   runApp(
     const ProviderScope(
       child: MyApp(),
     ),
   );
 }
+
 
 class MyApp extends ConsumerWidget {
   const MyApp({super.key});

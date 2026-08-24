@@ -5,8 +5,11 @@ import 'package:carousel_slider/carousel_slider.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shimmer/shimmer.dart';
+import 'package:go_router/go_router.dart';
 import '../../../core/config/app_colors.dart';
+import '../../../models/restaurant.dart';
 import '../providers/restaurant_providers.dart';
+
 import 'offer_badge.dart';
 
 class BannerData {
@@ -14,6 +17,9 @@ class BannerData {
   final String subtitle;
   final String imageUrl;
   final String ctaText;
+  final String actionType;
+  final String targetBranchId;
+  final String targetRestaurantId;
   final OfferBadgeType badgeType;
   final List<Color> accentColors;
 
@@ -22,6 +28,9 @@ class BannerData {
     required this.subtitle,
     required this.imageUrl,
     required this.ctaText,
+    this.actionType = 'ORDER_NOW',
+    this.targetBranchId = '',
+    this.targetRestaurantId = '',
     required this.badgeType,
     required this.accentColors,
   });
@@ -44,50 +53,78 @@ class _HeroBannerCarouselState extends ConsumerState<HeroBannerCarousel> {
     const BannerData(
       title: '🍕 BUY 1 GET 1 FREE\non Large Pizzas',
       subtitle: 'Freshly baked gourmet pizzas delivered hot to your door!',
-      imageUrl: 'assets/images/perfect_pizza_banner1.png',
+      imageUrl: 'https://images.unsplash.com/photo-1513104890138-7c749659a591?w=800&q=80&auto=format&fit=crop',
       ctaText: 'Order Now',
+      actionType: 'ORDER_NOW',
       badgeType: OfferBadgeType.buy1get1,
       accentColors: [Color(0xFF0879C9), Color(0xFF005B9F)],
     ),
     const BannerData(
       title: '🍔 SUPER COMBO DEALS\nFlat 40% OFF',
       subtitle: 'Family pizza combos with garlic bread & chilled drinks',
-      imageUrl: 'assets/images/perfect_pizza_banner2.png',
+      imageUrl: 'https://images.unsplash.com/photo-1574071318508-1cdbab80d002?w=800&q=80&auto=format&fit=crop',
       ctaText: 'Grab Deal',
+      actionType: 'GRAB_DEAL',
       badgeType: OfferBadgeType.flat50,
       accentColors: [Color(0xFF0879C9), Color(0xFF005B9F)],
     ),
     const BannerData(
       title: '🧀 CHEEZY DELIGHTS\nFree Delivery',
       subtitle: 'Ultra cheesy pizzas delivered free on orders above ₹299',
-      imageUrl: 'assets/images/perfect_pizza_banner3.png',
+      imageUrl: 'https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?w=800&q=80&auto=format&fit=crop',
       ctaText: 'Explore Menu',
+      actionType: 'EXPLORE_MENU',
       badgeType: OfferBadgeType.freeDelivery,
       accentColors: [Color(0xFF0879C9), Color(0xFF005B9F)],
     ),
   ];
 
+  void _handleBannerTap(BuildContext context, BannerData banner, Restaurant? nearestRestaurant) {
+    final String targetId = banner.targetBranchId.isNotEmpty
+        ? banner.targetBranchId
+        : (banner.targetRestaurantId.isNotEmpty
+            ? banner.targetRestaurantId
+            : (nearestRestaurant?.id ?? ''));
+
+    if (targetId.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please select an outlet to view details'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+      return;
+    }
+
+    context.push('/restaurant/$targetId');
+  }
+
   @override
   Widget build(BuildContext context) {
-    final offersAsync = ref.watch(offersStreamProvider);
+    final nearbyAsync = ref.watch(nearbyRestaurantsStreamProvider);
+    final nearestRestaurant = nearbyAsync.value?.firstOrNull;
 
-    List<BannerData> bannersList = _defaultBanners;
-    offersAsync.whenData((offers) {
-      final validFirestoreOffers = offers
-          .where((o) => o.bannerUrl.isNotEmpty && !o.bannerUrl.contains('unsplash.com'))
-          .map((o) => BannerData(
-                title: o.title,
-                subtitle: o.description,
-                imageUrl: o.bannerUrl,
-                ctaText: o.ctaText,
-                badgeType: o.badgeType,
-                accentColors: o.accentColors,
+    List<BannerData> bannersList = [];
+    if (nearestRestaurant != null && nearestRestaurant.homeHeroSliders.isNotEmpty) {
+      bannersList = nearestRestaurant.homeHeroSliders
+          .where((h) => h.active)
+          .map((h) => BannerData(
+                title: h.title,
+                subtitle: h.description,
+                imageUrl: h.imageUrl,
+                ctaText: h.buttonText,
+                actionType: h.actionType,
+                targetBranchId: h.targetBranchId,
+                targetRestaurantId: h.targetRestaurantId,
+                badgeType: OfferBadgeType.flat50,
+                accentColors: const [Color(0xFF0879C9), Color(0xFF005B9F)],
               ))
           .toList();
-      if (validFirestoreOffers.isNotEmpty) {
-        bannersList = [..._defaultBanners, ...validFirestoreOffers];
-      }
-    });
+    }
+
+    if (bannersList.isEmpty) {
+      bannersList = _defaultBanners;
+    }
 
     return Column(
       children: [
@@ -98,14 +135,18 @@ class _HeroBannerCarouselState extends ConsumerState<HeroBannerCarousel> {
             final banner = bannersList[index % bannersList.length];
             final isActive = _currentIndex == index;
 
-            return _BannerCard(
-              banner: banner,
-              isActive: isActive,
+            return GestureDetector(
+              onTap: () => _handleBannerTap(context, banner, nearestRestaurant),
+              child: _BannerCard(
+                banner: banner,
+                isActive: isActive,
+                onTap: () => _handleBannerTap(context, banner, nearestRestaurant),
+              ),
             );
           },
           options: CarouselOptions(
             height: 240,
-            autoPlay: true,
+            autoPlay: bannersList.length > 1,
             autoPlayInterval: const Duration(seconds: 4),
             autoPlayAnimationDuration: const Duration(milliseconds: 800),
             autoPlayCurve: Curves.fastOutSlowIn,
@@ -154,15 +195,19 @@ class _HeroBannerCarouselState extends ConsumerState<HeroBannerCarousel> {
 class _BannerCard extends StatefulWidget {
   final BannerData banner;
   final bool isActive;
+  final VoidCallback onTap;
 
-  const _BannerCard({required this.banner, required this.isActive});
+  const _BannerCard({
+    required this.banner,
+    required this.isActive,
+    required this.onTap,
+  });
 
   @override
   State<_BannerCard> createState() => _BannerCardState();
 }
 
-class _BannerCardState extends State<_BannerCard>
-    with SingleTickerProviderStateMixin {
+class _BannerCardState extends State<_BannerCard> with SingleTickerProviderStateMixin {
   late AnimationController _zoomController;
   late Animation<double> _zoomAnim;
 
@@ -243,14 +288,14 @@ class _BannerCardState extends State<_BannerCard>
                     ),
             ),
 
-            // Cinematic gradient overlay — bottom-heavy
+            // Cinematic gradient overlay
             Positioned.fill(
               child: DecoratedBox(
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
                     colors: [
-                      banner.accentColors.first.withOpacity(0.85),
-                      banner.accentColors.last.withOpacity(0.4),
+                      banner.accentColors.first.withValues(alpha: 0.85),
+                      banner.accentColors.last.withValues(alpha: 0.4),
                       Colors.transparent,
                     ],
                     begin: Alignment.bottomLeft,
@@ -268,7 +313,7 @@ class _BannerCardState extends State<_BannerCard>
                   gradient: RadialGradient(
                     colors: [
                       Colors.transparent,
-                      Colors.black.withOpacity(0.3),
+                      Colors.black.withValues(alpha: 0.3),
                     ],
                     center: Alignment.topRight,
                     radius: 1.2,
@@ -294,61 +339,66 @@ class _BannerCardState extends State<_BannerCard>
                     banner.title,
                     style: GoogleFonts.poppins(
                       color: Colors.white,
-                      fontSize: 20,
+                      fontSize: 18,
                       fontWeight: FontWeight.w900,
                       height: 1.2,
                       shadows: [
                         Shadow(
-                          color: Colors.black.withOpacity(0.5),
+                          color: Colors.black.withValues(alpha: 0.5),
                           blurRadius: 8,
                           offset: const Offset(0, 2),
                         ),
                       ],
                     ),
                   ),
-                  const SizedBox(height: 4),
-                  Text(
-                    banner.subtitle,
-                    style: GoogleFonts.poppins(
-                      color: Colors.white.withOpacity(0.9),
-                      fontSize: 11,
-                      fontWeight: FontWeight.w500,
+                  if (banner.subtitle.isNotEmpty) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      banner.subtitle,
+                      style: GoogleFonts.poppins(
+                        color: Colors.white.withValues(alpha: 0.9),
+                        fontSize: 11,
+                        fontWeight: FontWeight.w500,
+                      ),
                     ),
-                  ),
+                  ],
                   const SizedBox(height: 12),
                   // CTA Button
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 18, vertical: 9),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(20),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.white.withOpacity(0.3),
-                          blurRadius: 12,
-                          offset: const Offset(0, 4),
-                        ),
-                      ],
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          banner.ctaText,
-                          style: GoogleFonts.poppins(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700,
+                  GestureDetector(
+                    onTap: widget.onTap,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 18, vertical: 9),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(20),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.white.withValues(alpha: 0.3),
+                            blurRadius: 12,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            banner.ctaText.isNotEmpty ? banner.ctaText : 'Order Now',
+                            style: GoogleFonts.poppins(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                              color: banner.accentColors.first,
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          Icon(
+                            Icons.arrow_forward_rounded,
+                            size: 14,
                             color: banner.accentColors.first,
                           ),
-                        ),
-                        const SizedBox(width: 4),
-                        Icon(
-                          Icons.arrow_forward_rounded,
-                          size: 14,
-                          color: banner.accentColors.first,
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
                 ],

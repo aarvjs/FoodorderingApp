@@ -15,11 +15,14 @@ import 'providers/restaurant_providers.dart';
 import 'widgets/glass_app_bar.dart';
 import 'widgets/animated_search_bar.dart';
 import 'widgets/hero_banner_carousel.dart';
-import 'widgets/premium_category_list.dart';
 import 'widgets/floating_particles_bg.dart';
+import 'widgets/premium_category_list.dart';
 import '../address/widgets/address_selection_bottom_sheet.dart';
+import '../../core/services/state_providers.dart';
 
-import '../address/providers/address_provider.dart';
+
+
+
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -177,8 +180,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
             SliverToBoxAdapter(
               child: GlassAppBar(
                 isDark: isDark,
+                unreadNotifications: ref.watch(unreadNotificationCountProvider),
                 onMenuTap: () => Scaffold.of(context).openDrawer(),
                 onNotificationTap: () => context.push('/notifications'),
+
                 onWalletTap: () {},
                 onProfileTap: () => context.push('/profile'),
                 onLocationTap: () {

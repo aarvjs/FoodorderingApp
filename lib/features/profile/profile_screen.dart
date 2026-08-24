@@ -28,23 +28,29 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
 
     final nameController = TextEditingController(text: userModel?.fullName ?? 'Arvind');
     File? selectedImage;
+    bool isSaving = false;
 
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
+      useRootNavigator: true,
       backgroundColor: Colors.transparent,
       builder: (ctx) => StatefulBuilder(
         builder: (context, setModalState) {
+          final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+          final safeBottomPadding = MediaQuery.of(context).padding.bottom;
+
           return Padding(
             padding: EdgeInsets.only(
-              bottom: MediaQuery.of(context).viewInsets.bottom,
+              bottom: bottomInset > 0 ? bottomInset : (safeBottomPadding + 20),
             ),
             child: Container(
-              padding: const EdgeInsets.all(24),
+              padding: const EdgeInsets.fromLTRB(24, 20, 24, 28),
               decoration: BoxDecoration(
                 color: isDark ? AppColors.darkCard : Colors.white,
                 borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
               ),
+
               child: SingleChildScrollView(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
@@ -70,7 +76,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
 
                     // Avatar Picker
                     GestureDetector(
-                      onTap: () async {
+                      onTap: isSaving ? null : () async {
                         final picker = ImagePicker();
                         final picked = await picker.pickImage(
                           source: ImageSource.gallery,
@@ -98,18 +104,20 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                                       image: FileImage(selectedImage!),
                                       fit: BoxFit.cover,
                                     )
-                                  : (userModel?.photoUrl != null
+                                  : (userModel?.photoUrl != null && userModel!.photoUrl!.isNotEmpty
                                       ? DecorationImage(
-                                          image: NetworkImage(userModel!.photoUrl!),
+                                          image: NetworkImage(userModel.photoUrl!),
                                           fit: BoxFit.cover,
                                         )
                                       : null),
                             ),
-                            child: selectedImage == null && userModel?.photoUrl == null
-                                ? const Center(
+                            child: selectedImage == null && (userModel?.photoUrl == null || userModel!.photoUrl!.isEmpty)
+                                ? Center(
                                     child: Text(
-                                      'A',
-                                      style: TextStyle(
+                                      (userModel?.fullName?.isNotEmpty == true)
+                                          ? userModel!.fullName![0].toUpperCase()
+                                          : 'A',
+                                      style: const TextStyle(
                                         fontSize: 32,
                                         fontWeight: FontWeight.bold,
                                         color: AppColors.primary,
@@ -135,6 +143,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                     // Name Input
                     TextField(
                       controller: nameController,
+                      enabled: !isSaving,
                       decoration: InputDecoration(
                         labelText: 'Full Name',
                         prefixIcon: const Icon(Iconsax.user),
@@ -148,27 +157,44 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                       width: double.infinity,
                       height: 50,
                       child: ElevatedButton(
-                        onPressed: () async {
-                          if (nameController.text.trim().isEmpty) {
+                        onPressed: isSaving ? null : () async {
+                          final trimmedName = nameController.text.trim();
+                          if (trimmedName.isEmpty) {
                             ScaffoldMessenger.of(context).showSnackBar(
                               const SnackBar(
-                                content: Text('Please enter your name'),
+                                content: Text('Please enter a valid full name'),
                                 backgroundColor: AppColors.error,
                               ),
                             );
                             return;
                           }
+
+                          // Check if anything actually changed
+                          final isNameChanged = trimmedName != (userModel?.fullName ?? '');
+                          final isImageChanged = selectedImage != null;
+
+                          if (!isNameChanged && !isImageChanged) {
+                            if (ctx.mounted) Navigator.pop(ctx);
+                            return;
+                          }
+
+                          setModalState(() {
+                            isSaving = true;
+                          });
+
                           final messenger = ScaffoldMessenger.of(context);
                           final success = await ref.read(authProvider.notifier).saveUserData(
-                            fullName: nameController.text.trim(),
+                            fullName: trimmedName,
                             imageFile: selectedImage,
                           );
+
                           if (ctx.mounted) Navigator.pop(ctx);
+
                           if (mounted) {
                             if (success) {
                               messenger.showSnackBar(
                                 const SnackBar(
-                                  content: Text('Profile changes saved successfully!'),
+                                  content: Text('Profile updated successfully!'),
                                   backgroundColor: AppColors.success,
                                 ),
                               );
@@ -187,10 +213,19 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                           backgroundColor: AppColors.primary,
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                         ),
-                        child: const Text(
-                          'Save Changes',
-                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
-                        ),
+                        child: isSaving
+                            ? const SizedBox(
+                                width: 22,
+                                height: 22,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2.5,
+                                  color: Colors.white,
+                                ),
+                              )
+                            : const Text(
+                                'Save Changes',
+                                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+                              ),
                       ),
                     ),
                   ],
@@ -202,6 +237,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       ),
     );
   }
+
 
   void _openManageAddressesSheet() {
     showModalBottomSheet(

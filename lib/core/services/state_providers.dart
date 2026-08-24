@@ -47,6 +47,13 @@ final userNotificationsStreamProvider = StreamProvider<List<AppNotificationModel
   return repo.streamCustomerNotifications(userId);
 });
 
+final unreadNotificationCountProvider = Provider<int>((ref) {
+  final notifsAsync = ref.watch(userNotificationsStreamProvider);
+  final notifs = notifsAsync.value ?? [];
+  return notifs.where((n) => !n.read).length;
+});
+
+
 // ==========================================
 // THEME STATE
 // ==========================================

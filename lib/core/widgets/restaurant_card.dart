@@ -5,7 +5,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:iconsax/iconsax.dart';
 import '../../models/restaurant.dart';
 import '../config/app_colors.dart';
-import '../services/state_providers.dart';
+
 
 class RestaurantCard extends ConsumerWidget {
   final Restaurant restaurant;
@@ -20,8 +20,7 @@ class RestaurantCard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final isFav = ref.watch(favoritesProvider).contains(restaurant.id);
-    final favNotifier = ref.read(favoritesProvider.notifier);
+
 
     return Container(
       margin: const EdgeInsets.only(bottom: 20),
@@ -68,25 +67,7 @@ class RestaurantCard extends ConsumerWidget {
                     ),
                   ),
                 ),
-                // Favorite Button
-                Positioned(
-                  top: 12,
-                  right: 12,
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.9),
-                      shape: BoxShape.circle,
-                    ),
-                    child: IconButton(
-                      icon: Icon(
-                        isFav ? Icons.favorite : Icons.favorite_border,
-                        color: isFav ? Colors.red : Colors.grey.shade800,
-                        size: 20,
-                      ),
-                      onPressed: () => favNotifier.toggleFavorite(restaurant.id),
-                    ),
-                  ),
-                ),
+
                 // Offer Badge
                 Positioned(
                   bottom: 12,
