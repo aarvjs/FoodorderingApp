@@ -31,6 +31,8 @@ class Order {
   final String paymentStatus; // "PENDING", "COD_PENDING", "SUCCESS", "PAID"
   final String? transactionId;
   final DateTime? paidAt;
+  final String orderType; // "DELIVERY", "TAKE_AWAY"
+  final bool hiddenForUser;
   final String status; // "PENDING", "ACCEPTED", "PREPARING", "READY", "OUT_FOR_DELIVERY", "DELIVERED", "REJECTED", "CANCELLED"
   final int? estimatedPrepMinutes;
   final String? rejectionReason;
@@ -69,6 +71,8 @@ class Order {
     this.paymentStatus = 'PENDING',
     this.transactionId,
     this.paidAt,
+    this.orderType = 'DELIVERY',
+    this.hiddenForUser = false,
     required this.status,
     this.estimatedPrepMinutes,
     this.rejectionReason,
@@ -78,6 +82,9 @@ class Order {
     this.cancelledAt,
     required this.orderDate,
   });
+
+  bool get isTakeAway => orderType.toUpperCase() == 'TAKE_AWAY';
+  bool get isDelivery => !isTakeAway;
 
 
   /// Map raw status code to active timeline step index
@@ -262,6 +269,10 @@ class Order {
                   ? DateTime.fromMillisecondsSinceEpoch((data['paidAt']['seconds'] as int) * 1000)
                   : null))
           : null,
+      orderType: (data['orderType'] ?? 'DELIVERY').toString().toUpperCase() == 'TAKE_AWAY'
+          ? 'TAKE_AWAY'
+          : ((data['orderType'] ?? 'DELIVERY').toString().toUpperCase() == 'TAKEAWAY' ? 'TAKE_AWAY' : 'DELIVERY'),
+      hiddenForUser: data['hiddenForUser'] == true,
       status: (data['status'] ?? 'PENDING').toString(),
       estimatedPrepMinutes: data['estimatedPrepMinutes'] != null
           ? (data['estimatedPrepMinutes'] as num).toInt()
@@ -317,6 +328,8 @@ class Order {
     String? paymentStatus,
     String? transactionId,
     DateTime? paidAt,
+    String? orderType,
+    bool? hiddenForUser,
     String? status,
     int? estimatedPrepMinutes,
     String? rejectionReason,
@@ -353,9 +366,10 @@ class Order {
       paymentStatus: paymentStatus ?? this.paymentStatus,
       transactionId: transactionId ?? this.transactionId,
       paidAt: paidAt ?? this.paidAt,
+      orderType: orderType ?? this.orderType,
+      hiddenForUser: hiddenForUser ?? this.hiddenForUser,
       status: status ?? this.status,
       estimatedPrepMinutes: estimatedPrepMinutes ?? this.estimatedPrepMinutes,
-      rejectionReason: rejectionReason ?? this.rejectionReason,
       cancelledBy: cancelledBy ?? this.cancelledBy,
       cancellationReason: cancellationReason ?? this.cancellationReason,
       cancellationNote: cancellationNote ?? this.cancellationNote,

@@ -4,6 +4,7 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/config/app_colors.dart';
+import '../../routes/app_routes.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../address/providers/address_provider.dart';
 
@@ -57,10 +58,8 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
 
       if (!hasAddress) {
         context.go('/location-permission');
-      } else if (userModel?.fullName == null || userModel!.fullName!.trim().isEmpty) {
-        context.go('/complete-profile');
       } else {
-        context.go('/home');
+        await AppRoutes.navigateAfterLocation(context, ref);
       }
     }
   }

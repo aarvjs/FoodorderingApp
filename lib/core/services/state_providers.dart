@@ -30,12 +30,13 @@ final userOrdersStreamProvider = StreamProvider<List<Order>>((ref) {
   final rewardRepo = ref.watch(rewardRepositoryProvider);
 
   return repo.streamCustomerOrders(userId).map((orders) {
-    for (final order in orders) {
+    final visibleOrders = orders.where((o) => !o.hiddenForUser).toList();
+    for (final order in visibleOrders) {
       if (order.isCompleted || order.status.toUpperCase() == 'DELIVERED') {
         rewardRepo.awardPointsForOrder(order);
       }
     }
-    return orders;
+    return visibleOrders;
   });
 });
 
@@ -82,6 +83,7 @@ class CartState {
   final double pointValue;
   final double? overrideDeliveryFee;
   final double taxPercentage;
+  final String selectedOrderType; // "DELIVERY", "TAKE_AWAY"
 
   const CartState({
     required this.items,
@@ -92,7 +94,10 @@ class CartState {
     this.pointValue = 0.25,
     this.overrideDeliveryFee,
     this.taxPercentage = 0.0,
+    this.selectedOrderType = 'DELIVERY',
   });
+
+  bool get isTakeAway => selectedOrderType.toUpperCase() == 'TAKE_AWAY';
 
   double get subtotal {
     return items.fold(0.0, (total, item) => total + item.totalPrice);
@@ -120,7 +125,7 @@ class CartState {
   }
 
   double get deliveryFee {
-    if (items.isEmpty) return 0.0;
+    if (items.isEmpty || isTakeAway) return 0.0;
     if (overrideDeliveryFee != null) return overrideDeliveryFee!;
     return subtotal > 500 ? 0.0 : 40.0; // Fallback
   }
@@ -147,6 +152,7 @@ class CartState {
     double? pointValue,
     double? overrideDeliveryFee,
     double? taxPercentage,
+    String? selectedOrderType,
     bool clearCoupon = false,
     bool clearReward = false,
   }) {
@@ -159,6 +165,7 @@ class CartState {
       pointValue: pointValue ?? this.pointValue,
       overrideDeliveryFee: overrideDeliveryFee ?? this.overrideDeliveryFee,
       taxPercentage: taxPercentage ?? this.taxPercentage,
+      selectedOrderType: selectedOrderType ?? this.selectedOrderType,
     );
   }
 }
@@ -181,6 +188,10 @@ class CouponApplyResult {
 class CartNotifier extends Notifier<CartState> {
   @override
   CartState build() => const CartState(items: []);
+
+  void setOrderType(String orderType) {
+    state = state.copyWith(selectedOrderType: orderType);
+  }
 
   bool isDifferentRestaurant(String restaurantId, {String? branchId}) {
     if (state.items.isEmpty) return false;

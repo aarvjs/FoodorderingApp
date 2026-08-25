@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:iconsax/iconsax.dart';
 import 'package:food_ordering_app/core/config/app_colors.dart';
+import 'package:food_ordering_app/routes/app_routes.dart';
 import 'package:food_ordering_app/auth/providers/auth_provider.dart';
 import 'package:food_ordering_app/features/address/providers/address_provider.dart';
 import 'package:food_ordering_app/auth/utils/auth_validators.dart';
@@ -39,10 +40,8 @@ class _OtpScreenState extends ConsumerState<OtpScreen> {
 
     if (!hasAddress) {
       context.go('/location-permission');
-    } else if (userModel?.fullName == null || userModel!.fullName!.trim().isEmpty) {
-      context.go('/complete-profile');
     } else {
-      context.go('/home');
+      AppRoutes.navigateAfterLocation(context, ref);
     }
   }
 

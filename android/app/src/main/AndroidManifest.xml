@@ -14,7 +14,10 @@
 
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_channel_id"
-            android:value="order_status_notifications_v2" />
+            android:value="order_status_notifications_v3" />
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_sound"
+            android:value="appsound" />
 
 
         <activity

@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:iconsax/iconsax.dart';
 import 'package:gap/gap.dart';
 import '../../../core/config/app_colors.dart';
+import '../../../routes/app_routes.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/location_provider.dart';
 import '../../../features/address/providers/address_provider.dart';
@@ -47,12 +48,7 @@ class _LocationPermissionScreenState extends ConsumerState<LocationPermissionScr
   }
 
   void _advanceNext() {
-    final userModel = ref.read(authProvider).userModel;
-    if (userModel?.fullName == null || userModel!.fullName!.trim().isEmpty) {
-      context.go('/complete-profile');
-    } else {
-      context.go('/home');
-    }
+    AppRoutes.navigateAfterLocation(context, ref);
   }
 
   Future<void> _handleFetchLocation() async {

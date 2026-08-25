@@ -87,13 +87,13 @@ class _CartScreenState extends ConsumerState<CartScreen> {
 
     final deliveryCalcAsync = ref.watch(deliveryChargeCalculationProvider);
     final deliveryCalcResult = deliveryCalcAsync.value;
-    final double effectiveDeliveryFee = deliveryCalcResult?.deliveryFee ?? cartState.deliveryFee;
+    final double effectiveDeliveryFee = cartState.isTakeAway ? 0.0 : (deliveryCalcResult?.deliveryFee ?? cartState.deliveryFee);
     final double taxPercentage = deliveryCalcResult?.taxPercentage ?? 0.0;
     final double taxableAmount = (cartState.subtotal - cartState.couponDiscount - cartState.rewardDiscount).clamp(0.0, double.infinity);
     final double effectiveGstAmount = taxPercentage > 0 ? double.parse((taxableAmount * (taxPercentage / 100.0)).toStringAsFixed(2)) : 0.0;
     final double calculatedTotal = (cartState.subtotal - cartState.couponDiscount - cartState.rewardDiscount + effectiveDeliveryFee + effectiveGstAmount).clamp(0.0, double.infinity);
     final double effectiveGrandTotal = double.parse(calculatedTotal.toStringAsFixed(2));
-    final bool isOutsideRadius = deliveryCalcResult?.isOutsideRadius == true;
+    final bool isOutsideRadius = !cartState.isTakeAway && (deliveryCalcResult?.isOutsideRadius == true);
 
 
 
@@ -152,6 +152,140 @@ class _CartScreenState extends ConsumerState<CartScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  // Order Type Selection Segment (Delivery vs Take Away)
+                  Container(
+                    margin: const EdgeInsets.only(bottom: 16),
+                    padding: const EdgeInsets.all(4),
+                    decoration: BoxDecoration(
+                      color: isDark ? AppColors.darkCard : Colors.grey.shade100,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: isDark ? AppColors.darkDivider : Colors.grey.shade300,
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: GestureDetector(
+                            onTap: () => cartNotifier.setOrderType('DELIVERY'),
+                            child: AnimatedContainer(
+                              duration: const Duration(milliseconds: 200),
+                              padding: const EdgeInsets.symmetric(vertical: 10),
+                              decoration: BoxDecoration(
+                                color: !cartState.isTakeAway
+                                    ? (isDark ? AppColors.darkPrimary : AppColors.primary)
+                                    : Colors.transparent,
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(
+                                    Iconsax.truck_fast,
+                                    size: 18,
+                                    color: !cartState.isTakeAway
+                                        ? (isDark ? AppColors.textDark : Colors.white)
+                                        : (isDark ? Colors.grey.shade400 : AppColors.textLight),
+                                  ),
+                                  const Gap(8),
+                                  Text(
+                                    'Delivery',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 13,
+                                      color: !cartState.isTakeAway
+                                          ? (isDark ? AppColors.textDark : Colors.white)
+                                          : (isDark ? Colors.grey.shade400 : AppColors.textDark),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                        Expanded(
+                          child: GestureDetector(
+                            onTap: () => cartNotifier.setOrderType('TAKE_AWAY'),
+                            child: AnimatedContainer(
+                              duration: const Duration(milliseconds: 200),
+                              padding: const EdgeInsets.symmetric(vertical: 10),
+                              decoration: BoxDecoration(
+                                color: cartState.isTakeAway
+                                    ? (isDark ? AppColors.darkPrimary : AppColors.primary)
+                                    : Colors.transparent,
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(
+                                    Iconsax.bag_2,
+                                    size: 18,
+                                    color: cartState.isTakeAway
+                                        ? (isDark ? AppColors.textDark : Colors.white)
+                                        : (isDark ? Colors.grey.shade400 : AppColors.textLight),
+                                  ),
+                                  const Gap(8),
+                                  Text(
+                                    'Take Away',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 13,
+                                      color: cartState.isTakeAway
+                                          ? (isDark ? AppColors.textDark : Colors.white)
+                                          : (isDark ? Colors.grey.shade400 : AppColors.textDark),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  if (cartState.isTakeAway) ...[
+                    Container(
+                      margin: const EdgeInsets.only(bottom: 16),
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: Colors.amber.shade50,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: Colors.amber.shade200),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(Iconsax.shop, color: Colors.amber.shade900, size: 22),
+                          const Gap(10),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Self Pickup Order (Take Away)',
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.amber.shade900,
+                                  ),
+                                ),
+                                const Gap(2),
+                                Text(
+                                  'You will pick up this order directly at ${cartState.items.first.restaurantName}. No delivery charges apply.',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color: Colors.amber.shade800,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+
                   // Itemized List Card
                   Container(
                     decoration: BoxDecoration(

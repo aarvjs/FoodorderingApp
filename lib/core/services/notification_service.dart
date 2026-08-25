@@ -5,6 +5,7 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:audioplayers/audioplayers.dart';
 
 @pragma('vm:entry-point')
 Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
@@ -18,13 +19,14 @@ class NotificationService {
 
   final FirebaseMessaging _fcm = FirebaseMessaging.instance;
   final FlutterLocalNotificationsPlugin _localNotifications = FlutterLocalNotificationsPlugin();
+  final AudioPlayer _audioPlayer = AudioPlayer();
 
-  static const String channelId = 'order_status_notifications_v2';
+  static const String channelId = 'order_status_notifications_v3';
   static const String channelName = 'Order Updates';
 
   bool _initialized = false;
   GlobalKey<NavigatorState>? navigatorKey;
-  String? _lastPlayedNotifId;
+  final Set<String> _processedNotifIds = {};
 
   Future<void> initialize({GlobalKey<NavigatorState>? key}) async {
     if (_initialized) return;
@@ -35,7 +37,7 @@ class NotificationService {
       // Register background messaging handler
       FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
 
-      // 1. Create Android Notification Channel (v2) with custom sound 'appsound'
+      // 1. Android Notification Channel (v3) with custom sound 'appsound'
       const AndroidNotificationChannel channel = AndroidNotificationChannel(
         channelId,
         channelName,
@@ -45,9 +47,17 @@ class NotificationService {
         sound: RawResourceAndroidNotificationSound('appsound'),
       );
 
-      await _localNotifications
-          .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
-          ?.createNotificationChannel(channel);
+      final androidPlugin = _localNotifications
+          .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
+
+      if (androidPlugin != null) {
+        // Clean up legacy channel IDs if present to enforce sound settings
+        try {
+          await androidPlugin.deleteNotificationChannel(channelId: 'order_status_notifications');
+          await androidPlugin.deleteNotificationChannel(channelId: 'order_status_notifications_v2');
+        } catch (_) {}
+        await androidPlugin.createNotificationChannel(channel);
+      }
 
       // 2. Local Notifications Initialization
       const AndroidInitializationSettings androidInitSettings =
@@ -170,14 +180,29 @@ class NotificationService {
           if (data == null) continue;
 
           final docId = change.doc.id;
-          if (_lastPlayedNotifId == docId) continue;
-          _lastPlayedNotifId = docId;
+          final orderId = (data['orderId'] ?? '').toString();
+          final status = (data['status'] ?? '').toString();
+
+          // Generate candidate keys for deduplication
+          final String primaryKey = docId;
+          final String secondaryKey = (orderId.isNotEmpty && status.isNotEmpty)
+              ? '${orderId}_$status'
+              : docId;
+
+          if (_processedNotifIds.contains(primaryKey) || _processedNotifIds.contains(secondaryKey)) {
+            continue;
+          }
 
           final String title = (data['title'] ?? 'Order Status Updated').toString();
           final String body = (data['body'] ?? 'Your order status has been updated.').toString();
-          final String orderId = (data['orderId'] ?? '').toString();
 
-          _showSystemNotification(docId, title, body, orderId);
+          _processForegroundNotification(
+            notifKey: primaryKey,
+            secondaryKey: secondaryKey,
+            title: title,
+            body: body,
+            orderId: orderId,
+          );
         }
       }
     });
@@ -190,12 +215,49 @@ class NotificationService {
     final title = notification?.title ?? data['title'] ?? 'Order Status Update';
     final body = notification?.body ?? data['body'] ?? 'Your order status has been updated.';
     final orderId = (data['orderId'] ?? '').toString();
-    final notifId = (message.messageId ?? DateTime.now().millisecondsSinceEpoch.toString());
+    final status = (data['status'] ?? '').toString();
 
-    _showSystemNotification(notifId, title, body, orderId);
+    final String primaryKey = data['id'] ?? message.messageId ?? DateTime.now().millisecondsSinceEpoch.toString();
+    final String secondaryKey = (orderId.isNotEmpty && status.isNotEmpty)
+        ? '${orderId}_$status'
+        : (data['id'] ?? primaryKey);
+
+    if (_processedNotifIds.contains(primaryKey) || _processedNotifIds.contains(secondaryKey)) {
+      return;
+    }
+
+    _processForegroundNotification(
+      notifKey: primaryKey,
+      secondaryKey: secondaryKey,
+      title: title,
+      body: body,
+      orderId: orderId,
+    );
   }
 
-  void _showSystemNotification(String notifId, String title, String body, String orderId) {
+  void _processForegroundNotification({
+    required String notifKey,
+    required String secondaryKey,
+    required String title,
+    required String body,
+    required String orderId,
+  }) {
+    // 1. Mark as processed for deduplication
+    _processedNotifIds.add(notifKey);
+    _processedNotifIds.add(secondaryKey);
+    if (notifKey.startsWith('notif_')) {
+      // Strip 'notif_' prefix if key format is notif_orderId_status
+      final stripped = notifKey.replaceFirst('notif_', '');
+      _processedNotifIds.add(stripped);
+    }
+    if (_processedNotifIds.length > 200) {
+      _processedNotifIds.remove(_processedNotifIds.first);
+    }
+
+    // 2. Play bundled MP3 sound ONCE explicitly for ~2 seconds
+    _playForegroundSound();
+
+    // 3. Trigger Local Notification UI Banner
     const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
       channelId,
       channelName,
@@ -209,14 +271,28 @@ class NotificationService {
 
     const NotificationDetails platformDetails = NotificationDetails(android: androidDetails);
 
-    final int id = notifId.hashCode.abs() % 100000;
+    final int notificationId = notifKey.hashCode.abs() % 100000;
     _localNotifications.show(
-      id: id,
+      id: notificationId,
       title: title,
       body: body,
       notificationDetails: platformDetails,
       payload: orderId,
     );
+  }
+
+  Future<void> _playForegroundSound() async {
+    try {
+      await _audioPlayer.stop();
+      await _audioPlayer.play(AssetSource('sounds/appsound.mp3'));
+      
+      // Stop sound playback after ~2.2 seconds to guarantee non-looping 2s sound
+      Future.delayed(const Duration(milliseconds: 2200), () {
+        _audioPlayer.stop();
+      });
+    } catch (e) {
+      debugPrint('Error playing foreground notification sound: $e');
+    }
   }
 
   void _handleNotificationTap(String orderId) {

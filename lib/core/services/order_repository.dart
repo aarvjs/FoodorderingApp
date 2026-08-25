@@ -70,6 +70,7 @@ class OrderRepository {
     String? paidAt,
     String? appliedCoupon,
     String? appliedOfferId,
+    String orderType = 'DELIVERY',
   }) async {
     // Idempotency check: prevent duplicate orders for the same transaction ID
     if (transactionId != null && transactionId.isNotEmpty) {
@@ -191,7 +192,8 @@ class OrderRepository {
       'paymentStatus': finalPaymentStatus,
       'transactionId': transactionId,
       'paidAt': paidAt,
-      'orderType': 'DELIVERY',
+      'orderType': orderType,
+      'hiddenForUser': false,
       'status': 'PENDING',
       'createdAt': nowIso,
       'updatedAt': nowIso,
@@ -395,6 +397,20 @@ class OrderRepository {
       return {'success': true};
     } catch (e) {
       return {'success': false, 'message': 'Failed to cancel order: $e'};
+    }
+  }
+
+  /// Hide an order from customer's visible order history without deleting backend record
+  Future<bool> hideOrderFromUserHistory(String orderId) async {
+    try {
+      await _firestore.collection(_collectionName).doc(orderId).update({
+        'hiddenForUser': true,
+        'updatedAt': DateTime.now().toIso8601String(),
+      });
+      return true;
+    } catch (e) {
+      debugPrint('[OrderRepository] hideOrderFromUserHistory error: $e');
+      return false;
     }
   }
 }

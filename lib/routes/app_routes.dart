@@ -23,8 +23,13 @@ import '../auth/screens/login/login_screen.dart';
 import '../auth/screens/otp/otp_screen.dart';
 import '../auth/screens/location/location_permission_screen.dart';
 import '../auth/screens/location/location_confirm_screen.dart';
+import '../auth/screens/notification/notification_permission_screen.dart';
 import '../auth/screens/profile/complete_profile_screen.dart';
 import '../features/bookings/my_bookings_screen.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:permission_handler/permission_handler.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import '../auth/providers/auth_provider.dart';
 
 import '../features/referral/referral_screen.dart';
 import '../features/rewards/rewards_screen.dart';
@@ -36,6 +41,7 @@ class AppRoutes {
   static const String otp = '/otp';
   static const String locationPermission = '/location-permission';
   static const String locationConfirm = '/location-confirm';
+  static const String notificationPermission = '/notification-permission';
   static const String completeProfile = '/complete-profile';
 
   static const String home = '/home';
@@ -55,6 +61,27 @@ class AppRoutes {
   static const String premium = '/premium';
   static const String bookings = '/bookings';
   static const String referral = '/referral';
+
+  static Future<void> navigateAfterLocation(BuildContext context, WidgetRef ref) async {
+    final prefs = await SharedPreferences.getInstance();
+    final bool hasPrompted = prefs.getBool('has_prompted_notification_permission') ?? false;
+    final status = await Permission.notification.status;
+
+    final bool shouldPromptNotification = !hasPrompted && !status.isGranted;
+
+    if (context.mounted) {
+      if (shouldPromptNotification) {
+        context.go(notificationPermission);
+      } else {
+        final userModel = ref.read(authProvider).userModel;
+        if (userModel?.fullName == null || userModel!.fullName!.trim().isEmpty) {
+          context.go(completeProfile);
+        } else {
+          context.go(home);
+        }
+      }
+    }
+  }
 
   static final GlobalKey<NavigatorState> rootNavigatorKey = GlobalKey<NavigatorState>();
 
@@ -87,6 +114,10 @@ class AppRoutes {
       GoRoute(
         path: locationConfirm,
         builder: (context, state) => const LocationConfirmScreen(),
+      ),
+      GoRoute(
+        path: notificationPermission,
+        builder: (context, state) => const NotificationPermissionScreen(),
       ),
       GoRoute(
         path: completeProfile,

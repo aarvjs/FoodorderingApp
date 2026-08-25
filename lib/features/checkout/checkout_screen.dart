@@ -27,11 +27,6 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   bool _isPlacingOrder = false;
   final TextEditingController _deliveryAddressController = TextEditingController();
 
-  final List<Map<String, dynamic>> _paymentMethods = [
-    {'id': 'ONLINE', 'name': 'Online Payment — PayU', 'icon': Iconsax.card_pos},
-    {'id': 'COD', 'name': 'Cash on Delivery (COD)', 'icon': Iconsax.wallet_3},
-  ];
-
   @override
   void initState() {
     super.initState();
@@ -146,8 +141,12 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     final cartState = ref.read(cartProvider);
     if (cartState.items.isEmpty) return;
 
-    final manualAddress = _deliveryAddressController.text.trim();
-    if (manualAddress.isEmpty) {
+    final isTakeAway = cartState.isTakeAway;
+    String manualAddress = _deliveryAddressController.text.trim();
+
+    if (isTakeAway) {
+      manualAddress = '[TAKE AWAY] Self Pickup at ${cartState.items.first.restaurantName}';
+    } else if (manualAddress.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Please enter your complete delivery address.'),
@@ -179,10 +178,10 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     final String? rawPhone = authState.userModel?.phone;
     final customerPhone = (rawPhone != null && rawPhone.isNotEmpty) ? rawPhone : '+91 9876543210';
 
-
     final deliveryCalcAsync = ref.read(deliveryChargeCalculationProvider);
     final deliveryCalcResult = deliveryCalcAsync.value;
-    if (deliveryCalcResult?.isOutsideRadius == true) {
+
+    if (!isTakeAway && deliveryCalcResult?.isOutsideRadius == true) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
@@ -196,8 +195,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       return;
     }
 
-    final double effectiveDeliveryFee = deliveryCalcResult?.deliveryFee ?? cartState.deliveryFee;
-    final double effectiveDistanceKm = deliveryCalcResult?.distanceKm ?? 0.0;
+    final double effectiveDeliveryFee = isTakeAway ? 0.0 : (deliveryCalcResult?.deliveryFee ?? cartState.deliveryFee);
+    final double effectiveDistanceKm = isTakeAway ? 0.0 : (deliveryCalcResult?.distanceKm ?? 0.0);
     final double taxPercentage = deliveryCalcResult?.taxPercentage ?? 0.0;
     final double taxableAmount = (cartState.subtotal - cartState.couponDiscount - cartState.rewardDiscount).clamp(0.0, double.infinity);
     final double effectiveGstAmount = taxPercentage > 0 ? double.parse((taxableAmount * (taxPercentage / 100.0)).toStringAsFixed(2)) : 0.0;
@@ -255,6 +254,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
               paymentGateway: 'PAYU',
               paymentStatus: 'SUCCESS',
               transactionId: txnId,
+              orderType: isTakeAway ? 'TAKE_AWAY' : 'DELIVERY',
             );
           } else {
             setState(() {
@@ -309,6 +309,29 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
           );
         },
       );
+    } else if (isTakeAway || _selectedPaymentMethod == 'PAY_AT_STORE') {
+      // Pay at Store / Restaurant flow
+      await _finalizePaidOrder(
+        restId: restId,
+        branchId: branchId,
+        restName: restName,
+        customerId: customerId,
+        customerName: customerName,
+        customerPhone: customerPhone,
+        manualAddress: manualAddress,
+        lat: lat,
+        lng: lng,
+        cartState: cartState,
+        effectiveGstAmount: effectiveGstAmount,
+        taxPercentage: taxPercentage,
+        effectiveDeliveryFee: effectiveDeliveryFee,
+        effectiveDistanceKm: effectiveDistanceKm,
+        effectiveGrandTotal: effectiveGrandTotal,
+        paymentMethod: 'PAY_AT_STORE',
+        paymentGateway: 'STORE',
+        paymentStatus: 'PENDING',
+        orderType: 'TAKE_AWAY',
+      );
     } else {
       // Cash on Delivery flow
       await _finalizePaidOrder(
@@ -330,6 +353,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         paymentMethod: 'CASH_ON_DELIVERY',
         paymentGateway: 'COD',
         paymentStatus: 'COD_PENDING',
+        orderType: 'DELIVERY',
       );
     }
   }
@@ -354,6 +378,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     required String paymentGateway,
     required String paymentStatus,
     String? transactionId,
+    String orderType = 'DELIVERY',
   }) async {
     try {
       final orderRepo = ref.read(orderRepositoryProvider);
@@ -386,6 +411,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         paidAt: paymentStatus == 'SUCCESS' ? DateTime.now().toIso8601String() : null,
         appliedCoupon: cartState.appliedCoupon,
         appliedOfferId: cartState.appliedOfferId,
+        orderType: orderType,
       );
 
 
@@ -431,20 +457,36 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     final addresses = addressState.addresses;
     final cartState = ref.watch(cartProvider);
 
+    final isTakeAway = cartState.isTakeAway;
+    final currentPaymentMethods = isTakeAway
+        ? const [
+            {'id': 'PAY_AT_STORE', 'name': 'Pay at Store / Restaurant', 'icon': Iconsax.shop},
+            {'id': 'ONLINE', 'name': 'Online Payment — PayU', 'icon': Iconsax.card_pos},
+          ]
+        : const [
+            {'id': 'ONLINE', 'name': 'Online Payment — PayU', 'icon': Iconsax.card_pos},
+            {'id': 'COD', 'name': 'Cash on Delivery (COD)', 'icon': Iconsax.wallet_3},
+          ];
+
+    // Reset payment method if switching to take away and invalid selection
+    if (isTakeAway && _selectedPaymentMethod == 'COD') {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) setState(() => _selectedPaymentMethod = 'PAY_AT_STORE');
+      });
+    }
+
     final deliveryCalcAsync = ref.watch(deliveryChargeCalculationProvider);
     final deliveryCalcResult = deliveryCalcAsync.value;
-    final double effectiveDeliveryFee = deliveryCalcResult?.deliveryFee ?? cartState.deliveryFee;
+    final double effectiveDeliveryFee = isTakeAway ? 0.0 : (deliveryCalcResult?.deliveryFee ?? cartState.deliveryFee);
     final double taxPercentage = deliveryCalcResult?.taxPercentage ?? 0.0;
     final double taxableAmount = (cartState.subtotal - cartState.couponDiscount).clamp(0.0, double.infinity);
     final double effectiveGstAmount = taxPercentage > 0 ? double.parse((taxableAmount * (taxPercentage / 100.0)).toStringAsFixed(2)) : 0.0;
     final double computedTotal = cartState.subtotal - cartState.couponDiscount + effectiveDeliveryFee + effectiveGstAmount;
     final double effectiveGrandTotal = double.parse(computedTotal.toStringAsFixed(2));
-    final bool isOutsideRadius = deliveryCalcResult?.isOutsideRadius == true;
-
-
+    final bool isOutsideRadius = !isTakeAway && (deliveryCalcResult?.isOutsideRadius == true);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Checkout Details')),
+      appBar: AppBar(title: Text(isTakeAway ? 'Take Away Checkout' : 'Checkout Details')),
       body: SafeArea(
         child: Stack(
           children: [
@@ -454,184 +496,254 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Section Delivery Address
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        'Delivery Address',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                          color: isDark ? Colors.white : AppColors.textDark,
+                  if (isTakeAway) ...[
+                    // Take Away Store Pickup Location Card
+                    Container(
+                      margin: const EdgeInsets.only(bottom: 20),
+                      decoration: BoxDecoration(
+                        color: isDark ? AppColors.darkCard : Colors.amber.shade50.withValues(alpha: 0.5),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                          color: Colors.amber.shade300,
+                          width: 1.5,
                         ),
                       ),
-                      TextButton.icon(
-                        icon: const Icon(Icons.add, size: 16),
-                        label: const Text('Add New', style: TextStyle(fontSize: 12)),
-                        onPressed: () => _showAddAddressSheet(context),
-                      ),
-                    ],
-                  ),
-                  const Gap(8),
-
-                  // Addresses List
-                  ListView.builder(
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    itemCount: addresses.length,
-                    itemBuilder: (context, index) {
-                      final addr = addresses[index];
-                      final isSelected = _selectedAddressId == addr.id;
-                      return GestureDetector(
-                        onTap: () {
-                          setState(() {
-                            _selectedAddressId = addr.id;
-                            _deliveryAddressController.text = addr.fullAddress;
-                          });
-                        },
-                        child: Container(
-                          margin: const EdgeInsets.only(bottom: 12),
-                          padding: const EdgeInsets.all(16),
-                          decoration: BoxDecoration(
-                            color: isDark ? AppColors.darkCard : Colors.white,
-                            borderRadius: BorderRadius.circular(16),
-                            border: Border.all(
-                              color: isSelected
-                                  ? (isDark ? AppColors.darkPrimary : AppColors.primary)
-                                  : (isDark ? AppColors.darkDivider : Colors.grey.shade100),
-                              width: 1.5,
-                            ),
-                          ),
-                          child: Row(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
                             children: [
-                              Icon(
-                                addr.label == 'Home' ? Iconsax.house : Iconsax.briefcase,
-                                color: isSelected 
-                                    ? (isDark ? AppColors.darkPrimary : AppColors.primary)
-                                    : AppColors.textLight,
-                              ),
-                              const Gap(16),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Row(
-                                      children: [
-                                        Text(
-                                          addr.label,
-                                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-                                        ),
-                                        if (addr.isDefault) ...[
-                                          const Gap(8),
-                                          Container(
-                                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                            decoration: BoxDecoration(
-                                              color: AppColors.success.withValues(alpha: 0.15),
-                                              borderRadius: BorderRadius.circular(4),
-                                            ),
-                                            child: const Text(
-                                              'DEFAULT',
-                                              style: TextStyle(color: AppColors.success, fontSize: 8, fontWeight: FontWeight.bold),
-                                            ),
-                                          ),
-                                        ],
-                                      ],
-                                    ),
-                                    const Gap(4),
-                                    Text(
-                                      '${addr.addressLine}, ${addr.landmark}, ${addr.city} - ${addr.zipCode}',
-                                      maxLines: 2,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: TextStyle(
-                                        fontSize: 12,
-                                        color: isDark ? Colors.grey.shade400 : AppColors.textLight,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
+                              const Icon(Iconsax.shop, size: 20, color: Color(0xFFD97706)),
                               const Gap(8),
-                              Icon(
-                                isSelected ? Icons.radio_button_checked : Icons.radio_button_off,
-                                color: isSelected
-                                    ? (isDark ? AppColors.darkPrimary : AppColors.primary)
-                                    : AppColors.textLight,
+                              const Text(
+                                'Store Pickup Location (Take Away)',
+                                style: TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.bold,
+                                  color: Color(0xFF92400E),
+                                ),
                               ),
                             ],
                           ),
-                        ),
-                      );
-                    },
-                  ),
-
-                  const Gap(8),
-
-                  // Delivery Address Manual Input Card (Required)
-                  Container(
-                    margin: const EdgeInsets.only(bottom: 20),
-                    decoration: BoxDecoration(
-                      color: isDark ? AppColors.darkCard : Colors.white,
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(
-                        color: isDark ? AppColors.darkDivider : Colors.grey.shade200,
-                        width: 1.5,
+                          const Gap(10),
+                          Text(
+                            cartState.items.first.restaurantName,
+                            style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16),
+                          ),
+                          const Gap(4),
+                          Text(
+                            'Restaurant: ${cartState.items.first.restaurantName}',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: isDark ? Colors.grey.shade400 : AppColors.textLight,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          const Gap(8),
+                          Container(
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              color: isDark ? Colors.black26 : Colors.white,
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(color: Colors.amber.shade200),
+                            ),
+                            child: const Row(
+                              children: [
+                                Icon(Icons.info_outline_rounded, size: 16, color: Color(0xFFD97706)),
+                                Gap(8),
+                                Expanded(
+                                  child: Text(
+                                    'Visit the restaurant/branch counter with your Order ID to collect your order & make payment.',
+                                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF92400E)),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                  ] else ...[
+                    // Section Delivery Address
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Row(
-                          children: [
-                            const Icon(Iconsax.location5, size: 18, color: AppColors.primary),
-                            const Gap(8),
-                            Text(
-                              'Delivery Address *',
-                              style: TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.bold,
-                                color: isDark ? Colors.white : AppColors.textDark,
-                              ),
-                            ),
-                          ],
-                        ),
-                        const Gap(10),
-                        TextField(
-                          controller: _deliveryAddressController,
-                          maxLines: 3,
+                        Text(
+                          'Delivery Address',
                           style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
                             color: isDark ? Colors.white : AppColors.textDark,
                           ),
-                          decoration: InputDecoration(
-                            hintText: 'Enter your complete delivery address (e.g. Flat/House No, Street, Landmark, Area, City)',
-                            hintStyle: TextStyle(
-                              fontSize: 12,
-                              color: isDark ? Colors.grey.shade500 : Colors.grey.shade400,
-                            ),
-                            filled: true,
-                            fillColor: isDark ? Colors.black26 : Colors.grey.shade50,
-                            contentPadding: const EdgeInsets.all(12),
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                              borderSide: BorderSide(
-                                color: isDark ? Colors.grey.shade800 : Colors.grey.shade300,
-                              ),
-                            ),
-                            focusedBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                              borderSide: const BorderSide(
-                                color: AppColors.primary,
-                                width: 1.5,
-                              ),
-                            ),
-                          ),
+                        ),
+                        TextButton.icon(
+                          icon: const Icon(Icons.add, size: 16),
+                          label: const Text('Add New', style: TextStyle(fontSize: 12)),
+                          onPressed: () => _showAddAddressSheet(context),
                         ),
                       ],
                     ),
-                  ),
+                    const Gap(8),
+
+                    // Addresses List
+                    ListView.builder(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      itemCount: addresses.length,
+                      itemBuilder: (context, index) {
+                        final addr = addresses[index];
+                        final isSelected = _selectedAddressId == addr.id;
+                        return GestureDetector(
+                          onTap: () {
+                            setState(() {
+                              _selectedAddressId = addr.id;
+                              _deliveryAddressController.text = addr.fullAddress;
+                            });
+                          },
+                          child: Container(
+                            margin: const EdgeInsets.only(bottom: 12),
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: isDark ? AppColors.darkCard : Colors.white,
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(
+                                color: isSelected
+                                    ? (isDark ? AppColors.darkPrimary : AppColors.primary)
+                                    : (isDark ? AppColors.darkDivider : Colors.grey.shade100),
+                                width: 1.5,
+                              ),
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  addr.label == 'Home' ? Iconsax.house : Iconsax.briefcase,
+                                  color: isSelected 
+                                      ? (isDark ? AppColors.darkPrimary : AppColors.primary)
+                                      : AppColors.textLight,
+                                ),
+                                const Gap(16),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Row(
+                                        children: [
+                                          Text(
+                                            addr.label,
+                                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                                          ),
+                                          if (addr.isDefault) ...[
+                                            const Gap(8),
+                                            Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                              decoration: BoxDecoration(
+                                                color: AppColors.success.withValues(alpha: 0.15),
+                                                borderRadius: BorderRadius.circular(4),
+                                              ),
+                                              child: const Text(
+                                                'DEFAULT',
+                                                style: TextStyle(color: AppColors.success, fontSize: 8, fontWeight: FontWeight.bold),
+                                              ),
+                                            ),
+                                          ],
+                                        ],
+                                      ),
+                                      const Gap(4),
+                                      Text(
+                                        '${addr.addressLine}, ${addr.landmark}, ${addr.city} - ${addr.zipCode}',
+                                        maxLines: 2,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          color: isDark ? Colors.grey.shade400 : AppColors.textLight,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const Gap(8),
+                                Icon(
+                                  isSelected ? Icons.radio_button_checked : Icons.radio_button_off,
+                                  color: isSelected
+                                      ? (isDark ? AppColors.darkPrimary : AppColors.primary)
+                                      : AppColors.textLight,
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+
+                    const Gap(8),
+
+                    // Delivery Address Manual Input Card (Required)
+                    Container(
+                      margin: const EdgeInsets.only(bottom: 20),
+                      decoration: BoxDecoration(
+                        color: isDark ? AppColors.darkCard : Colors.white,
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                          color: isDark ? AppColors.darkDivider : Colors.grey.shade200,
+                          width: 1.5,
+                        ),
+                      ),
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              const Icon(Iconsax.location5, size: 18, color: AppColors.primary),
+                              const Gap(8),
+                              Text(
+                                'Delivery Address *',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.bold,
+                                  color: isDark ? Colors.white : AppColors.textDark,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const Gap(10),
+                          TextField(
+                            controller: _deliveryAddressController,
+                            maxLines: 3,
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: isDark ? Colors.white : AppColors.textDark,
+                            ),
+                            decoration: InputDecoration(
+                              hintText: 'Enter your complete delivery address (e.g. Flat/House No, Street, Landmark, Area, City)',
+                              hintStyle: TextStyle(
+                                fontSize: 12,
+                                color: isDark ? Colors.grey.shade500 : Colors.grey.shade400,
+                              ),
+                              filled: true,
+                              fillColor: isDark ? Colors.black26 : Colors.grey.shade50,
+                              contentPadding: const EdgeInsets.all(12),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: BorderSide(
+                                  color: isDark ? Colors.grey.shade800 : Colors.grey.shade300,
+                                ),
+                              ),
+                              focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: const BorderSide(
+                                  color: AppColors.primary,
+                                  width: 1.5,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
 
                   const Gap(16),
 
@@ -659,7 +771,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                     ),
                     padding: const EdgeInsets.symmetric(vertical: 8),
                     child: Column(
-                      children: _paymentMethods.map((method) {
+                      children: currentPaymentMethods.map((method) {
                         final isSelected = _selectedPaymentMethod == method['id'];
                         return ListTile(
                           leading: Icon(
@@ -727,9 +839,11 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                           ),
 
                         _buildRecapRow(
-                          deliveryCalcResult?.distanceKm != null && deliveryCalcResult!.distanceKm > 0
-                              ? 'Delivery Charge (${deliveryCalcResult.distanceKm.toStringAsFixed(1)} km)'
-                              : 'Delivery Charge',
+                          isTakeAway
+                              ? 'Delivery Charge'
+                              : (deliveryCalcResult?.distanceKm != null && deliveryCalcResult!.distanceKm > 0
+                                  ? 'Delivery Charge (${deliveryCalcResult.distanceKm.toStringAsFixed(1)} km)'
+                                  : 'Delivery Charge'),
                           effectiveDeliveryFee == 0 ? 'FREE' : '₹${effectiveDeliveryFee.toStringAsFixed(2)}',
                           isDark,
                         ),
@@ -803,7 +917,13 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                 child: CustomButton(
                   text: isOutsideRadius
                       ? 'Outside Delivery Area'
-                      : (_selectedPaymentMethod == 'ONLINE' ? 'Pay Now & Place Order (PayU)' : 'Confirm & Place Order (COD)'),
+                      : (isTakeAway
+                          ? (_selectedPaymentMethod == 'ONLINE'
+                              ? 'Pay Now & Place Take Away Order'
+                              : 'Confirm Take Away Order (Pay at Store)')
+                          : (_selectedPaymentMethod == 'ONLINE'
+                              ? 'Pay Now & Place Order (PayU)'
+                              : 'Confirm & Place Order (COD)')),
                   isLoading: _isPlacingOrder,
                   onPressed: isOutsideRadius
                       ? () {

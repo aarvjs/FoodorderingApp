@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:iconsax/iconsax.dart';
 import 'package:gap/gap.dart';
+import 'package:permission_handler/permission_handler.dart';
 import '../../core/config/app_colors.dart';
 import '../../core/services/state_providers.dart';
 
@@ -66,6 +67,19 @@ class SettingsScreen extends ConsumerWidget {
                     trailing: const Icon(Icons.chevron_right_rounded),
                     onTap: () {
                       _showLanguageDialog(context, isDark);
+                    },
+                  ),
+
+                  _buildDivider(isDark),
+
+                  // Push Notifications tile
+                  ListTile(
+                    leading: Icon(Iconsax.notification, color: isDark ? AppColors.darkPrimary : AppColors.primary),
+                    title: const Text('Order Notifications', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                    subtitle: const Text('Manage status & alert permissions in App Settings', style: TextStyle(fontSize: 11)),
+                    trailing: const Icon(Icons.chevron_right_rounded),
+                    onTap: () {
+                      openAppSettings();
                     },
                   ),
                 ],
