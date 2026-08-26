@@ -405,25 +405,6 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                                   fontWeight: FontWeight.w500,
                                 ),
                               ),
-                              const Gap(8),
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                decoration: BoxDecoration(
-                                  gradient: const LinearGradient(
-                                    colors: [Color(0xFFFFD700), Color(0xFFFF8C00)],
-                                  ),
-                                  borderRadius: BorderRadius.circular(10),
-                                ),
-                                child: const Text(
-                                  'GOLD MEMBER 🏆',
-                                  style: TextStyle(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 10,
-                                    letterSpacing: 0.5,
-                                  ),
-                                ),
-                              ),
                             ],
                           ),
                         ),

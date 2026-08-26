@@ -16,7 +16,6 @@ import 'widgets/glass_app_bar.dart';
 import 'widgets/animated_search_bar.dart';
 import 'widgets/hero_banner_carousel.dart';
 import 'widgets/floating_particles_bg.dart';
-import 'widgets/premium_category_list.dart';
 import '../address/widgets/address_selection_bottom_sheet.dart';
 import '../../core/services/state_providers.dart';
 
@@ -33,7 +32,6 @@ class HomeScreen extends ConsumerStatefulWidget {
 
 class _HomeScreenState extends ConsumerState<HomeScreen>
     with SingleTickerProviderStateMixin {
-  String? _selectedCategory;
   String _activeFilter = 'All';
   late AnimationController _greetingController;
 
@@ -127,28 +125,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
 
     // Apply Filter Logic
     var filteredRestaurants = allRestaurants;
-    if (_selectedCategory != null) {
-      final catMap = {
-        'Pizza': 'Pizza',
-        'Burger': 'Burger',
-        'Biryani': 'Biryani',
-        'Chinese': 'Chinese',
-        'Roll': 'Roll',
-        'Cake': 'Cake',
-        'Coffee': 'Coffee',
-        'Ice Cream': 'Ice Cream',
-        'Healthy': 'Healthy',
-        'Desserts': 'Desserts',
-        'Drinks': 'Coffee',
-        'Fast Food': 'Burger',
-        'Mexican': 'Roll',
-        'South Indian': 'Biryani',
-      };
-      final mappedCat = catMap[_selectedCategory] ?? _selectedCategory!;
-      filteredRestaurants = filteredRestaurants
-          .where((r) => r.categories.contains(mappedCat) || r.categories.contains(_selectedCategory))
-          .toList();
-    }
 
     if (_activeFilter == 'Offers') {
       filteredRestaurants =
@@ -251,66 +227,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
 
                   // Hero Banner Carousel
                   HeroBannerCarousel(isDark: isDark),
-
-                  const Gap(28),
-
-                  // Categories Section
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 20),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          "What are you\ncraving? 🍽️",
-                          style: GoogleFonts.poppins(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w800,
-                            height: 1.2,
-                            color: isDark ? Colors.white : AppColors.textDark,
-                          ),
-                        ),
-                        if (_selectedCategory != null)
-                          GestureDetector(
-                            onTap: () =>
-                                setState(() => _selectedCategory = null),
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 12, vertical: 6),
-                              decoration: BoxDecoration(
-                                gradient: const LinearGradient(
-                                  colors: [
-                                    AppColors.primary,
-                                    AppColors.secondary
-                                  ],
-                                ),
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Text(
-                                'Clear',
-                                style: GoogleFonts.poppins(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w700,
-                                  color: Colors.white,
-                                ),
-                              ),
-                            ),
-                          ),
-                      ],
-                    ),
-                  )
-                      .animate()
-                      .fadeIn(duration: 500.ms, delay: 300.ms),
-
-                  const Gap(14),
-
-                  // Premium Category List
-                  PremiumCategoryList(
-                    isDark: isDark,
-                    selectedCategory: _selectedCategory,
-                    onCategorySelected: (cat) {
-                      setState(() => _selectedCategory = cat);
-                    },
-                  ),
 
                   const Gap(28),
 
@@ -688,9 +604,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Text(
-                          _selectedCategory == null
-                              ? 'Outlets Delivering To You'
-                              : '$_selectedCategory Restaurants',
+                          'Outlets Delivering To You',
                           style: GoogleFonts.poppins(
                             fontSize: 16,
                             fontWeight: FontWeight.w800,

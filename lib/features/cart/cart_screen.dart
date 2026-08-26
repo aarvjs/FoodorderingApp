@@ -23,14 +23,6 @@ class CartScreen extends ConsumerStatefulWidget {
 
 class _CartScreenState extends ConsumerState<CartScreen> {
   final TextEditingController _couponController = TextEditingController();
-  String _selectedInstruction = '';
-
-  final List<Map<String, dynamic>> _deliveryInstructions = [
-    {'icon': Iconsax.notification, 'label': 'Avoid ringing bell'},
-    {'icon': Iconsax.shield_security, 'label': 'Leave at gate'},
-    {'icon': Iconsax.call, 'label': 'Avoid calling'},
-    {'icon': Iconsax.house, 'label': 'Leave with security'},
-  ];
 
   @override
   void dispose() {
@@ -893,80 +885,6 @@ class _CartScreenState extends ConsumerState<CartScreen> {
                   ),
 
                   const Gap(20),
-
-                  // Delivery Instructions
-                  Text(
-                    'Delivery Instructions',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: isDark ? Colors.white : AppColors.textDark,
-                    ),
-                  ),
-                  const Gap(12),
-                  SizedBox(
-                    height: 70,
-                    child: ListView.builder(
-                      scrollDirection: Axis.horizontal,
-                      physics: const BouncingScrollPhysics(),
-                      itemCount: _deliveryInstructions.length,
-                      itemBuilder: (context, index) {
-                        final instruction = _deliveryInstructions[index];
-                        final isSel = _selectedInstruction == instruction['label'];
-                        return GestureDetector(
-                          onTap: () {
-                            setState(() {
-                              _selectedInstruction = isSel ? '' : instruction['label'] as String;
-                            });
-                          },
-                          child: Container(
-                            width: 130,
-                            margin: const EdgeInsets.only(right: 12),
-                            padding: const EdgeInsets.all(10),
-                            decoration: BoxDecoration(
-                              color: isSel
-                                  ? (isDark ? AppColors.darkPrimary : AppColors.primary)
-                                  : (isDark ? AppColors.darkCard : Colors.white),
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(
-                                color: isSel 
-                                    ? Colors.transparent 
-                                    : (isDark ? AppColors.darkDivider : Colors.grey.shade200),
-                              ),
-                            ),
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Icon(
-                                  instruction['icon'] as IconData,
-                                  size: 18,
-                                  color: isSel 
-                                      ? (isDark ? AppColors.textDark : Colors.white) 
-                                      : (isDark ? AppColors.darkPrimary : AppColors.primary),
-                                ),
-                                const Gap(6),
-                                Text(
-                                  instruction['label'] as String,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.bold,
-                                    color: isSel 
-                                        ? (isDark ? AppColors.textDark : Colors.white) 
-                                        : (isDark ? Colors.white : AppColors.textDark),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-
-                  const Gap(24),
 
                   // Bill Details Summary Card
                   Container(

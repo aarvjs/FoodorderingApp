@@ -5,7 +5,6 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:audioplayers/audioplayers.dart';
 
 @pragma('vm:entry-point')
 Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
@@ -19,7 +18,6 @@ class NotificationService {
 
   final FirebaseMessaging _fcm = FirebaseMessaging.instance;
   final FlutterLocalNotificationsPlugin _localNotifications = FlutterLocalNotificationsPlugin();
-  final AudioPlayer _audioPlayer = AudioPlayer();
 
   static const String channelId = 'order_status_notifications_v3';
   static const String channelName = 'Order Updates';
@@ -254,10 +252,7 @@ class NotificationService {
       _processedNotifIds.remove(_processedNotifIds.first);
     }
 
-    // 2. Play bundled MP3 sound ONCE explicitly for ~2 seconds
-    _playForegroundSound();
-
-    // 3. Trigger Local Notification UI Banner
+    // 2. Trigger Local Notification UI Banner
     const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
       channelId,
       channelName,
@@ -279,20 +274,6 @@ class NotificationService {
       notificationDetails: platformDetails,
       payload: orderId,
     );
-  }
-
-  Future<void> _playForegroundSound() async {
-    try {
-      await _audioPlayer.stop();
-      await _audioPlayer.play(AssetSource('sounds/appsound.mp3'));
-      
-      // Stop sound playback after ~2.2 seconds to guarantee non-looping 2s sound
-      Future.delayed(const Duration(milliseconds: 2200), () {
-        _audioPlayer.stop();
-      });
-    } catch (e) {
-      debugPrint('Error playing foreground notification sound: $e');
-    }
   }
 
   void _handleNotificationTap(String orderId) {
