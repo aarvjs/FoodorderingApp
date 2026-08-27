@@ -27,6 +27,7 @@ class Restaurant {
   final String address;
   final double minimumOrder;
   final double deliveryCharges;
+  final double packagingCharge;
   final bool hasDineIn;
   final bool hasTakeaway;
   final bool hasDelivery;
@@ -34,6 +35,7 @@ class Restaurant {
   final String phone;
   final String openingTime;
   final String closingTime;
+  final String fssaiNo;
   final List<String> gallery;
   final List<String>? _rawSliderImages;
   final List<HomeHeroSliderModel>? _rawHomeHeroSliders;
@@ -82,6 +84,7 @@ class Restaurant {
     this.address = '',
     this.minimumOrder = 0.0,
     this.deliveryCharges = 0.0,
+    this.packagingCharge = 0.0,
     this.hasDineIn = true,
     this.hasTakeaway = true,
     this.hasDelivery = true,
@@ -89,6 +92,7 @@ class Restaurant {
     this.phone = '',
     this.openingTime = '10:00 AM',
     this.closingTime = '11:00 PM',
+    this.fssaiNo = '',
     this.gallery = const [],
     List<String>? sliderImages,
     List<HomeHeroSliderModel>? homeHeroSliders,
@@ -215,6 +219,8 @@ class Restaurant {
       }
     }
 
+    final String fssaiNum = (docData['fssaiNumber'] ?? docData['fssai'] ?? docData['fssaiNo'] ?? docData['fssai_number'] ?? docData['fssaiLicense'] ?? docData['licenseNumber'] ?? docData['fssaiLicenseNumber'] ?? docData['global_fssai_number'] ?? '').toString().trim();
+
     return Restaurant(
       id: docId,
       branchId: (docData['branchId'] ?? docId).toString(),
@@ -239,6 +245,7 @@ class Restaurant {
       address: (docData['address'] ?? docData['location']?['formattedAddress'] ?? '').toString(),
       minimumOrder: parseDouble(docData['minimumOrder']),
       deliveryCharges: parseDouble(docData['deliveryCharges']),
+      packagingCharge: parseDouble(docData['packagingCharge'] ?? docData['packagingCharges'] ?? docData['packagingFee']),
       hasDineIn: docData['tableBookingEnabled'] == null
           ? (docData['hasDineIn'] ?? docData['hasTableService'] ?? true)
           : (docData['tableBookingEnabled'] == true),
@@ -248,6 +255,7 @@ class Restaurant {
       phone: phoneNo,
       openingTime: openTime,
       closingTime: closeTime,
+      fssaiNo: fssaiNum,
       gallery: galleryImages,
       sliderImages: activeThemeSliderImages,
       homeHeroSliders: activeHeroSliders.isNotEmpty ? activeHeroSliders : kDefaultHomeHeroSliders,

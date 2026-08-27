@@ -260,8 +260,55 @@ class RestaurantRepository {
   Stream<Restaurant?> streamRestaurantDetails(String id, {double userLat = 0.0, double userLng = 0.0}) {
     return _firestore.collection('branches').doc(id).snapshots().asyncMap((doc) async {
       if (doc.exists && doc.data() != null) {
-        final data = doc.data()!;
+        final data = Map<String, dynamic>.from(doc.data()!);
         final restId = (data['restaurantId'] ?? doc.id).toString();
+
+        String fssai = (data['fssaiNumber'] ?? data['fssai'] ?? data['fssaiNo'] ?? data['fssai_number'] ?? data['fssaiLicense'] ?? data['licenseNumber'] ?? data['fssaiLicenseNumber'] ?? '').toString().trim();
+
+        // 1. Fallback to parent restaurant doc if branch doc doesn't have fssaiNumber
+        if (fssai.isEmpty && restId.isNotEmpty) {
+          try {
+            final parentDoc = await _firestore.collection('restaurants').doc(restId).get();
+            if (parentDoc.exists && parentDoc.data() != null) {
+              final pData = parentDoc.data()!;
+              fssai = (pData['fssaiNumber'] ?? pData['fssai'] ?? pData['fssaiNo'] ?? pData['fssai_number'] ?? pData['fssaiLicense'] ?? pData['licenseNumber'] ?? pData['fssaiLicenseNumber'] ?? '').toString().trim();
+              if (fssai.isNotEmpty) {
+                data['fssaiNumber'] = fssai;
+              }
+            }
+          } catch (_) {}
+        }
+
+        // 2. Fallback to any restaurant doc in collection if fssai is still empty
+        if (fssai.isEmpty) {
+          try {
+            final allRests = await _firestore.collection('restaurants').limit(5).get();
+            for (final rDoc in allRests.docs) {
+              final rData = rDoc.data();
+              final rFssai = (rData['fssaiNumber'] ?? rData['fssai'] ?? rData['fssaiNo'] ?? rData['fssai_number'] ?? rData['fssaiLicense'] ?? rData['licenseNumber'] ?? rData['fssaiLicenseNumber'] ?? '').toString().trim();
+              if (rFssai.isNotEmpty) {
+                fssai = rFssai;
+                data['fssaiNumber'] = fssai;
+                break;
+              }
+            }
+          } catch (_) {}
+        }
+
+        // 3. Fallback to global settings doc
+        if (fssai.isEmpty) {
+          try {
+            final settingsDoc = await _firestore.collection('settings').doc('global').get();
+            if (settingsDoc.exists && settingsDoc.data() != null) {
+              final sData = settingsDoc.data()!;
+              fssai = (sData['fssaiNumber'] ?? sData['fssai'] ?? sData['fssaiNo'] ?? sData['fssai_number'] ?? sData['fssaiLicense'] ?? sData['licenseNumber'] ?? sData['fssaiLicenseNumber'] ?? sData['global_fssai_number'] ?? '').toString().trim();
+              if (fssai.isNotEmpty) {
+                data['fssaiNumber'] = fssai;
+              }
+            }
+          } catch (_) {}
+        }
+
         final menuItems = await _fetchMenuForBranch(restId, doc.id);
         return Restaurant.fromFirestore(
           docData: data,
@@ -274,9 +321,25 @@ class RestaurantRepository {
 
       final restDoc = await _firestore.collection('restaurants').doc(id).get();
       if (restDoc.exists && restDoc.data() != null) {
+        final data = Map<String, dynamic>.from(restDoc.data()!);
+        String fssai = (data['fssaiNumber'] ?? data['fssai'] ?? data['fssaiNo'] ?? data['fssai_number'] ?? data['fssaiLicense'] ?? data['licenseNumber'] ?? data['fssaiLicenseNumber'] ?? '').toString().trim();
+
+        if (fssai.isEmpty) {
+          try {
+            final settingsDoc = await _firestore.collection('settings').doc('global').get();
+            if (settingsDoc.exists && settingsDoc.data() != null) {
+              final sData = settingsDoc.data()!;
+              fssai = (sData['fssaiNumber'] ?? sData['fssai'] ?? sData['fssaiNo'] ?? sData['fssai_number'] ?? sData['fssaiLicense'] ?? sData['licenseNumber'] ?? sData['fssaiLicenseNumber'] ?? sData['global_fssai_number'] ?? '').toString().trim();
+              if (fssai.isNotEmpty) {
+                data['fssaiNumber'] = fssai;
+              }
+            }
+          } catch (_) {}
+        }
+
         final menuItems = await _fetchMenuForBranch(id, id);
         return Restaurant.fromFirestore(
-          docData: restDoc.data()!,
+          docData: data,
           docId: restDoc.id,
           userLat: userLat,
           userLng: userLng,

@@ -119,7 +119,7 @@ class LocationService {
       return UserLocation(
         latitude: position.latitude,
         longitude: position.longitude,
-        formattedAddress: 'Current Location (${position.latitude.toStringAsFixed(4)}, ${position.longitude.toStringAsFixed(4)})',
+        formattedAddress: 'Current Location',
         area: '',
         city: '',
         state: '',

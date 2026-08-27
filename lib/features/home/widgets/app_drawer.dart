@@ -80,7 +80,9 @@ class AppDrawer extends ConsumerWidget {
 
     final userModel = authState.userModel;
     final userName = userModel?.fullName?.isNotEmpty == true ? userModel!.fullName! : 'Arvind';
-    final userPhone = userModel?.phone.isNotEmpty == true ? userModel!.phone : '+91 98765 43210';
+    final userPhone = (userModel?.phone != null && userModel!.phone.trim().isNotEmpty)
+        ? userModel.phone.trim()
+        : (authState.phoneNumber.isNotEmpty ? authState.phoneNumber : '');
     final photoUrl = userModel?.photoUrl;
     final activeAddr = addressState.selectedAddress;
 
@@ -179,24 +181,6 @@ class AppDrawer extends ConsumerWidget {
                                   style: TextStyle(
                                     fontSize: 12,
                                     color: isDark ? Colors.grey.shade400 : AppColors.textLight,
-                                  ),
-                                ),
-                                const Gap(6),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                  decoration: BoxDecoration(
-                                    gradient: const LinearGradient(
-                                      colors: [Color(0xFFFFD700), Color(0xFFFF8C00)],
-                                    ),
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                  child: const Text(
-                                    'GOLD MEMBER 🏆',
-                                    style: TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 9,
-                                      fontWeight: FontWeight.bold,
-                                    ),
                                   ),
                                 ),
                               ],

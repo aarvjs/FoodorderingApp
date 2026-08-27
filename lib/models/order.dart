@@ -19,6 +19,7 @@ class Order {
   final double tax;
   final double taxPercentage;
   final double deliveryFee;
+  final double packagingCharge;
   final double deliveryDistanceKm;
   final double discount;
   final double totalAmount;
@@ -59,6 +60,7 @@ class Order {
     this.tax = 0.0,
     this.taxPercentage = 0.0,
     this.deliveryFee = 0.0,
+    this.packagingCharge = 0.0,
     this.deliveryDistanceKm = 0.0,
     this.discount = 0.0,
     required this.totalAmount,
@@ -248,6 +250,7 @@ class Order {
       tax: _numToDouble(data['tax']),
       taxPercentage: _numToDouble(data['taxPercentage'] ?? data['gstPercentage']),
       deliveryFee: _numToDouble(data['deliveryFee'] ?? data['deliveryCharge']),
+      packagingCharge: _numToDouble(data['packagingCharge'] ?? data['packagingCharges'] ?? data['packagingFee']),
 
       deliveryDistanceKm: _numToDouble(data['deliveryDistanceKm'] ?? data['distanceKm']),
       discount: _numToDouble(data['discount']),

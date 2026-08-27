@@ -27,6 +27,21 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   bool _isPlacingOrder = false;
   final TextEditingController _deliveryAddressController = TextEditingController();
 
+  String _sanitizeAddressForDisplay(String rawAddress) {
+    if (rawAddress.isEmpty) return '';
+    String clean = rawAddress
+        .replaceAll(RegExp(r'Location\s*\([\d\.\s,-]+\)', caseSensitive: false), '')
+        .replaceAll(RegExp(r'Current Location\s*\([\d\.\s,-]+\)', caseSensitive: false), '')
+        .replaceAll(RegExp(r'\(\s*-?\d+\.\d+,\s*-?\d+\.\d+\s*\)'), '')
+        .replaceAll(RegExp(r'Lat:\s*-?\d+\.\d+,\s*Lng:\s*-?\d+\.\d+', caseSensitive: false), '')
+        .trim();
+
+    if (clean.toLowerCase() == 'location' || clean.toLowerCase() == 'current location') {
+      return '';
+    }
+    return clean;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -38,7 +53,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         setState(() {
           _selectedAddressId = defaultAddr.id;
           if (_deliveryAddressController.text.trim().isEmpty) {
-            _deliveryAddressController.text = defaultAddr.fullAddress;
+            _deliveryAddressController.text = _sanitizeAddressForDisplay(defaultAddr.fullAddress);
           }
         });
       }
@@ -126,7 +141,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                 ref.read(addressProvider.notifier).addAddress(newAddress);
                 setState(() {
                   _selectedAddressId = newAddress.id;
-                  _deliveryAddressController.text = newAddress.fullAddress;
+                  _deliveryAddressController.text = _sanitizeAddressForDisplay(newAddress.fullAddress);
                 });
                 Navigator.pop(context);
               },
@@ -146,10 +161,10 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
 
     if (isTakeAway) {
       manualAddress = '[TAKE AWAY] Self Pickup at ${cartState.items.first.restaurantName}';
-    } else if (manualAddress.isEmpty) {
+    } else if (manualAddress.isEmpty || _sanitizeAddressForDisplay(manualAddress).isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Please enter your complete delivery address.'),
+          content: Text('Please enter your complete delivery address before placing your order.'),
           backgroundColor: AppColors.error,
           behavior: SnackBarBehavior.floating,
         ),
@@ -196,11 +211,12 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     }
 
     final double effectiveDeliveryFee = isTakeAway ? 0.0 : (deliveryCalcResult?.deliveryFee ?? cartState.deliveryFee);
+    final double effectivePackagingCharge = deliveryCalcResult?.packagingCharge ?? 0.0;
     final double effectiveDistanceKm = isTakeAway ? 0.0 : (deliveryCalcResult?.distanceKm ?? 0.0);
     final double taxPercentage = deliveryCalcResult?.taxPercentage ?? 0.0;
     final double taxableAmount = (cartState.subtotal - cartState.couponDiscount - cartState.rewardDiscount).clamp(0.0, double.infinity);
     final double effectiveGstAmount = taxPercentage > 0 ? double.parse((taxableAmount * (taxPercentage / 100.0)).toStringAsFixed(2)) : 0.0;
-    final double computedTotal = (cartState.subtotal - cartState.couponDiscount - cartState.rewardDiscount + effectiveDeliveryFee + effectiveGstAmount).clamp(0.0, double.infinity);
+    final double computedTotal = (cartState.subtotal - cartState.couponDiscount - cartState.rewardDiscount + effectiveDeliveryFee + effectivePackagingCharge + effectiveGstAmount).clamp(0.0, double.infinity);
     final double effectiveGrandTotal = double.parse(computedTotal.toStringAsFixed(2));
 
     final firstItem = cartState.items.first;
@@ -248,6 +264,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
               effectiveGstAmount: effectiveGstAmount,
               taxPercentage: taxPercentage,
               effectiveDeliveryFee: effectiveDeliveryFee,
+              effectivePackagingCharge: effectivePackagingCharge,
               effectiveDistanceKm: effectiveDistanceKm,
               effectiveGrandTotal: effectiveGrandTotal,
               paymentMethod: 'ONLINE',
@@ -325,6 +342,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         effectiveGstAmount: effectiveGstAmount,
         taxPercentage: taxPercentage,
         effectiveDeliveryFee: effectiveDeliveryFee,
+        effectivePackagingCharge: effectivePackagingCharge,
         effectiveDistanceKm: effectiveDistanceKm,
         effectiveGrandTotal: effectiveGrandTotal,
         paymentMethod: 'PAY_AT_STORE',
@@ -348,6 +366,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         effectiveGstAmount: effectiveGstAmount,
         taxPercentage: taxPercentage,
         effectiveDeliveryFee: effectiveDeliveryFee,
+        effectivePackagingCharge: effectivePackagingCharge,
         effectiveDistanceKm: effectiveDistanceKm,
         effectiveGrandTotal: effectiveGrandTotal,
         paymentMethod: 'CASH_ON_DELIVERY',
@@ -372,6 +391,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     required double effectiveGstAmount,
     required double taxPercentage,
     required double effectiveDeliveryFee,
+    double effectivePackagingCharge = 0.0,
     required double effectiveDistanceKm,
     required double effectiveGrandTotal,
     required String paymentMethod,
@@ -398,6 +418,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         tax: effectiveGstAmount,
         taxPercentage: taxPercentage,
         deliveryFee: effectiveDeliveryFee,
+        packagingCharge: effectivePackagingCharge,
         deliveryDistanceKm: effectiveDistanceKm,
         discount: cartState.couponDiscount,
         grandTotal: effectiveGrandTotal,
@@ -478,10 +499,11 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     final deliveryCalcAsync = ref.watch(deliveryChargeCalculationProvider);
     final deliveryCalcResult = deliveryCalcAsync.value;
     final double effectiveDeliveryFee = isTakeAway ? 0.0 : (deliveryCalcResult?.deliveryFee ?? cartState.deliveryFee);
+    final double effectivePackagingCharge = deliveryCalcResult?.packagingCharge ?? 0.0;
     final double taxPercentage = deliveryCalcResult?.taxPercentage ?? 0.0;
-    final double taxableAmount = (cartState.subtotal - cartState.couponDiscount).clamp(0.0, double.infinity);
+    final double taxableAmount = (cartState.subtotal - cartState.couponDiscount - cartState.rewardDiscount).clamp(0.0, double.infinity);
     final double effectiveGstAmount = taxPercentage > 0 ? double.parse((taxableAmount * (taxPercentage / 100.0)).toStringAsFixed(2)) : 0.0;
-    final double computedTotal = cartState.subtotal - cartState.couponDiscount + effectiveDeliveryFee + effectiveGstAmount;
+    final double computedTotal = (cartState.subtotal - cartState.couponDiscount - cartState.rewardDiscount + effectiveDeliveryFee + effectivePackagingCharge + effectiveGstAmount).clamp(0.0, double.infinity);
     final double effectiveGrandTotal = double.parse(computedTotal.toStringAsFixed(2));
     final bool isOutsideRadius = !isTakeAway && (deliveryCalcResult?.isOutsideRadius == true);
 
@@ -598,7 +620,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                           onTap: () {
                             setState(() {
                               _selectedAddressId = addr.id;
-                              _deliveryAddressController.text = addr.fullAddress;
+                              _deliveryAddressController.text = _sanitizeAddressForDisplay(addr.fullAddress);
                             });
                           },
                           child: Container(
@@ -651,7 +673,9 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                                       ),
                                       const Gap(4),
                                       Text(
-                                        '${addr.addressLine}, ${addr.landmark}, ${addr.city} - ${addr.zipCode}',
+                                        _sanitizeAddressForDisplay(addr.fullAddress).isNotEmpty
+                                            ? _sanitizeAddressForDisplay('${addr.addressLine}, ${addr.landmark}, ${addr.city} - ${addr.zipCode}')
+                                            : (addr.locality.isNotEmpty ? '${addr.locality}, ${addr.city} ${addr.zipCode}'.trim() : 'Manual Address Required'),
                                         maxLines: 2,
                                         overflow: TextOverflow.ellipsis,
                                         style: TextStyle(
@@ -847,6 +871,12 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                           effectiveDeliveryFee == 0 ? 'FREE' : '₹${effectiveDeliveryFee.toStringAsFixed(2)}',
                           isDark,
                         ),
+                        if (effectivePackagingCharge > 0)
+                          _buildRecapRow(
+                            'Packaging Charge',
+                            '₹${effectivePackagingCharge.toStringAsFixed(2)}',
+                            isDark,
+                          ),
                         if (taxPercentage > 0 && effectiveGstAmount > 0)
                           _buildRecapRow(
                             'Govt Taxes & GST (${taxPercentage.toStringAsFixed(taxPercentage.truncateToDouble() == taxPercentage ? 0 : 1)}%)',

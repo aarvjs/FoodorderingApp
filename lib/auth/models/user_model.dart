@@ -62,7 +62,7 @@ class UserModel {
 
     return UserModel(
       uid: id.isNotEmpty ? id : (map['uid'] ?? ''),
-      phone: map['phone'] ?? '',
+      phone: (map['phone'] ?? map['phoneNumber'] ?? map['mobile'] ?? map['phone_number'] ?? map['userPhone'] ?? '').toString(),
       fullName: map['fullName'] ?? map['name'],
       email: map['email'],
       photoUrl: map['photoUrl'] ?? map['profileImage'] ?? map['photo'],
@@ -84,6 +84,7 @@ class UserModel {
     final map = <String, dynamic>{
       'uid': uid,
       'phone': phone,
+      'phoneNumber': phone,
       if (fullName != null) 'fullName': fullName,
       if (email != null) 'email': email,
       if (photoUrl != null) ...{

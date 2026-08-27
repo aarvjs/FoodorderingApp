@@ -99,61 +99,42 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
               ),
             ),
             
-            // Brand Logo & Text Group
+            // Brand Logo Artwork (Includes Perfect Pizza logo & brand name)
             Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Container(
-                  width: 120,
-                  height: 120,
+                  width: 220,
+                  height: 220,
                   decoration: BoxDecoration(
-                    shape: BoxShape.circle,
+                    borderRadius: BorderRadius.circular(28),
                     boxShadow: [
                       BoxShadow(
-                        color: (isDark ? AppColors.darkPrimary : AppColors.primary).withOpacity(0.3),
-                        blurRadius: 20,
+                        color: (isDark ? AppColors.darkPrimary : AppColors.primary).withValues(alpha: 0.18),
+                        blurRadius: 30,
                         offset: const Offset(0, 10),
                       ),
                     ],
                   ),
-                  child: ClipOval(
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(28),
                     child: Image.asset(
-                      'assets/images/app_logo_1.png',
-                      width: 120,
-                      height: 120,
-                      fit: BoxFit.cover,
+                      'assets/images/splashlogo.jpeg',
+                      width: 220,
+                      height: 220,
+                      fit: BoxFit.contain,
+                      errorBuilder: (_, __, ___) => Image.asset(
+                        'assets/images/app_logo_1.png',
+                        width: 180,
+                        height: 180,
+                        fit: BoxFit.contain,
+                      ),
                     ),
                   ),
                 )
                     .animate()
-                    .scale(duration: 800.ms, curve: Curves.elasticOut)
-                    .then()
-                    .shake(hz: 2, offset: const Offset(4, 4), duration: 800.ms),
-                const SizedBox(height: 24),
-                Text(
-                  'Perfect Pizza',
-                  style: TextStyle(
-                    fontSize: 36,
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: -1,
-                    color: isDark ? Colors.white : AppColors.textDark,
-                  ),
-                )
-                    .animate()
-                    .fade(delay: 200.ms, duration: 500.ms)
-                    .slideY(begin: 0.2, curve: Curves.easeOut),
-                const SizedBox(height: 8),
-                Text(
-                  'Delicious meals delivered to your doorstep',
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w500,
-                    color: isDark ? Colors.grey.shade400 : AppColors.textLight,
-                  ),
-                )
-                    .animate()
-                    .fade(delay: 450.ms, duration: 500.ms)
-                    .slideY(begin: 0.2, curve: Curves.easeOut),
+                    .scale(duration: 600.ms, curve: Curves.easeOutBack)
+                    .fadeIn(duration: 500.ms),
               ],
             ),
             

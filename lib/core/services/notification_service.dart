@@ -5,6 +5,7 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 @pragma('vm:entry-point')
 Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
@@ -23,13 +24,38 @@ class NotificationService {
   static const String channelName = 'Order Updates';
 
   bool _initialized = false;
+  bool _spLoaded = false;
   GlobalKey<NavigatorState>? navigatorKey;
   final Set<String> _processedNotifIds = {};
+
+  Future<void> _loadProcessedNotifIds() async {
+    if (_spLoaded) return;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final saved = prefs.getStringList('processed_notification_ids') ?? [];
+      _processedNotifIds.addAll(saved);
+      _spLoaded = true;
+    } catch (_) {}
+  }
+
+  Future<void> _saveProcessedNotifIds() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final list = _processedNotifIds.toList();
+      if (list.length > 500) {
+        final trimmed = list.sublist(list.length - 500);
+        await prefs.setStringList('processed_notification_ids', trimmed);
+      } else {
+        await prefs.setStringList('processed_notification_ids', list);
+      }
+    } catch (_) {}
+  }
 
   Future<void> initialize({GlobalKey<NavigatorState>? key}) async {
     if (_initialized) return;
     _initialized = true;
     if (key != null) navigatorKey = key;
+    await _loadProcessedNotifIds();
 
     try {
       // Register background messaging handler
@@ -167,11 +193,34 @@ class NotificationService {
   void _listenToCustomerFirestoreNotifications(String userId) {
     if (userId.isEmpty) return;
 
+    bool isInitialSnapshot = true;
+
     FirebaseFirestore.instance
         .collection('notifications')
         .where('userId', isEqualTo: userId)
         .snapshots()
-        .listen((snapshot) {
+        .listen((snapshot) async {
+      await _loadProcessedNotifIds();
+
+      if (isInitialSnapshot) {
+        // Seed all existing notification IDs from initial snapshot so old notifications NEVER pop up on app launch
+        for (final doc in snapshot.docs) {
+          final data = doc.data();
+          final docId = doc.id;
+          final orderId = (data['orderId'] ?? '').toString();
+          final status = (data['status'] ?? '').toString();
+
+          _processedNotifIds.add(docId);
+          if (orderId.isNotEmpty && status.isNotEmpty) {
+            _processedNotifIds.add('${orderId}_$status');
+            _processedNotifIds.add('notif_${orderId}_$status');
+          }
+        }
+        isInitialSnapshot = false;
+        await _saveProcessedNotifIds();
+        return;
+      }
+
       for (final change in snapshot.docChanges) {
         if (change.type == DocumentChangeType.added) {
           final data = change.doc.data();
@@ -181,13 +230,20 @@ class NotificationService {
           final orderId = (data['orderId'] ?? '').toString();
           final status = (data['status'] ?? '').toString();
 
-          // Generate candidate keys for deduplication
           final String primaryKey = docId;
           final String secondaryKey = (orderId.isNotEmpty && status.isNotEmpty)
               ? '${orderId}_$status'
               : docId;
 
           if (_processedNotifIds.contains(primaryKey) || _processedNotifIds.contains(secondaryKey)) {
+            continue;
+          }
+
+          final bool isFresh = _isFreshNotification(data);
+          if (!isFresh) {
+            _processedNotifIds.add(primaryKey);
+            _processedNotifIds.add(secondaryKey);
+            await _saveProcessedNotifIds();
             continue;
           }
 
@@ -204,6 +260,25 @@ class NotificationService {
         }
       }
     });
+  }
+
+  bool _isFreshNotification(Map<String, dynamic> data) {
+    if (data['createdAt'] == null) return true;
+    try {
+      DateTime notifTime = DateTime.now();
+      final raw = data['createdAt'];
+      if (raw is String) {
+        notifTime = DateTime.tryParse(raw) ?? DateTime.now();
+      } else if (raw is Timestamp) {
+        notifTime = raw.toDate();
+      } else if (raw is Map && raw['seconds'] != null) {
+        notifTime = DateTime.fromMillisecondsSinceEpoch((raw['seconds'] as int) * 1000);
+      }
+      final ageInSeconds = DateTime.now().difference(notifTime).inSeconds;
+      return ageInSeconds >= 0 && ageInSeconds < 300;
+    } catch (_) {
+      return true;
+    }
   }
 
   void _showLocalNotification(RemoteMessage message) {
@@ -248,6 +323,7 @@ class NotificationService {
       final stripped = notifKey.replaceFirst('notif_', '');
       _processedNotifIds.add(stripped);
     }
+    _saveProcessedNotifIds();
     if (_processedNotifIds.length > 200) {
       _processedNotifIds.remove(_processedNotifIds.first);
     }

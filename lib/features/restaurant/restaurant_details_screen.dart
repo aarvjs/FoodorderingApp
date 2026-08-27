@@ -33,7 +33,7 @@ class RestaurantDetailsScreen extends ConsumerStatefulWidget {
 }
 
 class _RestaurantDetailsScreenState extends ConsumerState<RestaurantDetailsScreen> {
-  String _selectedNavId = 'MENU'; // 'MENU' or combo.id
+  String _selectedNavId = 'ALL'; // 'ALL', 'MENU' or combo.id
   final TextEditingController _menuSearchController = TextEditingController();
   final FocusNode _searchFocusNode = FocusNode();
   String _menuSearchQuery = '';
@@ -618,10 +618,22 @@ class _RestaurantDetailsScreenState extends ConsumerState<RestaurantDetailsScree
                 ),
               ),
 
-              // Content View (Menu Items or Selected Combo Items List)
-              if (_selectedNavId == 'MENU') ...[
+              // Content View (ALL Items, Menu Items or Selected Combo Items List)
+              if (_selectedNavId == 'ALL') ...[
+                _buildAllProductsSliver(
+                  filteredMenuItems: filteredItems,
+                  isMenuLoading: isMenuLoading,
+                  combosList: combosList,
+                  restaurant: restaurant,
+                  isDark: isDark,
+                  query: query,
+                ),
+                SliverToBoxAdapter(
+                  child: _buildFssaiFooter(restaurant, isDark),
+                ),
+              ] else if (_selectedNavId == 'MENU') ...[
                 SliverPadding(
-                  padding: const EdgeInsets.only(left: 16, right: 16, top: 8, bottom: 100),
+                  padding: const EdgeInsets.only(left: 16, right: 16, top: 8, bottom: 20),
                   sliver: isMenuLoading
                       ? SliverList(
                           delegate: SliverChildBuilderDelegate(
@@ -686,6 +698,9 @@ class _RestaurantDetailsScreenState extends ConsumerState<RestaurantDetailsScree
                               ),
                             )),
                 ),
+                SliverToBoxAdapter(
+                  child: _buildFssaiFooter(restaurant, isDark),
+                ),
               ] else ...[
                 // Selected Combo Products Sliver
                 _buildSelectedComboSliver(
@@ -693,6 +708,9 @@ class _RestaurantDetailsScreenState extends ConsumerState<RestaurantDetailsScree
                   combosList: combosList,
                   restaurant: restaurant,
                   isDark: isDark,
+                ),
+                SliverToBoxAdapter(
+                  child: _buildFssaiFooter(restaurant, isDark),
                 ),
               ],
             ],
@@ -1287,9 +1305,66 @@ class _RestaurantDetailsScreenState extends ConsumerState<RestaurantDetailsScree
       child: ListView.builder(
         scrollDirection: Axis.horizontal,
         physics: const BouncingScrollPhysics(),
-        itemCount: combosList.length + 1,
+        itemCount: combosList.length + 2,
         itemBuilder: (context, index) {
           if (index == 0) {
+            final isSelected = _selectedNavId == 'ALL';
+            return GestureDetector(
+              onTap: () {
+                _searchFocusNode.unfocus();
+                setState(() {
+                  _selectedNavId = 'ALL';
+                });
+              },
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 180),
+                margin: const EdgeInsets.only(right: 8),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                decoration: BoxDecoration(
+                  color: isSelected
+                      ? AppColors.primary
+                      : (isDark ? AppColors.darkCard : Colors.grey.shade100),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(
+                    color: isSelected
+                        ? AppColors.primary
+                        : (isDark ? AppColors.darkDivider : Colors.grey.shade300),
+                    width: isSelected ? 1.6 : 1.0,
+                  ),
+                  boxShadow: isSelected
+                      ? [
+                          BoxShadow(
+                            color: AppColors.primary.withValues(alpha: 0.25),
+                            blurRadius: 6,
+                            offset: const Offset(0, 2),
+                          )
+                        ]
+                      : null,
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Iconsax.grid_5,
+                      size: 15,
+                      color: isSelected ? Colors.white : (isDark ? Colors.grey.shade300 : AppColors.textDark),
+                    ),
+                    const Gap(6),
+                    Text(
+                      'ALL',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: isSelected ? FontWeight.w900 : FontWeight.w700,
+                        color: isSelected ? Colors.white : (isDark ? Colors.grey.shade300 : AppColors.textDark),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }
+
+          if (index == 1) {
             final isSelected = _selectedNavId == 'MENU';
             return GestureDetector(
               onTap: () {
@@ -1346,7 +1421,7 @@ class _RestaurantDetailsScreenState extends ConsumerState<RestaurantDetailsScree
             );
           }
 
-          final combo = combosList[index - 1];
+          final combo = combosList[index - 2];
           final isSelected = _selectedNavId == combo.id;
 
           return GestureDetector(
@@ -1419,6 +1494,242 @@ class _RestaurantDetailsScreenState extends ConsumerState<RestaurantDetailsScree
             ),
           );
         },
+      ),
+    );
+  }
+
+  Widget _buildAllProductsSliver({
+    required List<FoodItem> filteredMenuItems,
+    required bool isMenuLoading,
+    required List<ComboModel> combosList,
+    required Restaurant restaurant,
+    required bool isDark,
+    required String query,
+  }) {
+    return Consumer(
+      builder: (context, ref, child) {
+        final List<Widget> sliverWidgets = [];
+
+        // 1. Normal Menu Items Section
+        if (filteredMenuItems.isNotEmpty) {
+          if (combosList.isNotEmpty) {
+            sliverWidgets.add(
+              Padding(
+                padding: const EdgeInsets.only(top: 8, bottom: 10),
+                child: Row(
+                  children: [
+                    const Icon(Iconsax.element_4, size: 16, color: AppColors.primary),
+                    const Gap(6),
+                    Text(
+                      'Menu Items (${filteredMenuItems.length})',
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.bold,
+                        color: isDark ? Colors.white : AppColors.textDark,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }
+
+          for (final foodItem in filteredMenuItems) {
+            sliverWidgets.add(
+              FoodCard(
+                foodItem: foodItem,
+                restaurantId: restaurant.id,
+                restaurantName: restaurant.name,
+                onTap: () => context.push('/product/${restaurant.id}/${foodItem.id}'),
+              ),
+            );
+          }
+        }
+
+        // 2. Combos Section
+        int totalMatchingComboItems = 0;
+
+        for (final combo in combosList) {
+          final comboItemsAsync = ref.watch(comboItemsStreamProvider(combo.id));
+          final comboItems = comboItemsAsync.value ?? [];
+
+          final filteredComboItems = query.isEmpty
+              ? comboItems
+              : comboItems.where((item) {
+                  return item.name.toLowerCase().contains(query) ||
+                      item.description.toLowerCase().contains(query);
+                }).toList();
+
+          if (filteredComboItems.isNotEmpty) {
+            totalMatchingComboItems += filteredComboItems.length;
+
+            sliverWidgets.add(
+              Padding(
+                padding: const EdgeInsets.only(top: 14, bottom: 8),
+                child: Row(
+                  children: [
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(6),
+                      child: Image.network(
+                        combo.image,
+                        width: 18,
+                        height: 18,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => const Icon(Icons.fastfood, size: 16, color: AppColors.primary),
+                      ),
+                    ),
+                    const Gap(6),
+                    Text(
+                      '${combo.name} (${filteredComboItems.length})',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                        color: isDark ? Colors.white : AppColors.textDark,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+
+            for (final item in filteredComboItems) {
+              sliverWidgets.add(
+                _buildComboItemTile(
+                  item: item,
+                  combo: combo,
+                  restaurant: restaurant,
+                  isDark: isDark,
+                ),
+              );
+            }
+          }
+        }
+
+        // 3. Empty State if no menu items and no combo items match
+        if (filteredMenuItems.isEmpty && totalMatchingComboItems == 0) {
+          if (isMenuLoading) {
+            return SliverPadding(
+              padding: const EdgeInsets.only(left: 16, right: 16, top: 8, bottom: 20),
+              sliver: SliverList(
+                delegate: SliverChildBuilderDelegate(
+                  (context, index) => Padding(
+                    padding: const EdgeInsets.only(bottom: 16),
+                    child: Shimmer.fromColors(
+                      baseColor: isDark ? Colors.grey.shade800 : Colors.grey.shade300,
+                      highlightColor: isDark ? Colors.grey.shade700 : Colors.grey.shade100,
+                      child: Container(
+                        height: 110,
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(18),
+                        ),
+                      ),
+                    ),
+                  ),
+                  childCount: 4,
+                ),
+              ),
+            );
+          }
+
+          return SliverToBoxAdapter(
+            child: Center(
+              child: Padding(
+                padding: const EdgeInsets.all(40),
+                child: Column(
+                  children: [
+                    Icon(
+                      Iconsax.document_text,
+                      size: 48,
+                      color: isDark ? Colors.grey.shade600 : Colors.grey.shade400,
+                    ),
+                    const Gap(12),
+                    Text(
+                      query.isNotEmpty
+                          ? 'No products matching "$query"'
+                          : 'No items available for this outlet.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                        color: isDark ? Colors.grey.shade400 : AppColors.textLight,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        }
+
+        return SliverPadding(
+          padding: const EdgeInsets.only(left: 16, right: 16, top: 8, bottom: 20),
+          sliver: SliverList(
+            delegate: SliverChildBuilderDelegate(
+              (context, index) => sliverWidgets[index],
+              childCount: sliverWidgets.length,
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildFssaiFooter(Restaurant restaurant, bool isDark) {
+    final rawFssai = restaurant.fssaiNo.trim();
+    String displayFssai = 'N/A';
+
+    if (rawFssai.isNotEmpty) {
+      if (rawFssai.toUpperCase().contains('FSSAI')) {
+        displayFssai = rawFssai;
+      } else {
+        displayFssai = 'FSSAI No: $rawFssai';
+      }
+    } else {
+      displayFssai = 'FSSAI No: N/A';
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(left: 16, right: 16, top: 20, bottom: 100),
+      child: Center(
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          decoration: BoxDecoration(
+            color: isDark ? AppColors.darkCard : Colors.grey.shade50,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: isDark ? AppColors.darkDivider : Colors.grey.shade200,
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(4),
+                decoration: BoxDecoration(
+                  color: isDark ? Colors.green.shade900.withValues(alpha: 0.3) : Colors.green.shade50,
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  Icons.verified_user_rounded,
+                  size: 15,
+                  color: isDark ? Colors.green.shade300 : Colors.green.shade700,
+                ),
+              ),
+              const Gap(8),
+              Text(
+                displayFssai,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: isDark ? Colors.grey.shade300 : AppColors.textDark,
+                  letterSpacing: 0.3,
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

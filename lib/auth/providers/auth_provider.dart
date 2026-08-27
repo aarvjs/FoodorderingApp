@@ -285,13 +285,27 @@ class AuthNotifier extends Notifier<AuthState> {
     }
 
     try {
+      final verifiedPhone = (firebaseUser.phoneNumber != null && firebaseUser.phoneNumber!.isNotEmpty)
+          ? firebaseUser.phoneNumber!
+          : state.phoneNumber;
+
       final existingProfile = await _repository.getUserProfile(firebaseUser.uid);
 
       if (existingProfile != null) {
+        UserModel activeProfile = existingProfile;
+
+        // If existing profile lacks phone number or has empty phone, sync verified phone from session
+        if (existingProfile.phone.isEmpty && verifiedPhone.isNotEmpty) {
+          activeProfile = existingProfile.copyWith(phone: verifiedPhone);
+          try {
+            await _repository.saveUserProfile(activeProfile);
+          } catch (_) {}
+        }
+
         state = state.copyWith(
           isLoading: false,
           status: AuthStatus.authenticated,
-          userModel: existingProfile,
+          userModel: activeProfile,
         );
 
         if (existingProfile.formattedAddress == null ||
@@ -303,7 +317,7 @@ class AuthNotifier extends Notifier<AuthState> {
       } else {
         final newProfile = UserModel(
           uid: firebaseUser.uid,
-          phone: firebaseUser.phoneNumber ?? state.phoneNumber,
+          phone: verifiedPhone,
           createdAt: DateTime.now(),
           updatedAt: DateTime.now(),
         );
@@ -321,9 +335,12 @@ class AuthNotifier extends Notifier<AuthState> {
       }
       return true;
     } catch (e) {
+      final verifiedPhone = (firebaseUser.phoneNumber != null && firebaseUser.phoneNumber!.isNotEmpty)
+          ? firebaseUser.phoneNumber!
+          : state.phoneNumber;
       final fallbackProfile = UserModel(
         uid: firebaseUser.uid,
-        phone: firebaseUser.phoneNumber ?? state.phoneNumber,
+        phone: verifiedPhone,
         createdAt: DateTime.now(),
       );
       await ref.read(addressProvider.notifier).clearAddressCache(firebaseUser.uid);
@@ -462,11 +479,35 @@ class AuthNotifier extends Notifier<AuthState> {
     final currentUser = _repository.currentUser;
     if (currentUser != null) {
       final profile = await _repository.getUserProfile(currentUser.uid);
+      final authPhone = currentUser.phoneNumber ?? state.phoneNumber;
+
       if (profile != null) {
+        UserModel activeProfile = profile;
+        if (profile.phone.isEmpty && authPhone.isNotEmpty) {
+          activeProfile = profile.copyWith(phone: authPhone);
+          try {
+            await _repository.saveUserProfile(activeProfile);
+          } catch (_) {}
+        }
         state = state.copyWith(
-          userModel: profile,
+          userModel: activeProfile,
           status: AuthStatus.authenticated,
         );
+      } else {
+        if (authPhone.isNotEmpty) {
+          final newProfile = UserModel(
+            uid: currentUser.uid,
+            phone: authPhone,
+            createdAt: DateTime.now(),
+          );
+          try {
+            await _repository.saveUserProfile(newProfile);
+          } catch (_) {}
+          state = state.copyWith(
+            userModel: newProfile,
+            status: AuthStatus.authenticated,
+          );
+        }
       }
     }
   }

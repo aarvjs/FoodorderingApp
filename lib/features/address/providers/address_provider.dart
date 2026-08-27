@@ -381,7 +381,7 @@ class AddressNotifier extends Notifier<AddressState> {
         throw Exception('INVALID_COORDINATES');
       }
 
-      final String coordStr = 'Location (${position.latitude.toStringAsFixed(4)}, ${position.longitude.toStringAsFixed(4)})';
+      final String coordStr = 'Current Location';
 
       final gpsAddress = Address(
         id: 'addr_gps_${DateTime.now().millisecondsSinceEpoch}',

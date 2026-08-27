@@ -80,10 +80,11 @@ class _CartScreenState extends ConsumerState<CartScreen> {
     final deliveryCalcAsync = ref.watch(deliveryChargeCalculationProvider);
     final deliveryCalcResult = deliveryCalcAsync.value;
     final double effectiveDeliveryFee = cartState.isTakeAway ? 0.0 : (deliveryCalcResult?.deliveryFee ?? cartState.deliveryFee);
+    final double effectivePackagingCharge = deliveryCalcResult?.packagingCharge ?? 0.0;
     final double taxPercentage = deliveryCalcResult?.taxPercentage ?? 0.0;
     final double taxableAmount = (cartState.subtotal - cartState.couponDiscount - cartState.rewardDiscount).clamp(0.0, double.infinity);
     final double effectiveGstAmount = taxPercentage > 0 ? double.parse((taxableAmount * (taxPercentage / 100.0)).toStringAsFixed(2)) : 0.0;
-    final double calculatedTotal = (cartState.subtotal - cartState.couponDiscount - cartState.rewardDiscount + effectiveDeliveryFee + effectiveGstAmount).clamp(0.0, double.infinity);
+    final double calculatedTotal = (cartState.subtotal - cartState.couponDiscount - cartState.rewardDiscount + effectiveDeliveryFee + effectivePackagingCharge + effectiveGstAmount).clamp(0.0, double.infinity);
     final double effectiveGrandTotal = double.parse(calculatedTotal.toStringAsFixed(2));
     final bool isOutsideRadius = !cartState.isTakeAway && (deliveryCalcResult?.isOutsideRadius == true);
 
@@ -931,6 +932,12 @@ class _CartScreenState extends ConsumerState<CartScreen> {
                           isDark,
                           isFree: effectiveDeliveryFee == 0,
                         ),
+                        if (effectivePackagingCharge > 0)
+                          _buildBillRow(
+                            'Packaging Charges',
+                            '₹${effectivePackagingCharge.toStringAsFixed(2)}',
+                            isDark,
+                          ),
                         if (taxPercentage > 0 && effectiveGstAmount > 0)
                           _buildBillRow(
                             'Govt Taxes & GST (${taxPercentage.toStringAsFixed(taxPercentage.truncateToDouble() == taxPercentage ? 0 : 1)}%)',

@@ -971,6 +971,8 @@ class _OrderBillSheet extends StatelessWidget {
               if (order.rewardDiscountAmount > 0)
                 _buildBillRow('Reward Points Discount', '- ₹${order.rewardDiscountAmount.toStringAsFixed(2)}', isDiscount: true),
               _buildBillRow('Delivery Fee', order.deliveryFee == 0 ? 'FREE (₹0.00)' : '₹${order.deliveryFee.toStringAsFixed(2)}'),
+              if (order.packagingCharge > 0)
+                _buildBillRow('Packaging Charge', '₹${order.packagingCharge.toStringAsFixed(2)}'),
               if (order.tax > 0)
                 _buildBillRow('Taxes & GST (${order.taxPercentage}%)', '₹${order.tax.toStringAsFixed(2)}'),
 

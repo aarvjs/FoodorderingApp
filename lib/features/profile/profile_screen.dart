@@ -151,6 +151,30 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                       ),
                     ),
 
+                    const Gap(16),
+
+                    // Phone Number Field (Verified)
+                    if (userModel?.phone.isNotEmpty == true || authState.phoneNumber.isNotEmpty) ...[
+                      TextField(
+                        controller: TextEditingController(
+                          text: (userModel?.phone != null && userModel!.phone.trim().isNotEmpty)
+                              ? userModel.phone.trim()
+                              : authState.phoneNumber,
+                        ),
+                        enabled: false,
+                        decoration: InputDecoration(
+                          labelText: 'Phone Number (Verified)',
+                          prefixIcon: const Icon(Iconsax.call),
+                          suffixIcon: const Icon(Icons.verified, color: Colors.green, size: 18),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+                          disabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(14),
+                            borderSide: BorderSide(color: isDark ? Colors.grey.shade700 : Colors.grey.shade300),
+                          ),
+                        ),
+                      ),
+                    ],
+
                     const Gap(24),
 
                     SizedBox(
@@ -287,7 +311,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
 
     final userModel = authState.userModel;
     final userName = userModel?.fullName?.isNotEmpty == true ? userModel!.fullName! : 'Arvind';
-    final userPhone = userModel?.phone.isNotEmpty == true ? userModel!.phone : '+91 98765 43210';
+    final userPhone = (userModel?.phone != null && userModel!.phone.trim().isNotEmpty)
+        ? userModel.phone.trim()
+        : (authState.phoneNumber.isNotEmpty ? authState.phoneNumber : '');
     final photoUrl = userModel?.photoUrl;
 
     final selectedAddr = addressState.selectedAddress;

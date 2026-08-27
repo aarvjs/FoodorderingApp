@@ -8,6 +8,7 @@ import 'state_providers.dart';
 class DeliveryChargeCalculationResult {
   final double distanceKm;
   final double deliveryFee;
+  final double packagingCharge;
   final double maxRadiusKm;
   final double taxPercentage;
   final bool isMaxRadiusConfigured;
@@ -18,6 +19,7 @@ class DeliveryChargeCalculationResult {
   const DeliveryChargeCalculationResult({
     required this.distanceKm,
     required this.deliveryFee,
+    this.packagingCharge = 0.0,
     required this.maxRadiusKm,
     this.taxPercentage = 0.0,
     required this.isMaxRadiusConfigured,
@@ -30,6 +32,7 @@ class DeliveryChargeCalculationResult {
     return const DeliveryChargeCalculationResult(
       distanceKm: 0.0,
       deliveryFee: 0.0,
+      packagingCharge: 0.0,
       maxRadiusKm: 20.0,
       taxPercentage: 0.0,
       isMaxRadiusConfigured: false,
@@ -60,6 +63,7 @@ class DeliveryChargeService {
       double branchLng = 0.0;
       double maxRadiusKm = 20.0;
       double taxPercentage = 0.0;
+      double packagingCharge = 0.0;
       bool isMaxRadiusConfigured = false;
 
       Map<String, dynamic>? branchData;
@@ -109,6 +113,11 @@ class DeliveryChargeService {
           branchData['taxPercentage'] ?? branchData['gstPercentage'] ?? branchData['tax'] ?? branchData['taxRate'],
           fallback: 0.0,
         );
+
+        packagingCharge = _numToDouble(
+          branchData['packagingCharge'] ?? branchData['packagingCharges'] ?? branchData['packagingFee'],
+          fallback: 0.0,
+        );
       }
 
       // 2. Customer location validation
@@ -116,6 +125,7 @@ class DeliveryChargeService {
         return DeliveryChargeCalculationResult(
           distanceKm: 0.0,
           deliveryFee: 0.0,
+          packagingCharge: packagingCharge,
           maxRadiusKm: maxRadiusKm,
           taxPercentage: taxPercentage,
           isMaxRadiusConfigured: isMaxRadiusConfigured,
@@ -158,6 +168,7 @@ class DeliveryChargeService {
         return DeliveryChargeCalculationResult(
           distanceKm: distKm,
           deliveryFee: 0.0,
+          packagingCharge: packagingCharge,
           maxRadiusKm: maxRadiusKm,
           taxPercentage: taxPercentage,
           isMaxRadiusConfigured: isMaxRadiusConfigured,
@@ -197,6 +208,7 @@ class DeliveryChargeService {
       return DeliveryChargeCalculationResult(
         distanceKm: distKm,
         deliveryFee: calculatedFee,
+        packagingCharge: packagingCharge,
         maxRadiusKm: maxRadiusKm,
         taxPercentage: taxPercentage,
         isMaxRadiusConfigured: isMaxRadiusConfigured,
