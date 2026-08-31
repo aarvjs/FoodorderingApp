@@ -40,6 +40,51 @@ class Restaurant {
   final List<String>? _rawSliderImages;
   final List<HomeHeroSliderModel>? _rawHomeHeroSliders;
 
+  bool get isCurrentlyOpen {
+    if (!isOpen) return false;
+
+    try {
+      final now = DateTime.now();
+      final openMinutes = parseTimeToMinutes(openingTime);
+      final closeMinutes = parseTimeToMinutes(closingTime);
+
+      if (openMinutes == null || closeMinutes == null) return isOpen;
+
+      final currentMinutes = now.hour * 60 + now.minute;
+
+      if (closeMinutes > openMinutes) {
+        return currentMinutes >= openMinutes && currentMinutes <= closeMinutes;
+      } else {
+        // Overnight timing (e.g., 6:00 PM to 2:00 AM)
+        return currentMinutes >= openMinutes || currentMinutes <= closeMinutes;
+      }
+    } catch (_) {
+      return isOpen;
+    }
+  }
+
+  static int? parseTimeToMinutes(String timeStr) {
+    if (timeStr.isEmpty) return null;
+    try {
+      final cleaned = timeStr.trim().toUpperCase();
+      final isPM = cleaned.contains('PM');
+      final isAM = cleaned.contains('AM');
+      final digitsOnly = cleaned.replaceAll(RegExp(r'[^0-9:]'), '');
+      final parts = digitsOnly.split(':');
+      if (parts.isEmpty || parts[0].isEmpty) return null;
+
+      int hour = int.parse(parts[0]);
+      int minute = parts.length > 1 && parts[1].isNotEmpty ? int.parse(parts[1]) : 0;
+
+      if (isPM && hour < 12) hour += 12;
+      if (isAM && hour == 12) hour = 0;
+
+      return hour * 60 + minute;
+    } catch (_) {
+      return null;
+    }
+  }
+
   List<String> get sliderImages {
     final list = _rawSliderImages;
     if (list != null && list.isNotEmpty) {
@@ -182,10 +227,14 @@ class Restaurant {
     final double lat = parseDouble(docData['latitude'] ?? docData['location']?['latitude']);
     final double lng = parseDouble(docData['longitude'] ?? docData['location']?['longitude']);
 
-    // Radius
+    // Radius (supports all Firestore schema keys)
     final double radius = parseDouble(
-      docData['serviceRadiusKm'] ?? docData['deliveryRadiusKm'] ?? docData['deliveryRadius'] ?? docData['radius'],
-      fallback: 5.0,
+      docData['deliveryRadiusKm'] ??
+          docData['maximumDeliveryRadius'] ??
+          docData['deliveryRadius'] ??
+          docData['serviceRadiusKm'] ??
+          docData['radius'],
+      fallback: 10.0,
     );
 
     // Calculated distance in KM

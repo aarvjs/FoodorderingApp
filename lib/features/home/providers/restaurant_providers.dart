@@ -30,10 +30,27 @@ final restaurantCombosStreamProvider = StreamProvider.family<List<ComboModel>, S
   return repo.streamRestaurantCombos(parentRestId ?? restaurantId, branchId: branchId);
 });
 
+/// Periodic timer provider ticking every 15 seconds to automatically re-evaluate time-based product availability schedules
+final clockTickProvider = StreamProvider<int>((ref) {
+  return Stream.periodic(const Duration(seconds: 15), (i) => i);
+});
+
 /// Stream provider family for dedicated items in a combo
 final comboItemsStreamProvider = StreamProvider.family<List<ComboItemModel>, String>((ref, comboId) {
+  ref.watch(clockTickProvider);
   final repo = ref.watch(comboRepositoryProvider);
   return repo.streamComboItems(comboId);
+});
+
+/// Stream provider family for restaurant menu items strictly scoped to branch
+final restaurantMenuStreamProvider = StreamProvider.family<List<FoodItem>, String>((ref, idOrBranchId) {
+  ref.watch(clockTickProvider);
+  final repo = ref.watch(restaurantRepositoryProvider);
+  final detailsAsync = ref.watch(restaurantDetailsStreamProvider(idOrBranchId));
+  final restaurant = detailsAsync.value;
+  final parentRestId = restaurant?.restaurantId;
+  final branchId = (restaurant?.branchId.isNotEmpty == true) ? restaurant!.branchId : (restaurant?.id ?? idOrBranchId);
+  return repo.streamRestaurantMenu(parentRestId ?? idOrBranchId, branchId: branchId);
 });
 
 /// Stream provider family for a single dynamic combo doc (real-time active/inactive status)
@@ -51,10 +68,16 @@ final singleComboItemStreamProvider = StreamProvider.family<ComboItemModel?, Str
 /// Stream provider for nearby restaurants filtered dynamically by delivery radius of customer's selected address
 final nearbyRestaurantsStreamProvider = StreamProvider<List<Restaurant>>((ref) {
   final addressState = ref.watch(addressProvider);
+  final authUser = ref.watch(authProvider).userModel;
   final selectedAddress = addressState.selectedAddress;
 
-  final userLat = selectedAddress?.latitude ?? 0.0;
-  final userLng = selectedAddress?.longitude ?? 0.0;
+  final double userLat = (selectedAddress != null && selectedAddress.latitude != 0.0)
+      ? selectedAddress.latitude
+      : (authUser?.latitude ?? 0.0);
+
+  final double userLng = (selectedAddress != null && selectedAddress.longitude != 0.0)
+      ? selectedAddress.longitude
+      : (authUser?.longitude ?? 0.0);
 
   final repo = ref.watch(restaurantRepositoryProvider);
 
@@ -67,9 +90,14 @@ final categoriesStreamProvider = StreamProvider<List<CategoryModel>>((ref) {
   return repo.streamCategories();
 });
 
-/// Stream provider for dynamic promotional banners and offers from Firestore
+/// Stream provider for dynamic promotional banners and offers from Firestore (scoped to eligible branch)
 final offersStreamProvider = StreamProvider<List<OfferModel>>((ref) {
+  final nearbyList = ref.watch(nearbyRestaurantsStreamProvider).value ?? [];
+  final nearestBranch = nearbyList.firstOrNull;
   final repo = ref.watch(restaurantRepositoryProvider);
+  if (nearestBranch != null) {
+    return repo.streamRestaurantOffers(nearestBranch.restaurantId, branchId: nearestBranch.id);
+  }
   return repo.streamActiveOffers();
 });
 
@@ -93,15 +121,7 @@ final restaurantDetailsStreamProvider = StreamProvider.family<Restaurant?, Strin
   return repo.streamRestaurantDetails(id, userLat: userLat, userLng: userLng);
 });
 
-/// Stream provider family for restaurant menu items strictly scoped to branch
-final restaurantMenuStreamProvider = StreamProvider.family<List<FoodItem>, String>((ref, idOrBranchId) {
-  final repo = ref.watch(restaurantRepositoryProvider);
-  final detailsAsync = ref.watch(restaurantDetailsStreamProvider(idOrBranchId));
-  final restaurant = detailsAsync.value;
-  final parentRestId = restaurant?.restaurantId;
-  final branchId = (restaurant?.branchId.isNotEmpty == true) ? restaurant!.branchId : (restaurant?.id ?? idOrBranchId);
-  return repo.streamRestaurantMenu(parentRestId ?? idOrBranchId, branchId: branchId);
-});
+
 
 /// Stream provider family for available restaurant tables
 final availableTablesStreamProvider = StreamProvider.family<List<TableModel>, String>((ref, idOrRestaurantId) {

@@ -37,8 +37,12 @@ class RestaurantRepository {
         final double bLat = Restaurant.parseDouble(data['latitude'] ?? data['location']?['latitude']);
         final double bLng = Restaurant.parseDouble(data['longitude'] ?? data['location']?['longitude']);
         final double serviceRadiusKm = Restaurant.parseDouble(
-          data['serviceRadiusKm'] ?? data['deliveryRadiusKm'] ?? data['deliveryRadius'] ?? data['radius'],
-          fallback: 5.0,
+          data['deliveryRadiusKm'] ??
+              data['maximumDeliveryRadius'] ??
+              data['deliveryRadius'] ??
+              data['serviceRadiusKm'] ??
+              data['radius'],
+          fallback: 10.0,
         );
 
         final String outletName = (data['restaurantName'] ?? data['name'] ?? 'Restaurant').toString();
@@ -168,7 +172,7 @@ class RestaurantRepository {
         return snap.docs
             .map((doc) => FoodItem.fromFirestore(doc.data(), doc.id))
             .where((item) {
-              if (!item.isAvailable) return false;
+              if (!item.isCurrentlyAvailableForBranch(targetBId)) return false;
 
               final String iBranchId = (item.branchId ?? '').trim();
               if (targetBId.isNotEmpty && iBranchId.isNotEmpty && iBranchId.toLowerCase() != 'all') {
@@ -356,11 +360,18 @@ class RestaurantRepository {
     final String targetBranchId = (branchId != null && branchId.isNotEmpty) ? branchId.trim() : restaurantId.trim();
     final String targetRestId = restaurantId.trim();
 
-    return _firestore.collection('menuItems').snapshots().map((snapshot) {
+    return _firestore
+        .collection('menuItems')
+        .snapshots()
+        .asyncExpand((snapshot) async* {
+          yield snapshot;
+          yield* Stream.periodic(const Duration(seconds: 5), (_) => snapshot);
+        })
+        .map((snapshot) {
       return snapshot.docs
           .map((doc) => FoodItem.fromFirestore(doc.data(), doc.id))
           .where((item) {
-            if (!item.isAvailable) return false;
+            if (!item.isCurrentlyAvailableForBranch(targetBranchId)) return false;
 
             final String iBranchId = (item.branchId ?? '').trim();
             final String iRestId = (item.restaurantId ?? '').trim();

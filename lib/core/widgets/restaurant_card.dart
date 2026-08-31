@@ -68,6 +68,35 @@ class RestaurantCard extends ConsumerWidget {
                   ),
                 ),
 
+                if (!restaurant.isCurrentlyOpen)
+                  Positioned(
+                    top: 12,
+                    left: 12,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                      decoration: BoxDecoration(
+                        color: Colors.red.shade700,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.lock_clock, size: 12, color: Colors.white),
+                          SizedBox(width: 4),
+                          Text(
+                            'CLOSED NOW',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 10,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: 0.5,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+
                 // Offer Badge
                 Positioned(
                   bottom: 12,

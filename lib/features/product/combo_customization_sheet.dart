@@ -404,6 +404,16 @@ class _ComboProductCustomizationSheetState
     );
   }
 
+  String _cleanGroupName(String rawName) {
+    return rawName
+        .replaceAll(RegExp(r'\s*REQUIRED\s*•?\s*SELECT\s*\d*', caseSensitive: false), '')
+        .replaceAll(RegExp(r'\s*REQUIRED\s*•?\s*CHOOSE\s*\d*', caseSensitive: false), '')
+        .replaceAll(RegExp(r'\s*REQUIRED\b', caseSensitive: false), '')
+        .replaceAll(RegExp(r'\s*OPTIONAL\b', caseSensitive: false), '')
+        .replaceAll(RegExp(r'\s+', caseSensitive: false), ' ')
+        .trim();
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -675,18 +685,19 @@ class _ComboProductCustomizationSheetState
                           children: [
                             // Item Header inside Size
                             Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Expanded(
                                   child: Column(
                                     crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
                                       Text(
-                                        varItem.name,
+                                        _cleanGroupName(varItem.name),
                                         style: TextStyle(
                                           fontSize: 14,
                                           fontWeight: FontWeight.w900,
                                           color: isDark ? Colors.white : AppColors.textDark,
+                                          height: 1.25,
                                         ),
                                       ),
                                       if (varItem.description.isNotEmpty) ...[
@@ -703,12 +714,13 @@ class _ComboProductCustomizationSheetState
                                     ],
                                   ),
                                 ),
+                                const Gap(8),
                                 Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                                   decoration: BoxDecoration(
                                     color: varItem.isRequired
                                         ? AppColors.primary.withValues(alpha: 0.12)
-                                        : Colors.grey.shade200,
+                                        : (isDark ? Colors.grey.shade800 : Colors.grey.shade200),
                                     borderRadius: BorderRadius.circular(6),
                                   ),
                                   child: Text(
@@ -718,7 +730,7 @@ class _ComboProductCustomizationSheetState
                                     style: TextStyle(
                                       fontSize: 9.5,
                                       fontWeight: FontWeight.w800,
-                                      color: varItem.isRequired ? AppColors.primary : Colors.grey.shade700,
+                                      color: varItem.isRequired ? AppColors.primary : (isDark ? Colors.grey.shade300 : Colors.grey.shade700),
                                     ),
                                   ),
                                 ),
@@ -841,22 +853,26 @@ class _ComboProductCustomizationSheetState
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text(
-                                  group.name,
-                                  style: TextStyle(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w900,
-                                    color: isDark ? Colors.white : AppColors.textDark,
+                                Expanded(
+                                  child: Text(
+                                    _cleanGroupName(group.name),
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w900,
+                                      color: isDark ? Colors.white : AppColors.textDark,
+                                      height: 1.25,
+                                    ),
                                   ),
                                 ),
+                                const Gap(8),
                                 Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                                   decoration: BoxDecoration(
                                     color: group.isRequired
                                         ? AppColors.primary.withValues(alpha: 0.12)
-                                        : Colors.grey.shade200,
+                                        : (isDark ? Colors.grey.shade800 : Colors.grey.shade200),
                                     borderRadius: BorderRadius.circular(6),
                                   ),
                                   child: Text(
@@ -866,7 +882,7 @@ class _ComboProductCustomizationSheetState
                                     style: TextStyle(
                                       fontSize: 9.5,
                                       fontWeight: FontWeight.w800,
-                                      color: group.isRequired ? AppColors.primary : Colors.grey.shade700,
+                                      color: group.isRequired ? AppColors.primary : (isDark ? Colors.grey.shade300 : Colors.grey.shade700),
                                     ),
                                   ),
                                 ),

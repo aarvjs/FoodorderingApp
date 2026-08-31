@@ -10,6 +10,7 @@ import '../../core/services/delivery_charge_service.dart';
 import '../../core/services/payu_service.dart';
 import '../../models/address.dart';
 import '../../auth/providers/auth_provider.dart';
+import '../home/providers/restaurant_providers.dart';
 
 
 
@@ -46,6 +47,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(cartProvider.notifier).checkAndExpireItems();
       final addressState = ref.read(addressProvider);
       final addresses = addressState.addresses;
       if (addresses.isNotEmpty) {
@@ -196,7 +198,27 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     final deliveryCalcAsync = ref.read(deliveryChargeCalculationProvider);
     final deliveryCalcResult = deliveryCalcAsync.value;
 
-    if (!isTakeAway && deliveryCalcResult?.isOutsideRadius == true) {
+    final firstItem = cartState.items.first;
+    final String targetBranchId = firstItem.branchId.isNotEmpty
+        ? firstItem.branchId
+        : (firstItem.foodItem.branchId ?? firstItem.restaurantId);
+
+    final detailsAsync = ref.read(restaurantDetailsStreamProvider(targetBranchId));
+    final cartRest = detailsAsync.value;
+    if (cartRest != null && !cartRest.isCurrentlyOpen) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '"${cartRest.name}" is currently closed (${cartRest.openingTime} – ${cartRest.closingTime}). Orders cannot be placed right now.',
+          ),
+          backgroundColor: AppColors.error,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
+    if (!isTakeAway && (deliveryCalcResult?.isOutsideRadius == true)) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
@@ -219,10 +241,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     final double computedTotal = (cartState.subtotal - cartState.couponDiscount - cartState.rewardDiscount + effectiveDeliveryFee + effectivePackagingCharge + effectiveGstAmount).clamp(0.0, double.infinity);
     final double effectiveGrandTotal = double.parse(computedTotal.toStringAsFixed(2));
 
-    final firstItem = cartState.items.first;
-    final String branchId = firstItem.branchId.isNotEmpty
-        ? firstItem.branchId
-        : (firstItem.foodItem.branchId ?? firstItem.restaurantId);
+    final String branchId = targetBranchId;
     final String restId = firstItem.restaurantId;
     final String restName = firstItem.restaurantName;
 

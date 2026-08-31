@@ -7,6 +7,7 @@ import '../config/app_colors.dart';
 import '../services/state_providers.dart';
 import '../utils/snackbar_utils.dart';
 import 'quantity_selector.dart';
+import '../../features/home/providers/restaurant_providers.dart';
 
 class FoodCard extends ConsumerWidget {
   final FoodItem foodItem;
@@ -32,6 +33,14 @@ class FoodCard extends ConsumerWidget {
     final String targetRestId = (foodItem.restaurantId != null && foodItem.restaurantId!.isNotEmpty)
         ? foodItem.restaurantId!
         : restaurantId;
+
+    // Check if target restaurant/branch is currently open
+    final detailsAsync = ref.read(restaurantDetailsStreamProvider(targetBranchId));
+    final restaurant = detailsAsync.value;
+    if (restaurant != null && !restaurant.isCurrentlyOpen) {
+      TopToast.show(context, '"$restaurantName" is currently closed. Ordering is not available right now.');
+      return;
+    }
 
     final newItem = CartItem(
       foodItem: foodItem.copyWith(

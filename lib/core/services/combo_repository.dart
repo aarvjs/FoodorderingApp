@@ -19,6 +19,10 @@ class ComboRepository {
         .handleError((err) {
           debugPrint('[ComboRepository] Firestore snapshot error on combos collection: $err');
         })
+        .asyncExpand((snapshot) async* {
+          yield snapshot;
+          yield* Stream.periodic(const Duration(seconds: 5), (_) => snapshot);
+        })
         .map((snapshot) {
       final list = snapshot.docs
           .map((doc) {
@@ -69,7 +73,7 @@ class ComboRepository {
 
 
   /// Stream dedicated combo items belonging specifically to a comboId from Firestore `comboItems` collection
-  Stream<List<ComboItemModel>> streamComboItems(String comboId) {
+  Stream<List<ComboItemModel>> streamComboItems(String comboId, {String? branchId}) {
     final String targetComboId = comboId.trim();
 
     return _firestore
@@ -78,13 +82,17 @@ class ComboRepository {
         .handleError((err) {
           debugPrint('[ComboRepository] Firestore snapshot error on comboItems collection: $err');
         })
+        .asyncExpand((snapshot) async* {
+          yield snapshot;
+          yield* Stream.periodic(const Duration(seconds: 5), (_) => snapshot);
+        })
         .map((snapshot) {
       final list = snapshot.docs
           .map((doc) {
             final data = doc.data();
             return ComboItemModel.fromFirestore(data, doc.id);
           })
-          .where((item) => item.comboId == targetComboId)
+          .where((item) => item.comboId == targetComboId && item.isCurrentlyAvailableForBranch(branchId))
           .toList();
 
       debugPrint('[ComboRepository] Total matched items for comboId="$targetComboId": ${list.length}');

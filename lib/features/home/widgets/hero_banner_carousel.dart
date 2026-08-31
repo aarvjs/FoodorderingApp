@@ -89,7 +89,7 @@ class _HeroBannerCarouselState extends ConsumerState<HeroBannerCarousel> {
     if (targetId.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Please select an outlet to view details'),
+          content: Text('No delivering outlet available near your location.'),
           duration: Duration(seconds: 2),
         ),
       );

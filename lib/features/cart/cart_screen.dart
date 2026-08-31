@@ -13,6 +13,7 @@ import '../address/widgets/address_selection_bottom_sheet.dart';
 
 import '../rewards/repositories/reward_repository.dart';
 import 'widgets/coupon_selection_bottom_sheet.dart';
+import '../home/providers/restaurant_providers.dart';
 
 class CartScreen extends ConsumerStatefulWidget {
   const CartScreen({super.key});
@@ -23,6 +24,14 @@ class CartScreen extends ConsumerStatefulWidget {
 
 class _CartScreenState extends ConsumerState<CartScreen> {
   final TextEditingController _couponController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(cartProvider.notifier).checkAndExpireItems();
+    });
+  }
 
   @override
   void dispose() {
@@ -1038,6 +1047,21 @@ class _CartScreenState extends ConsumerState<CartScreen> {
                         text: isOutsideRadius ? 'Outside Delivery Area' : 'Proceed to Pay',
                         height: 48,
                         onPressed: () {
+                          final detailsAsync = ref.read(restaurantDetailsStreamProvider(restaurantId));
+                          final cartRest = detailsAsync.value;
+                          if (cartRest != null && !cartRest.isCurrentlyOpen) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                  '"${cartRest.name}" is currently closed (${cartRest.openingTime} – ${cartRest.closingTime}). Orders cannot be placed right now.',
+                                ),
+                                backgroundColor: AppColors.error,
+                                behavior: SnackBarBehavior.floating,
+                              ),
+                            );
+                            return;
+                          }
+
                           if (isOutsideRadius) {
                             ScaffoldMessenger.of(context).showSnackBar(
                               SnackBar(

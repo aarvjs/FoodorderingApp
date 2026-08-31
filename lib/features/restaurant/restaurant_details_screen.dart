@@ -38,52 +38,6 @@ class _RestaurantDetailsScreenState extends ConsumerState<RestaurantDetailsScree
   final FocusNode _searchFocusNode = FocusNode();
   String _menuSearchQuery = '';
 
-  bool _calculateIsOpen(Restaurant restaurant) {
-    if (!restaurant.isOpen) return false;
-
-    try {
-      final now = DateTime.now();
-      final openTime = _parseTimeOfDay(restaurant.openingTime);
-      final closeTime = _parseTimeOfDay(restaurant.closingTime);
-
-      if (openTime == null || closeTime == null) return restaurant.isOpen;
-
-      final currentMinutes = now.hour * 60 + now.minute;
-      final openMinutes = openTime.hour * 60 + openTime.minute;
-      final closeMinutes = closeTime.hour * 60 + closeTime.minute;
-
-      if (closeMinutes > openMinutes) {
-        return currentMinutes >= openMinutes && currentMinutes <= closeMinutes;
-      } else {
-        return currentMinutes >= openMinutes || currentMinutes <= closeMinutes;
-      }
-    } catch (e) {
-      return restaurant.isOpen;
-    }
-  }
-
-  TimeOfDay? _parseTimeOfDay(String timeStr) {
-    if (timeStr.isEmpty) return null;
-    try {
-      final cleaned = timeStr.trim().toUpperCase();
-      final isPM = cleaned.contains('PM');
-      final isAM = cleaned.contains('AM');
-      final digitsOnly = cleaned.replaceAll(RegExp(r'[^0-9:]'), '');
-      final parts = digitsOnly.split(':');
-      if (parts.isEmpty || parts[0].isEmpty) return null;
-
-      int hour = int.parse(parts[0]);
-      int minute = parts.length > 1 && parts[1].isNotEmpty ? int.parse(parts[1]) : 0;
-
-      if (isPM && hour < 12) hour += 12;
-      if (isAM && hour == 12) hour = 0;
-
-      return TimeOfDay(hour: hour, minute: minute);
-    } catch (e) {
-      return null;
-    }
-  }
-
   @override
   void dispose() {
     _searchFocusNode.dispose();
@@ -376,7 +330,7 @@ class _RestaurantDetailsScreenState extends ConsumerState<RestaurantDetailsScree
                       // 3. Contact + Timing + OPEN/CLOSED Status in one clean horizontal row
                       Builder(
                         builder: (context) {
-                          final bool isCalculatedOpen = _calculateIsOpen(restaurant);
+                          final bool isCalculatedOpen = restaurant.isCurrentlyOpen;
                           return Container(
                             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                             decoration: BoxDecoration(
@@ -468,6 +422,35 @@ class _RestaurantDetailsScreenState extends ConsumerState<RestaurantDetailsScree
                           );
                         },
                       ),
+
+                      if (!restaurant.isCurrentlyOpen) ...[
+                        const Gap(10),
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                          decoration: BoxDecoration(
+                            color: Colors.red.shade50,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: Colors.red.shade200),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(Icons.lock_clock, size: 18, color: Colors.red.shade700),
+                              const Gap(8),
+                              Expanded(
+                                child: Text(
+                                  'Outlet Closed Now • Ordering resumes during opening hours (${restaurant.openingTime} – ${restaurant.closingTime}).',
+                                  style: TextStyle(
+                                    fontSize: 11.5,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.red.shade900,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
 
                       const Gap(12),
                       const Divider(),

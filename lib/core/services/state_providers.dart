@@ -187,7 +187,31 @@ class CouponApplyResult {
 
 class CartNotifier extends Notifier<CartState> {
   @override
-  CartState build() => const CartState(items: []);
+  CartState build() {
+    final initialState = const CartState(items: []);
+    // Perform initial expiry check on build
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      checkAndExpireItems();
+    });
+    return initialState;
+  }
+
+  void checkAndExpireItems() {
+    if (state.items.isEmpty) return;
+    final now = DateTime.now();
+    final validItems = state.items.where((item) {
+      final ageMs = now.difference(item.addedAt).inMilliseconds;
+      return ageMs < (5 * 3600 * 1000); // 5-hour cart retention rule
+    }).toList();
+
+    if (validItems.length != state.items.length) {
+      if (validItems.isEmpty) {
+        clearCart();
+      } else {
+        state = state.copyWith(items: validItems);
+      }
+    }
+  }
 
   void setOrderType(String orderType) {
     state = state.copyWith(selectedOrderType: orderType);

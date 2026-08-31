@@ -271,6 +271,10 @@ class ComboItemModel {
   final bool isVeg;
   final double rating;
   final int ratingCount;
+  final bool isActive;
+  final String? availableFrom;
+  final String? availableUntil;
+  final Map<String, dynamic>? branchAvailability;
   final bool isCustomisable;
   final List<ComboCustomizationGroupModel>? _customizationGroups;
   final bool isVariantEnabled;
@@ -292,6 +296,10 @@ class ComboItemModel {
     this.isVeg = true,
     this.rating = 4.2,
     this.ratingCount = 569,
+    this.isActive = true,
+    this.availableFrom,
+    this.availableUntil,
+    this.branchAvailability,
     this.isCustomisable = true,
     List<ComboCustomizationGroupModel>? customizationGroups,
     this.isVariantEnabled = false,
@@ -301,6 +309,93 @@ class ComboItemModel {
 
   List<ComboCustomizationGroupModel> get customizationGroups =>
       _customizationGroups ?? const [];
+
+  static String _firstNonEmpty(List<dynamic> values) {
+    for (final v in values) {
+      if (v != null) {
+        final s = v.toString().trim();
+        if (s.isNotEmpty) return s;
+      }
+    }
+    return '';
+  }
+
+  bool isCurrentlyAvailableForBranch(String? targetBranchId) {
+    bool bActive = isActive;
+    String sFrom = availableFrom ?? '';
+    String sUntil = availableUntil ?? '';
+
+    if (branchAvailability != null && branchAvailability!.isNotEmpty) {
+      dynamic override;
+      if (targetBranchId != null && targetBranchId.isNotEmpty) {
+        override = branchAvailability![targetBranchId];
+      }
+      if (override == null) {
+        override = branchAvailability!.values.firstWhere((v) => v is Map, orElse: () => null);
+      }
+
+      if (override is Map) {
+        final Map map = override;
+        if (map.containsKey('isActive')) {
+          bActive = map['isActive'] == true;
+        } else if (map.containsKey('isAvailable')) {
+          bActive = map['isAvailable'] == true;
+        }
+
+        final fromMap = _firstNonEmpty([map['availableFrom']]);
+        if (fromMap.isNotEmpty) sFrom = fromMap;
+
+        final untilMap = _firstNonEmpty([map['availableUntil']]);
+        if (untilMap.isNotEmpty) sUntil = untilMap;
+      }
+    }
+
+    if (!bActive) return false;
+    return _isWithinTimeSchedule(sFrom, sUntil);
+  }
+
+  bool _isWithinTimeSchedule(String sFrom, String sUntil) {
+    final startMinutesParsed = parseTimeToMinutes(sFrom);
+    final endMinutesParsed = parseTimeToMinutes(sUntil);
+
+    if (startMinutesParsed == null && endMinutesParsed == null) return true;
+
+    final startMinutes = startMinutesParsed ?? 0;
+    final endMinutes = endMinutesParsed ?? 1439;
+
+    final now = DateTime.now();
+    final currentMinutes = now.hour * 60 + now.minute;
+
+    if (endMinutes > startMinutes) {
+      return currentMinutes >= startMinutes && currentMinutes < endMinutes;
+    } else if (startMinutes > endMinutes) {
+      return currentMinutes >= startMinutes || currentMinutes < endMinutes;
+    } else {
+      return true;
+    }
+  }
+
+  static int? parseTimeToMinutes(String timeStr) {
+    if (timeStr.isEmpty) return null;
+    try {
+      final cleaned = timeStr.trim().toUpperCase();
+      final isPM = cleaned.contains('PM');
+      final isAM = cleaned.contains('AM');
+      final digitsOnly = cleaned.replaceAll(RegExp(r'[^0-9:]'), '');
+      final parts = digitsOnly.split(':');
+      if (parts.isEmpty || parts[0].isEmpty) return null;
+
+      int hour = int.parse(parts[0]);
+      int minute = parts.length > 1 && parts[1].isNotEmpty ? int.parse(parts[1]) : 0;
+
+      if (isPM && hour < 12) hour += 12;
+      if (isAM && hour == 12) hour = 0;
+
+      return hour * 60 + minute;
+    } catch (_) {
+      return null;
+    }
+  }
 
   factory ComboItemModel.fromFirestore(Map<String, dynamic> data, String docId) {
     final branchIdsList = (data['branchIds'] as List?)
@@ -330,6 +425,13 @@ class ComboItemModel {
     final int ratingCount = (countVal is num)
         ? countVal.toInt()
         : int.tryParse(countVal?.toString() ?? '569') ?? 569;
+
+    final bool isActive = (data['isActive'] != false) && (data['isAvailable'] != false) && (data['status'] == null || data['status'] == 'ACTIVE');
+    final String? availableFrom = data['availableFrom']?.toString();
+    final String? availableUntil = data['availableUntil']?.toString();
+    final Map<String, dynamic>? branchAvailability = data['branchAvailability'] is Map
+        ? Map<String, dynamic>.from(data['branchAvailability'])
+        : null;
 
     final rawGroups = data['customizationGroups'] as List? ?? data['customizations'] as List? ?? [];
     final parsedGroups = <ComboCustomizationGroupModel>[];
@@ -374,6 +476,10 @@ class ComboItemModel {
       isVeg: isVeg,
       rating: rating,
       ratingCount: ratingCount,
+      isActive: isActive,
+      availableFrom: availableFrom,
+      availableUntil: availableUntil,
+      branchAvailability: branchAvailability,
       isCustomisable: data['isCustomisable'] ?? (parsedGroups.isNotEmpty || isVariantEnabled),
       customizationGroups: parsedGroups,
       isVariantEnabled: isVariantEnabled,

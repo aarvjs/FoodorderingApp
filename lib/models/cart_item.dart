@@ -42,6 +42,7 @@ class CartItem {
   final String restaurantId;
   final String branchId;
   final String restaurantName;
+  final DateTime addedAt;
 
   // Combo & Customization Extensions
   final bool isCombo;
@@ -64,6 +65,7 @@ class CartItem {
     required this.restaurantId,
     String? branchId,
     required this.restaurantName,
+    DateTime? addedAt,
     this.isCombo = false,
     this.comboId,
     this.comboName,
@@ -75,7 +77,14 @@ class CartItem {
     this.selectedAddons = const [],
     this.selectedCustomizations = const [],
     this.customizationSelections = const [],
-  }) : branchId = (branchId != null && branchId.isNotEmpty) ? branchId : restaurantId;
+  })  : branchId = (branchId != null && branchId.isNotEmpty) ? branchId : restaurantId,
+        addedAt = addedAt ?? DateTime.now();
+
+  /// 5-Hour Cart Expiry Check
+  bool get isExpired {
+    final ageMs = DateTime.now().difference(addedAt).inMilliseconds;
+    return ageMs >= (5 * 3600 * 1000); // 5 hours in milliseconds
+  }
 
   double get displayBasePrice => basePrice > 0 ? basePrice : foodItem.price;
 
@@ -111,6 +120,7 @@ class CartItem {
     String? restaurantId,
     String? branchId,
     String? restaurantName,
+    DateTime? addedAt,
     bool? isCombo,
     String? comboId,
     String? comboName,
@@ -131,6 +141,7 @@ class CartItem {
       restaurantId: restaurantId ?? this.restaurantId,
       branchId: branchId ?? this.branchId,
       restaurantName: restaurantName ?? this.restaurantName,
+      addedAt: addedAt ?? this.addedAt,
       isCombo: isCombo ?? this.isCombo,
       comboId: comboId ?? this.comboId,
       comboName: comboName ?? this.comboName,
