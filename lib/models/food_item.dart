@@ -14,6 +14,7 @@ class FoodItem {
   final bool isAvailable;
   final String? availableFrom;
   final String? availableUntil;
+  final List<String>? availableDays;
   final Map<String, dynamic>? branchAvailability;
   final double? discountPrice;
   final String? restaurantId;
@@ -37,6 +38,7 @@ class FoodItem {
     this.isAvailable = true,
     this.availableFrom,
     this.availableUntil,
+    this.availableDays,
     this.branchAvailability,
     this.discountPrice,
     this.restaurantId,
@@ -44,6 +46,24 @@ class FoodItem {
     this.isBestseller = false,
     this.isRecommended = false,
   });
+
+  static final Map<int, String> _shortDays = {
+    1: 'Mon', 2: 'Tue', 3: 'Wed', 4: 'Thu', 5: 'Fri', 6: 'Sat', 7: 'Sun'
+  };
+  static final Map<int, String> _longDays = {
+    1: 'Monday', 2: 'Tuesday', 3: 'Wednesday', 4: 'Thursday', 5: 'Friday', 6: 'Saturday', 7: 'Sunday'
+  };
+
+  static bool isDayAvailable(List<dynamic>? days) {
+    if (days == null || days.isEmpty) return true;
+    final now = DateTime.now();
+    final shortToday = _shortDays[now.weekday]?.toLowerCase();
+    final longToday = _longDays[now.weekday]?.toLowerCase();
+    return days.any((d) {
+      final s = d.toString().trim().toLowerCase();
+      return s == shortToday || s == longToday;
+    });
+  }
 
   static int? parseTimeToMinutes(String timeStr) {
     if (timeStr.isEmpty) return null;
@@ -81,6 +101,7 @@ class FoodItem {
     bool bActive = isAvailable;
     String sFrom = availableFrom ?? '';
     String sUntil = availableUntil ?? '';
+    List<dynamic>? days = availableDays;
 
     if (branchAvailability != null && branchAvailability!.isNotEmpty) {
       dynamic override;
@@ -104,10 +125,15 @@ class FoodItem {
 
         final untilMap = _firstNonEmpty([map['availableUntil']]);
         if (untilMap.isNotEmpty) sUntil = untilMap;
+
+        if (map['availableDays'] is List) {
+          days = List<String>.from((map['availableDays'] as List).map((e) => e.toString()));
+        }
       }
     }
 
     if (!bActive) return false;
+    if (!isDayAvailable(days)) return false;
     return _isWithinTimeSchedule(sFrom, sUntil);
   }
 
@@ -154,6 +180,7 @@ class FoodItem {
 
     final String? availableFrom = data['availableFrom']?.toString();
     final String? availableUntil = data['availableUntil']?.toString();
+    final List<String>? availableDays = (data['availableDays'] as List?)?.map((e) => e.toString()).toList();
     final Map<String, dynamic>? branchAvailability = data['branchAvailability'] is Map
         ? Map<String, dynamic>.from(data['branchAvailability'])
         : null;
@@ -180,6 +207,7 @@ class FoodItem {
       isAvailable: isAvailable,
       availableFrom: availableFrom,
       availableUntil: availableUntil,
+      availableDays: availableDays,
       branchAvailability: branchAvailability,
       restaurantId: data['restaurantId']?.toString(),
       branchId: data['branchId']?.toString(),

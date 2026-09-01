@@ -1,3 +1,5 @@
+import 'food_item.dart';
+
 class ComboVariantOption {
   final String id;
   final String name;
@@ -274,6 +276,7 @@ class ComboItemModel {
   final bool isActive;
   final String? availableFrom;
   final String? availableUntil;
+  final List<String>? availableDays;
   final Map<String, dynamic>? branchAvailability;
   final bool isCustomisable;
   final List<ComboCustomizationGroupModel>? _customizationGroups;
@@ -299,6 +302,7 @@ class ComboItemModel {
     this.isActive = true,
     this.availableFrom,
     this.availableUntil,
+    this.availableDays,
     this.branchAvailability,
     this.isCustomisable = true,
     List<ComboCustomizationGroupModel>? customizationGroups,
@@ -324,6 +328,7 @@ class ComboItemModel {
     bool bActive = isActive;
     String sFrom = availableFrom ?? '';
     String sUntil = availableUntil ?? '';
+    List<dynamic>? days = availableDays;
 
     if (branchAvailability != null && branchAvailability!.isNotEmpty) {
       dynamic override;
@@ -347,10 +352,15 @@ class ComboItemModel {
 
         final untilMap = _firstNonEmpty([map['availableUntil']]);
         if (untilMap.isNotEmpty) sUntil = untilMap;
+
+        if (map['availableDays'] is List) {
+          days = List<String>.from((map['availableDays'] as List).map((e) => e.toString()));
+        }
       }
     }
 
     if (!bActive) return false;
+    if (!FoodItem.isDayAvailable(days)) return false;
     return _isWithinTimeSchedule(sFrom, sUntil);
   }
 
@@ -460,6 +470,7 @@ class ComboItemModel {
     if (data['createdAt'] is String) {
       createdAt = DateTime.tryParse(data['createdAt']);
     }
+    final List<String>? availableDays = (data['availableDays'] as List?)?.map((e) => e.toString()).toList();
 
     return ComboItemModel(
       id: docId,
@@ -479,6 +490,7 @@ class ComboItemModel {
       isActive: isActive,
       availableFrom: availableFrom,
       availableUntil: availableUntil,
+      availableDays: availableDays,
       branchAvailability: branchAvailability,
       isCustomisable: data['isCustomisable'] ?? (parsedGroups.isNotEmpty || isVariantEnabled),
       customizationGroups: parsedGroups,
