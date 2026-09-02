@@ -11,6 +11,7 @@ class DeliveryChargeCalculationResult {
   final double packagingCharge;
   final double maxRadiusKm;
   final double taxPercentage;
+  final double freeDeliveryThreshold;
   final bool isMaxRadiusConfigured;
   final bool isOutsideRadius;
   final bool hasSlabs;
@@ -22,6 +23,7 @@ class DeliveryChargeCalculationResult {
     this.packagingCharge = 0.0,
     required this.maxRadiusKm,
     this.taxPercentage = 0.0,
+    this.freeDeliveryThreshold = 0.0,
     required this.isMaxRadiusConfigured,
     required this.isOutsideRadius,
     required this.hasSlabs,
@@ -35,6 +37,7 @@ class DeliveryChargeCalculationResult {
       packagingCharge: 0.0,
       maxRadiusKm: 20.0,
       taxPercentage: 0.0,
+      freeDeliveryThreshold: 0.0,
       isMaxRadiusConfigured: false,
       isOutsideRadius: false,
       hasSlabs: false,
@@ -51,6 +54,7 @@ class DeliveryChargeService {
     required String restaurantId,
     required double userLat,
     required double userLng,
+    double cartSubtotal = 0.0,
   }) async {
     final String targetBranchId = branchId.isNotEmpty ? branchId : restaurantId;
     if (targetBranchId.isEmpty) {
@@ -180,28 +184,35 @@ class DeliveryChargeService {
 
       // 6. Find matching distance slab
       double calculatedFee = 0.0;
-      bool matched = false;
+      double freeDeliveryThreshold = 0.0;
+      DeliveryChargeSlab? matchedSlab;
 
       if (slabs.isNotEmpty) {
         for (final slab in slabs) {
           // Range check: min <= dist < max (or <= max if dist equals max boundary)
           if (distKm >= slab.minDistanceKm && (distKm < slab.maxDistanceKm || (distKm == slab.maxDistanceKm))) {
-            calculatedFee = slab.deliveryCharge;
-            matched = true;
+            matchedSlab = slab;
             break;
           }
         }
 
         // If distance is past the last slab's min distance but within maxRadius, match highest slab
-        if (!matched && distKm >= slabs.last.minDistanceKm) {
-          calculatedFee = slabs.last.deliveryCharge;
-          matched = true;
+        if (matchedSlab == null && distKm >= slabs.last.minDistanceKm) {
+          matchedSlab = slabs.last;
         }
 
         // If distance is below the first slab's min distance, match lowest slab
-        if (!matched && distKm < slabs.first.minDistanceKm) {
-          calculatedFee = slabs.first.deliveryCharge;
-          matched = true;
+        if (matchedSlab == null && distKm < slabs.first.minDistanceKm) {
+          matchedSlab = slabs.first;
+        }
+
+        if (matchedSlab != null) {
+          freeDeliveryThreshold = matchedSlab.freeDeliveryThreshold;
+          if (matchedSlab.freeDeliveryThreshold > 0 && cartSubtotal >= matchedSlab.freeDeliveryThreshold) {
+            calculatedFee = 0.0;
+          } else {
+            calculatedFee = matchedSlab.deliveryCharge;
+          }
         }
       }
 
@@ -211,6 +222,7 @@ class DeliveryChargeService {
         packagingCharge: packagingCharge,
         maxRadiusKm: maxRadiusKm,
         taxPercentage: taxPercentage,
+        freeDeliveryThreshold: freeDeliveryThreshold,
         isMaxRadiusConfigured: isMaxRadiusConfigured,
         isOutsideRadius: false,
         hasSlabs: slabs.isNotEmpty,
@@ -270,5 +282,6 @@ final deliveryChargeCalculationProvider = FutureProvider<DeliveryChargeCalculati
     restaurantId: restId,
     userLat: selectedAddress.latitude,
     userLng: selectedAddress.longitude,
+    cartSubtotal: cartState.subtotal,
   );
 });

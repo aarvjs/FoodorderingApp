@@ -218,6 +218,17 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       return;
     }
 
+    if (!isTakeAway && cartState.subtotal < 149) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Minimum order value for delivery is ₹149.'),
+          backgroundColor: AppColors.error,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
     if (!isTakeAway && (deliveryCalcResult?.isOutsideRadius == true)) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(

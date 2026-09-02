@@ -977,6 +977,30 @@ class _CartScreenState extends ConsumerState<CartScreen> {
                     ),
                   ),
 
+                  if (!cartState.isTakeAway && cartState.subtotal < 149) ...[
+                    const Gap(16),
+                    Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: Colors.amber.shade50,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: Colors.amber.shade300),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(Icons.info_outline_rounded, color: Colors.amber.shade800, size: 22),
+                          const Gap(10),
+                          Expanded(
+                            child: Text(
+                              'Minimum order value for delivery is ₹149. Add ₹${(149 - cartState.subtotal).toStringAsFixed(0)} more items to place order.',
+                              style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.amber.shade900),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+
                   if (isOutsideRadius) ...[
                     const Gap(16),
                     Container(
@@ -1044,7 +1068,11 @@ class _CartScreenState extends ConsumerState<CartScreen> {
                     // Checkout Button
                     Expanded(
                       child: CustomButton(
-                        text: isOutsideRadius ? 'Outside Delivery Area' : 'Proceed to Pay',
+                        text: isOutsideRadius
+                            ? 'Outside Delivery Area'
+                            : (!cartState.isTakeAway && cartState.subtotal < 149
+                                ? 'Min Order ₹149'
+                                : 'Proceed to Pay'),
                         height: 48,
                         onPressed: () {
                           final detailsAsync = ref.read(restaurantDetailsStreamProvider(restaurantId));
@@ -1055,6 +1083,17 @@ class _CartScreenState extends ConsumerState<CartScreen> {
                                 content: Text(
                                   '"${cartRest.name}" is currently closed (${cartRest.openingTime} – ${cartRest.closingTime}). Orders cannot be placed right now.',
                                 ),
+                                backgroundColor: AppColors.error,
+                                behavior: SnackBarBehavior.floating,
+                              ),
+                            );
+                            return;
+                          }
+
+                          if (!cartState.isTakeAway && cartState.subtotal < 149) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Minimum order value for delivery is ₹149.'),
                                 backgroundColor: AppColors.error,
                                 behavior: SnackBarBehavior.floating,
                               ),
