@@ -27,8 +27,6 @@ class ProductDetailsScreen extends ConsumerStatefulWidget {
 
 class _ProductDetailsScreenState extends ConsumerState<ProductDetailsScreen> {
   int _quantity = 1;
-  String _selectedSize = 'Medium';
-  final List<String> _sizes = ['Regular', 'Medium', 'Large'];
   final TextEditingController _instructionController = TextEditingController();
 
   @override
@@ -73,10 +71,10 @@ class _ProductDetailsScreenState extends ConsumerState<ProductDetailsScreen> {
     // Watch cart notifier
     final cartNotifier = ref.read(cartProvider.notifier);
 
-    // Calculate price modifiers
-    double finalPrice = foodItem.price;
-    if (_selectedSize == 'Regular') finalPrice -= 20;
-    if (_selectedSize == 'Large') finalPrice += 40;
+    // Calculate real item price from database
+    final double finalPrice = (foodItem.discountPrice != null && foodItem.discountPrice! > 0)
+        ? foodItem.discountPrice!
+        : foodItem.price;
 
     return Scaffold(
       body: Stack(
@@ -167,16 +165,48 @@ class _ProductDetailsScreenState extends ConsumerState<ProductDetailsScreen> {
                       // Header details
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Expanded(
-                            child: Text(
-                              foodItem.name,
-                              style: TextStyle(
-                                fontSize: 24,
-                                fontWeight: FontWeight.w900,
-                                color: isDark ? Colors.white : AppColors.textDark,
-                                letterSpacing: -0.5,
-                              ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  foodItem.name,
+                                  style: TextStyle(
+                                    fontSize: 24,
+                                    fontWeight: FontWeight.w900,
+                                    color: isDark ? Colors.white : AppColors.textDark,
+                                    letterSpacing: -0.5,
+                                  ),
+                                ),
+                                const Gap(6),
+                                Row(
+                                  children: [
+                                    Text(
+                                      '₹${finalPrice.toStringAsFixed(0)}',
+                                      style: TextStyle(
+                                        fontSize: 22,
+                                        fontWeight: FontWeight.w900,
+                                        color: isDark ? AppColors.darkPrimary : AppColors.primary,
+                                      ),
+                                    ),
+                                    if (foodItem.discountPrice != null &&
+                                        foodItem.discountPrice! > 0 &&
+                                        foodItem.price > foodItem.discountPrice!) ...[
+                                      const Gap(8),
+                                      Text(
+                                        '₹${foodItem.price.toStringAsFixed(0)}',
+                                        style: const TextStyle(
+                                          fontSize: 14,
+                                          decoration: TextDecoration.lineThrough,
+                                          color: AppColors.textLight,
+                                        ),
+                                      ),
+                                    ],
+                                  ],
+                                ),
+                              ],
                             ),
                           ),
                           Container(
@@ -202,172 +232,26 @@ class _ProductDetailsScreenState extends ConsumerState<ProductDetailsScreen> {
                           ),
                         ],
                       ),
-                      const Gap(4),
+                      const Gap(6),
                       Text(
                         'from ${restaurant?.name ?? 'Restaurant'}',
                         style: TextStyle(
-                          fontSize: 14,
+                          fontSize: 13,
                           fontWeight: FontWeight.bold,
                           color: isDark ? AppColors.darkPrimary : AppColors.primary,
                         ),
                       ),
-                      const Gap(16),
-                      
-                      // Description
-                      Text(
-                        foodItem.description,
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: isDark ? Colors.grey.shade400 : AppColors.textLight,
-                          height: 1.5,
+                      if (foodItem.description.isNotEmpty) ...[
+                        const Gap(16),
+                        Text(
+                          foodItem.description,
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: isDark ? Colors.grey.shade400 : AppColors.textLight,
+                            height: 1.5,
+                          ),
                         ),
-                      ),
-
-                      const Gap(24),
-                      const Divider(),
-                      const Gap(16),
-
-                      // Size Selection Row
-                      Text(
-                        'Select Size',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                          color: isDark ? Colors.white : AppColors.textDark,
-                        ),
-                      ),
-                      const Gap(12),
-                      Row(
-                        children: _sizes.map((size) {
-                          final isSel = _selectedSize == size;
-                          return Expanded(
-                            child: GestureDetector(
-                              onTap: () {
-                                setState(() {
-                                  _selectedSize = size;
-                                });
-                              },
-                              child: Container(
-                                margin: const EdgeInsets.symmetric(horizontal: 4),
-                                padding: const EdgeInsets.symmetric(vertical: 12),
-                                decoration: BoxDecoration(
-                                  color: isSel
-                                      ? (isDark ? AppColors.darkPrimary : AppColors.primary)
-                                      : (isDark ? AppColors.darkCard : Colors.white),
-                                  borderRadius: BorderRadius.circular(12),
-                                  border: Border.all(
-                                    color: isSel 
-                                        ? Colors.transparent 
-                                        : (isDark ? AppColors.darkDivider : Colors.grey.shade200),
-                                  ),
-                                ),
-                                child: Center(
-                                  child: Text(
-                                    size,
-                                    style: TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      color: isSel
-                                          ? (isDark ? AppColors.textDark : Colors.white)
-                                          : (isDark ? Colors.white : AppColors.textDark),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
-                          );
-                        }).toList(),
-                      ),
-
-                      const Gap(24),
-                      const Divider(),
-                      const Gap(16),
-
-                      // Ingredients
-                      Text(
-                        'Ingredients',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                          color: isDark ? Colors.white : AppColors.textDark,
-                        ),
-                      ),
-                      const Gap(12),
-                      SizedBox(
-                        height: 38,
-                        child: ListView.builder(
-                          scrollDirection: Axis.horizontal,
-                          itemCount: foodItem.ingredients.length,
-                          itemBuilder: (context, index) {
-                            return Container(
-                              margin: const EdgeInsets.only(right: 8),
-                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                              decoration: BoxDecoration(
-                                color: isDark ? AppColors.darkCard : Colors.grey.shade100,
-                                borderRadius: BorderRadius.circular(10),
-                                border: Border.all(color: isDark ? AppColors.darkDivider : Colors.grey.shade200),
-                              ),
-                              child: Text(
-                                foodItem.ingredients[index],
-                                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
-                              ),
-                            );
-                          },
-                        ),
-                      ),
-
-                      const Gap(24),
-                      const Divider(),
-                      const Gap(16),
-
-                      // Nutrition Grid
-                      Text(
-                        'Nutrition Facts',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                          color: isDark ? Colors.white : AppColors.textDark,
-                        ),
-                      ),
-                      const Gap(12),
-                      GridView.builder(
-                        shrinkWrap: true,
-                        physics: const NeverScrollableScrollPhysics(),
-                        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: 4,
-                          childAspectRatio: 1.2,
-                          crossAxisSpacing: 10,
-                        ),
-                        itemCount: foodItem.nutrition.length,
-                        itemBuilder: (context, index) {
-                          final key = foodItem.nutrition.keys.elementAt(index);
-                          final val = foodItem.nutrition[key]!;
-                          return Container(
-                            decoration: BoxDecoration(
-                              color: isDark ? AppColors.darkCard : Colors.grey.shade50,
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: isDark ? AppColors.darkDivider : Colors.grey.shade200),
-                            ),
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Text(
-                                  val,
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 14,
-                                    color: isDark ? AppColors.darkPrimary : AppColors.primary,
-                                  ),
-                                ),
-                                const Gap(2),
-                                Text(
-                                  key,
-                                  style: const TextStyle(fontSize: 10, color: AppColors.textLight),
-                                ),
-                              ],
-                            ),
-                          );
-                        },
-                      ),
+                      ],
 
                       const Gap(24),
                       const Divider(),
@@ -453,7 +337,7 @@ class _ProductDetailsScreenState extends ConsumerState<ProductDetailsScreen> {
                           foodItem: foodItem.copyWith(price: finalPrice),
                           quantity: _quantity,
                           unitPrice: finalPrice,
-                          selectedSize: _selectedSize,
+                          selectedSize: null,
                           customInstructions: _instructionController.text.trim().isEmpty 
                               ? null 
                               : _instructionController.text.trim(),
