@@ -11,6 +11,8 @@ class DeliveryChargeCalculationResult {
   final double packagingCharge;
   final double maxRadiusKm;
   final double taxPercentage;
+  final String branchGstNumber;
+  final String branchFssaiNumber;
   final double freeDeliveryThreshold;
   final bool isMaxRadiusConfigured;
   final bool isOutsideRadius;
@@ -23,6 +25,8 @@ class DeliveryChargeCalculationResult {
     this.packagingCharge = 0.0,
     required this.maxRadiusKm,
     this.taxPercentage = 0.0,
+    this.branchGstNumber = '',
+    this.branchFssaiNumber = '',
     this.freeDeliveryThreshold = 0.0,
     required this.isMaxRadiusConfigured,
     required this.isOutsideRadius,
@@ -37,6 +41,8 @@ class DeliveryChargeCalculationResult {
       packagingCharge: 0.0,
       maxRadiusKm: 20.0,
       taxPercentage: 0.0,
+      branchGstNumber: '',
+      branchFssaiNumber: '',
       freeDeliveryThreshold: 0.0,
       isMaxRadiusConfigured: false,
       isOutsideRadius: false,
@@ -103,6 +109,9 @@ class DeliveryChargeService {
         }
       }
 
+      String branchGstNumber = '';
+      String branchFssaiNumber = '';
+
       if (branchData != null) {
         branchLat = _numToDouble(branchData['latitude'] ?? branchData['location']?['latitude']);
         branchLng = _numToDouble(branchData['longitude'] ?? branchData['location']?['longitude']);
@@ -122,6 +131,9 @@ class DeliveryChargeService {
           branchData['packagingCharge'] ?? branchData['packagingCharges'] ?? branchData['packagingFee'],
           fallback: 0.0,
         );
+
+        branchGstNumber = (branchData['gstNumber'] ?? branchData['branchGstNumber'] ?? '').toString();
+        branchFssaiNumber = (branchData['fssaiNumber'] ?? branchData['fssai'] ?? branchData['branchFssaiNumber'] ?? branchData['fssaiLicNo'] ?? '').toString();
       }
 
       // 2. Customer location validation
@@ -132,6 +144,8 @@ class DeliveryChargeService {
           packagingCharge: packagingCharge,
           maxRadiusKm: maxRadiusKm,
           taxPercentage: taxPercentage,
+          branchGstNumber: branchGstNumber,
+          branchFssaiNumber: branchFssaiNumber,
           isMaxRadiusConfigured: isMaxRadiusConfigured,
           isOutsideRadius: false,
           hasSlabs: false,
@@ -149,20 +163,29 @@ class DeliveryChargeService {
       QuerySnapshot slabSnap = await _firestore
           .collection('delivery_charge_slabs')
           .where('branchId', isEqualTo: targetBranchId)
+          .where('status', isEqualTo: 'ACTIVE')
           .get();
 
-      if (slabSnap.docs.isEmpty && restaurantId.isNotEmpty) {
-        slabSnap = await _firestore
+      if (slabSnap.docs.isNotEmpty) {
+        slabs = slabSnap.docs
+            .map((doc) => DeliveryChargeSlab.fromFirestore(doc.data() as Map<String, dynamic>, doc.id))
+            .toList();
+      } else if (restaurantId.isNotEmpty && targetBranchId == restaurantId) {
+        // Fallback query slabs by restaurantId only if targetBranchId is the restaurant ID itself
+        QuerySnapshot restSlabSnap = await _firestore
             .collection('delivery_charge_slabs')
             .where('restaurantId', isEqualTo: restaurantId)
+            .where('status', isEqualTo: 'ACTIVE')
             .get();
+
+        if (restSlabSnap.docs.isNotEmpty) {
+          slabs = restSlabSnap.docs
+              .map((doc) => DeliveryChargeSlab.fromFirestore(doc.data() as Map<String, dynamic>, doc.id))
+              .toList();
+        }
       }
 
-      slabs = slabSnap.docs
-          .map((doc) => DeliveryChargeSlab.fromFirestore(doc.data() as Map<String, dynamic>, doc.id))
-          .where((s) => s.isActive)
-          .toList();
-
+      slabs = slabs.where((s) => s.isActive).toList();
       slabs.sort((a, b) => a.minDistanceKm.compareTo(b.minDistanceKm));
 
       // 5. Check if distance exceeds Maximum Delivery Radius
@@ -175,6 +198,8 @@ class DeliveryChargeService {
           packagingCharge: packagingCharge,
           maxRadiusKm: maxRadiusKm,
           taxPercentage: taxPercentage,
+          branchGstNumber: branchGstNumber,
+          branchFssaiNumber: branchFssaiNumber,
           isMaxRadiusConfigured: isMaxRadiusConfigured,
           isOutsideRadius: true,
           hasSlabs: slabs.isNotEmpty,
@@ -222,6 +247,8 @@ class DeliveryChargeService {
         packagingCharge: packagingCharge,
         maxRadiusKm: maxRadiusKm,
         taxPercentage: taxPercentage,
+        branchGstNumber: branchGstNumber,
+        branchFssaiNumber: branchFssaiNumber,
         freeDeliveryThreshold: freeDeliveryThreshold,
         isMaxRadiusConfigured: isMaxRadiusConfigured,
         isOutsideRadius: false,

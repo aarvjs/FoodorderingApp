@@ -81,6 +81,7 @@ class CartState {
   final double discountPercentage;
   final int appliedRewardPoints;
   final double pointValue;
+  final double? appliedRewardMinOrder;
   final double? overrideDeliveryFee;
   final double taxPercentage;
   final String selectedOrderType; // "DELIVERY", "TAKE_AWAY"
@@ -92,6 +93,7 @@ class CartState {
     this.discountPercentage = 0.0,
     this.appliedRewardPoints = 0,
     this.pointValue = 0.25,
+    this.appliedRewardMinOrder,
     this.overrideDeliveryFee,
     this.taxPercentage = 0.0,
     this.selectedOrderType = 'DELIVERY',
@@ -115,6 +117,9 @@ class CartState {
 
   double get rewardDiscount {
     if (subtotal <= 0 || appliedRewardPoints <= 0) return 0.0;
+    if (appliedRewardMinOrder != null && appliedRewardMinOrder! > 0 && subtotal < appliedRewardMinOrder!) {
+      return 0.0;
+    }
     final rawVal = appliedRewardPoints * pointValue;
     final clamped = rawVal.clamp(0.0, maxRewardEligibleSubtotal);
     return double.parse(clamped.toStringAsFixed(2));
@@ -127,7 +132,7 @@ class CartState {
   double get deliveryFee {
     if (items.isEmpty || isTakeAway) return 0.0;
     if (overrideDeliveryFee != null) return overrideDeliveryFee!;
-    return subtotal > 500 ? 0.0 : 40.0; // Fallback
+    return 0.0;
   }
 
   double get gstTax {
@@ -150,6 +155,7 @@ class CartState {
     double? discountPercentage,
     int? appliedRewardPoints,
     double? pointValue,
+    double? appliedRewardMinOrder,
     double? overrideDeliveryFee,
     double? taxPercentage,
     String? selectedOrderType,
@@ -163,6 +169,7 @@ class CartState {
       discountPercentage: clearCoupon ? 0.0 : (discountPercentage ?? this.discountPercentage),
       appliedRewardPoints: clearReward ? 0 : (appliedRewardPoints ?? this.appliedRewardPoints),
       pointValue: pointValue ?? this.pointValue,
+      appliedRewardMinOrder: clearReward ? null : (appliedRewardMinOrder ?? this.appliedRewardMinOrder),
       overrideDeliveryFee: overrideDeliveryFee ?? this.overrideDeliveryFee,
       taxPercentage: taxPercentage ?? this.taxPercentage,
       selectedOrderType: selectedOrderType ?? this.selectedOrderType,
@@ -231,6 +238,24 @@ class CartNotifier extends Notifier<CartState> {
     return firstRestId != restaurantId && firstBranchId != restaurantId;
   }
 
+  void _revalidateDiscounts() {
+    if (state.items.isEmpty) {
+      state = state.copyWith(clearCoupon: true, clearReward: true);
+      return;
+    }
+
+    if (state.appliedRewardPoints > 0) {
+      final double minReq = state.appliedRewardMinOrder ?? 0.0;
+      if ((minReq > 0 && state.subtotal < minReq) || state.subtotal <= 0) {
+        state = state.copyWith(clearReward: true);
+      }
+    }
+
+    if (state.appliedCoupon != null && state.subtotal <= 0) {
+      state = state.copyWith(clearCoupon: true);
+    }
+  }
+
   void forceAddItem(CartItem item) {
     state = CartState(items: [item], appliedCoupon: null, appliedOfferId: null, discountPercentage: 0.0);
   }
@@ -259,6 +284,7 @@ class CartNotifier extends Notifier<CartState> {
     } else {
       state = state.copyWith(items: [...state.items, item]);
     }
+    _revalidateDiscounts();
   }
 
   void updateQuantityAtIndex(int index, int quantity) {
@@ -270,6 +296,7 @@ class CartNotifier extends Notifier<CartState> {
     final updatedItems = List<CartItem>.from(state.items);
     updatedItems[index] = updatedItems[index].copyWith(quantity: quantity);
     state = state.copyWith(items: updatedItems);
+    _revalidateDiscounts();
   }
 
   void removeItemAtIndex(int index) {
@@ -278,6 +305,8 @@ class CartNotifier extends Notifier<CartState> {
     state = state.copyWith(items: updatedItems);
     if (updatedItems.isEmpty) {
       clearCart();
+    } else {
+      _revalidateDiscounts();
     }
   }
 
@@ -297,6 +326,8 @@ class CartNotifier extends Notifier<CartState> {
       state = state.copyWith(items: updatedItems);
       if (updatedItems.isEmpty) {
         clearCart();
+      } else {
+        _revalidateDiscounts();
       }
     }
   }
@@ -577,7 +608,7 @@ class CartNotifier extends Notifier<CartState> {
     );
   }
 
-  void applyRewardPoints(int points, double pointValue) {
+  void applyRewardPoints(int points, double pointValue, {double? minOrderThreshold}) {
     if (points <= 0) {
       removeRewardPoints();
       return;
@@ -585,7 +616,9 @@ class CartNotifier extends Notifier<CartState> {
     state = state.copyWith(
       appliedRewardPoints: points,
       pointValue: pointValue,
+      appliedRewardMinOrder: minOrderThreshold ?? 0.0,
     );
+    _revalidateDiscounts();
   }
 
   void removeRewardPoints() {

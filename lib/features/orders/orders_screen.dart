@@ -291,6 +291,75 @@ class OrdersScreen extends ConsumerWidget {
 
               const Divider(height: 24),
 
+              // Items Breakdown
+              Text(
+                'Items Ordered (${order.items.length})',
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: AppColors.textLight),
+              ),
+              const Gap(6),
+              ...order.items.map((item) {
+                final String name = item.isCombo && item.comboName != null && item.comboName!.isNotEmpty
+                    ? item.comboName!
+                    : item.foodItem.name;
+                final double unitP = item.unitPrice;
+                final int qty = item.quantity;
+                final double totalP = item.totalPrice;
+
+                return Container(
+                  margin: const EdgeInsets.only(bottom: 6),
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: isDark ? Colors.black26 : Colors.grey.shade50,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: isDark ? Colors.grey.shade800 : Colors.grey.shade200),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Expanded(
+                            child: Text(
+                              name,
+                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                            ),
+                          ),
+                          if (item.isCombo)
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: Colors.amber.shade100,
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Text(
+                                'COMBO',
+                                style: TextStyle(
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.w900,
+                                  color: Colors.amber.shade900,
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                      if (item.selectedSize != null && item.selectedSize!.isNotEmpty) ...[
+                        const Gap(2),
+                        Text('Size: ${item.selectedSize}',
+                            style: TextStyle(fontSize: 10.5, color: isDark ? Colors.grey.shade400 : AppColors.textLight)),
+                      ],
+                      const Gap(2),
+                      Text('Quantity: $qty', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600)),
+                      Text('Price: ₹${unitP.toStringAsFixed(0)} each',
+                          style: TextStyle(fontSize: 11, color: isDark ? Colors.grey.shade400 : AppColors.textLight)),
+                      Text('Item Total: ₹${totalP.toStringAsFixed(0)}',
+                          style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold, color: isDark ? AppColors.darkPrimary : AppColors.primary)),
+                    ],
+                  ),
+                );
+              }),
+              const Gap(8),
+
               // Timeline or item lists
               if (isOngoing) ...[
                 const Text(
@@ -398,42 +467,6 @@ class OrdersScreen extends ConsumerWidget {
                             );
                           },
                           child: const Text('Cancel Order', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
-                        ),
-
-                      if (!isOngoing)
-                        IconButton(
-                          icon: const Icon(Icons.delete_outline, size: 20, color: Colors.red),
-                          tooltip: 'Delete from history',
-                          constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-                          padding: EdgeInsets.zero,
-                          onPressed: () async {
-                            final confirm = await showDialog<bool>(
-                              context: context,
-                              builder: (ctx) => AlertDialog(
-                                title: const Text('Delete from History?', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                                content: const Text('This order will be hidden from your order history. The store record remains intact.', style: TextStyle(fontSize: 13)),
-                                actions: [
-                                  TextButton(
-                                    onPressed: () => Navigator.pop(ctx, false),
-                                    child: const Text('Cancel'),
-                                  ),
-                                  TextButton(
-                                    onPressed: () => Navigator.pop(ctx, true),
-                                    child: const Text('Delete', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
-                                  ),
-                                ],
-                              ),
-                            );
-
-                            if (confirm == true) {
-                              await ref.read(orderRepositoryProvider).hideOrderFromUserHistory(order.id);
-                              if (context.mounted) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(content: Text('Order removed from history.')),
-                                );
-                              }
-                            }
-                          },
                         ),
                     ],
                   ),
@@ -829,8 +862,18 @@ class _OrderBillSheet extends StatelessWidget {
                       ),
                       if (order.branchName.isNotEmpty)
                         Text(
-                          'Branch: ${order.branchName}',
+                          '${order.branchName} Branch',
                           style: const TextStyle(fontSize: 12, color: AppColors.textLight, fontWeight: FontWeight.bold),
+                        ),
+                      if (order.branchFssaiNumber != null && order.branchFssaiNumber!.isNotEmpty)
+                        Text(
+                          'FSSAI Lic. No.: ${order.branchFssaiNumber}',
+                          style: const TextStyle(fontSize: 11, color: AppColors.textLight, fontWeight: FontWeight.bold),
+                        ),
+                      if (order.branchGstNumber != null && order.branchGstNumber!.isNotEmpty)
+                        Text(
+                          'GSTIN: ${order.branchGstNumber}',
+                          style: const TextStyle(fontSize: 11, color: AppColors.textLight, fontWeight: FontWeight.bold),
                         ),
                     ],
                   ),
@@ -920,38 +963,106 @@ class _OrderBillSheet extends StatelessWidget {
 
               // Items List
               ...order.items.map((item) {
+                final String name = item.isCombo && item.comboName != null && item.comboName!.isNotEmpty
+                    ? item.comboName!
+                    : item.foodItem.name;
+                final double unitP = item.unitPrice;
+                final int qty = item.quantity;
+                final double totalP = item.totalPrice;
+
                 return Container(
                   margin: const EdgeInsets.only(bottom: 8),
-                  padding: const EdgeInsets.all(10),
+                  padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: isDark ? Colors.black12 : Colors.white,
-                    borderRadius: BorderRadius.circular(10),
+                    color: isDark ? Colors.black12 : Colors.grey.shade50,
+                    borderRadius: BorderRadius.circular(12),
                     border: Border.all(color: isDark ? Colors.grey.shade800 : Colors.grey.shade200),
                   ),
-                  child: Row(
+                  child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              '${item.quantity}x ${item.foodItem.name}',
-                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    name,
+                                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                                  ),
+                                ),
+                                if (item.isCombo) ...[
+                                  const Gap(6),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: Colors.amber.shade100,
+                                      borderRadius: BorderRadius.circular(6),
+                                    ),
+                                    child: Text(
+                                      'COMBO',
+                                      style: TextStyle(
+                                        fontSize: 9,
+                                        fontWeight: FontWeight.w900,
+                                        color: Colors.amber.shade900,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ],
                             ),
-                            if (item.selectedSize != null)
-                              Text('Size: ${item.selectedSize}',
-                                  style: const TextStyle(fontSize: 10, color: AppColors.textLight)),
-                            if (item.customInstructions != null && item.customInstructions!.isNotEmpty)
-                              Text('Note: ${item.customInstructions}',
-                                  style: const TextStyle(fontSize: 10, fontStyle: FontStyle.italic)),
-                          ],
+                          ),
+                        ],
+                      ),
+                      if (item.selectedSize != null && item.selectedSize!.isNotEmpty) ...[
+                        const Gap(2),
+                        Text('Size: ${item.selectedSize}',
+                            style: TextStyle(fontSize: 11, color: isDark ? Colors.grey.shade400 : AppColors.textLight)),
+                      ],
+                      const Gap(4),
+                      Text('Quantity: $qty', style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600)),
+                      Text('Price: ₹${unitP.toStringAsFixed(0)} each',
+                          style: TextStyle(fontSize: 11.5, color: isDark ? Colors.grey.shade400 : AppColors.textLight)),
+                      Text('Item Total: ₹${totalP.toStringAsFixed(0)}',
+                          style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: isDark ? AppColors.darkPrimary : AppColors.primary)),
+
+                      if (item.customInstructions != null && item.customInstructions!.isNotEmpty) ...[
+                        const Gap(2),
+                        Text('Note: "${item.customInstructions}"',
+                            style: const TextStyle(fontSize: 10.5, fontStyle: FontStyle.italic, color: Colors.orange)),
+                      ],
+                      if (item.removedItems.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 2),
+                          child: Text('Removed: ${item.removedItems.join(", ")}',
+                              style: const TextStyle(fontSize: 10.5, color: Colors.red, fontWeight: FontWeight.w500)),
                         ),
-                      ),
-                      Text(
-                        '₹${item.totalPrice.toStringAsFixed(2)}',
-                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-                      ),
+                      if (item.replacements.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 2),
+                          child: Text('Replacements: ${item.replacements.join(", ")}',
+                              style: const TextStyle(fontSize: 10.5, color: Colors.amber, fontWeight: FontWeight.w600)),
+                        ),
+                      if (item.selectedAddons.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 2),
+                          child: Text('Add-ons: ${item.selectedAddons.join(", ")}',
+                              style: const TextStyle(fontSize: 10.5, color: Colors.blue, fontWeight: FontWeight.w600)),
+                        ),
+                      if (item.selectedCustomizations.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 2),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: item.selectedCustomizations
+                                .map((cust) => Text('• $cust',
+                                    style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w600, color: isDark ? Colors.amber.shade300 : Colors.amber.shade900)))
+                                .toList(),
+                          ),
+                        ),
                     ],
                   ),
                 );
@@ -974,7 +1085,14 @@ class _OrderBillSheet extends StatelessWidget {
               if (order.packagingCharge > 0)
                 _buildBillRow('Packaging Charge', '₹${order.packagingCharge.toStringAsFixed(2)}'),
               if (order.tax > 0)
-                _buildBillRow('Taxes & GST (${order.taxPercentage}%)', '₹${order.tax.toStringAsFixed(2)}'),
+                _buildBillRow(
+                  (order.branchGstNumber != null && order.branchGstNumber!.isNotEmpty)
+                      ? 'Taxes & GST (${order.taxPercentage}% • GSTIN: ${order.branchGstNumber})'
+                      : 'Taxes & GST (${order.taxPercentage}%)',
+                  '₹${order.tax.toStringAsFixed(2)}',
+                )
+              else if (order.branchGstNumber != null && order.branchGstNumber!.isNotEmpty)
+                _buildBillRow('Branch GSTIN', order.branchGstNumber!),
 
               const Divider(height: 20),
               Row(

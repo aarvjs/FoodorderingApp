@@ -27,6 +27,8 @@ class Order {
   final double rewardDiscountAmount;
   final String? rewardTransactionId;
   final String? rewardBranchId;
+  final String? branchGstNumber;
+  final String? branchFssaiNumber;
   final String paymentMethod; // "CASH_ON_DELIVERY", "COD", "ONLINE"
   final String paymentGateway; // "PAYU", "COD"
   final String paymentStatus; // "PENDING", "COD_PENDING", "SUCCESS", "PAID"
@@ -68,6 +70,8 @@ class Order {
     this.rewardDiscountAmount = 0.0,
     this.rewardTransactionId,
     this.rewardBranchId,
+    this.branchGstNumber,
+    this.branchFssaiNumber,
     required this.paymentMethod,
     this.paymentGateway = 'COD',
     this.paymentStatus = 'PENDING',
@@ -261,6 +265,8 @@ class Order {
       rewardDiscountAmount: _numToDouble(data['rewardDiscountAmount']),
       rewardTransactionId: data['rewardTransactionId']?.toString(),
       rewardBranchId: data['rewardBranchId']?.toString(),
+      branchGstNumber: (data['branchGstNumber'] ?? data['gstNumber'] ?? '').toString(),
+      branchFssaiNumber: (data['branchFssaiNumber'] ?? data['fssaiNumber'] ?? data['fssai'] ?? '').toString(),
       paymentMethod: (data['paymentMethod'] ?? 'CASH_ON_DELIVERY').toString(),
       paymentGateway: (data['paymentGateway'] ?? (data['paymentMethod'] == 'ONLINE' ? 'PAYU' : 'COD')).toString(),
       paymentStatus: (data['paymentStatus'] ?? 'PENDING').toString(),

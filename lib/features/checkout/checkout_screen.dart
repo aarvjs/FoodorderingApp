@@ -431,6 +431,9 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     String orderType = 'DELIVERY',
   }) async {
     try {
+      final deliveryCalcAsync = ref.read(deliveryChargeCalculationProvider);
+      final deliveryCalcResult = deliveryCalcAsync.value;
+
       final orderRepo = ref.read(orderRepositoryProvider);
       final createdOrder = await orderRepo.createOrder(
         restaurantId: restId,
@@ -462,6 +465,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         paidAt: paymentStatus == 'SUCCESS' ? DateTime.now().toIso8601String() : null,
         appliedCoupon: cartState.appliedCoupon,
         appliedOfferId: cartState.appliedOfferId,
+        branchGstNumber: deliveryCalcResult?.branchGstNumber,
+        branchFssaiNumber: deliveryCalcResult?.branchFssaiNumber,
         orderType: orderType,
       );
 
@@ -856,6 +861,11 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
 
                   const Gap(24),
 
+                  // Section Ordered Items Breakdown
+                  _buildOrderedItemsCard(cartState, isDark),
+
+                  const Gap(24),
+
                   // Section Order Summary Recap
                   Text(
                     'Order Recap',
@@ -909,8 +919,16 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                           ),
                         if (taxPercentage > 0 && effectiveGstAmount > 0)
                           _buildRecapRow(
-                            'Govt Taxes & GST (${taxPercentage.toStringAsFixed(taxPercentage.truncateToDouble() == taxPercentage ? 0 : 1)}%)',
+                            (deliveryCalcResult?.branchGstNumber != null && deliveryCalcResult!.branchGstNumber.isNotEmpty)
+                                ? 'Govt Taxes & GST (${taxPercentage.toStringAsFixed(taxPercentage.truncateToDouble() == taxPercentage ? 0 : 1)}% • GSTIN: ${deliveryCalcResult.branchGstNumber})'
+                                : 'Govt Taxes & GST (${taxPercentage.toStringAsFixed(taxPercentage.truncateToDouble() == taxPercentage ? 0 : 1)}%)',
                             '₹${effectiveGstAmount.toStringAsFixed(2)}',
+                            isDark,
+                          )
+                        else if (deliveryCalcResult?.branchGstNumber != null && deliveryCalcResult!.branchGstNumber.isNotEmpty)
+                          _buildRecapRow(
+                            'Branch GSTIN',
+                            deliveryCalcResult!.branchGstNumber,
                             isDark,
                           ),
 
@@ -1007,6 +1025,131 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
 
         ),
       ),
+    );
+  }
+
+  Widget _buildOrderedItemsCard(CartState cartState, bool isDark) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Ordered Items (${cartState.items.length})',
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+            color: isDark ? Colors.white : AppColors.textDark,
+          ),
+        ),
+        const Gap(12),
+        Container(
+          decoration: BoxDecoration(
+            color: isDark ? AppColors.darkCard : Colors.white,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: isDark ? AppColors.darkDivider : Colors.grey.shade100),
+          ),
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            children: cartState.items.asMap().entries.map((entry) {
+              final idx = entry.key;
+              final item = entry.value;
+              final String name = item.isCombo && item.comboName != null && item.comboName!.isNotEmpty
+                  ? item.comboName!
+                  : item.foodItem.name;
+              final double unitP = item.unitPrice;
+              final int qty = item.quantity;
+              final double totalP = item.totalPrice;
+
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (idx > 0) const Divider(height: 20),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    name,
+                                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                                  ),
+                                ),
+                                if (item.isCombo) ...[
+                                  const Gap(6),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: Colors.amber.shade100,
+                                      borderRadius: BorderRadius.circular(6),
+                                    ),
+                                    child: Text(
+                                      'COMBO',
+                                      style: TextStyle(
+                                        fontSize: 9,
+                                        fontWeight: FontWeight.w900,
+                                        color: Colors.amber.shade900,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
+                            if (item.selectedSize != null && item.selectedSize!.isNotEmpty) ...[
+                              const Gap(2),
+                              Text('Size: ${item.selectedSize}',
+                                  style: TextStyle(fontSize: 11, color: isDark ? Colors.grey.shade400 : AppColors.textLight)),
+                            ],
+                            const Gap(4),
+                            Text('Quantity: $qty', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                            Text('Price: ₹${unitP.toStringAsFixed(0)} each',
+                                style: TextStyle(fontSize: 12, color: isDark ? Colors.grey.shade400 : AppColors.textLight)),
+                            Text('Item Total: ₹${totalP.toStringAsFixed(0)}',
+                                style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: isDark ? AppColors.darkPrimary : AppColors.primary)),
+
+                            if (item.removedItems.isNotEmpty)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 4),
+                                child: Text('Removed: ${item.removedItems.join(", ")}',
+                                    style: const TextStyle(fontSize: 11, color: Colors.red, fontWeight: FontWeight.w500)),
+                              ),
+                            if (item.replacements.isNotEmpty)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 2),
+                                child: Text('Replacements: ${item.replacements.join(", ")}',
+                                    style: const TextStyle(fontSize: 11, color: Colors.amber, fontWeight: FontWeight.w600)),
+                              ),
+                            if (item.selectedAddons.isNotEmpty)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 2),
+                                child: Text('Add-ons: ${item.selectedAddons.join(", ")}',
+                                    style: const TextStyle(fontSize: 11, color: Colors.blue, fontWeight: FontWeight.w600)),
+                              ),
+                            if (item.selectedCustomizations.isNotEmpty)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 2),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: item.selectedCustomizations
+                                      .map((cust) => Text('• $cust',
+                                          style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: isDark ? Colors.amber.shade300 : Colors.amber.shade900)))
+                                      .toList(),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              );
+            }).toList(),
+          ),
+        ),
+      ],
     );
   }
 

@@ -830,35 +830,49 @@ class _CartScreenState extends ConsumerState<CartScreen> {
                                 )
                               else
                                 ElevatedButton(
-                                  onPressed: () async {
-                                    final branchId = cartState.items.first.branchId.isNotEmpty
-                                        ? cartState.items.first.branchId
-                                        : cartState.items.first.restaurantId;
-                                    final config = await ref
-                                        .read(rewardRepositoryProvider)
-                                        .getRewardConfigByBranch(branchId, cartState.items.first.restaurantId);
-                                    final pVal = config?.pointValue ?? 0.25;
+                                   onPressed: () async {
+                                     final branchId = cartState.items.first.branchId.isNotEmpty
+                                         ? cartState.items.first.branchId
+                                         : cartState.items.first.restaurantId;
+                                     final config = await ref
+                                         .read(rewardRepositoryProvider)
+                                         .getRewardConfigByBranch(branchId, cartState.items.first.restaurantId);
+                                     final minThreshold = config?.minimumOrderAmount ?? 0.0;
+                                     final pVal = config?.pointValue ?? 0.25;
 
-                                    cartNotifier.applyRewardPoints(userAvailablePoints, pVal);
-                                    if (context.mounted) {
-                                      ScaffoldMessenger.of(context).showSnackBar(
-                                        SnackBar(
-                                          content: Text('🎉 Applied $userAvailablePoints reward points! Saved ₹${cartState.rewardDiscount.toStringAsFixed(2)}'),
-                                          backgroundColor: const Color(0xFF16A34A),
-                                          behavior: SnackBarBehavior.floating,
-                                        ),
-                                      );
-                                    }
-                                  },
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: const Color(0xFFF59E0B),
-                                    foregroundColor: Colors.white,
-                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                                    elevation: 0,
-                                  ),
-                                  child: const Text('Apply', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
-                                ),
+                                     if (cartState.subtotal < minThreshold) {
+                                       if (context.mounted) {
+                                         ScaffoldMessenger.of(context).showSnackBar(
+                                           SnackBar(
+                                             content: Text('Minimum product subtotal of ₹${minThreshold.toStringAsFixed(0)} required to use reward points.'),
+                                             backgroundColor: AppColors.error,
+                                             behavior: SnackBarBehavior.floating,
+                                           ),
+                                         );
+                                       }
+                                       return;
+                                     }
+
+                                     cartNotifier.applyRewardPoints(userAvailablePoints, pVal, minOrderThreshold: minThreshold);
+                                     if (context.mounted) {
+                                       ScaffoldMessenger.of(context).showSnackBar(
+                                         SnackBar(
+                                           content: Text('🎉 Applied $userAvailablePoints reward points! Saved ₹${cartState.rewardDiscount.toStringAsFixed(2)}'),
+                                           backgroundColor: const Color(0xFF16A34A),
+                                           behavior: SnackBarBehavior.floating,
+                                         ),
+                                       );
+                                     }
+                                   },
+                                   style: ElevatedButton.styleFrom(
+                                     backgroundColor: const Color(0xFFF59E0B),
+                                     foregroundColor: Colors.white,
+                                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                                     elevation: 0,
+                                   ),
+                                   child: const Text('Apply', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                                 ),
                             ],
                           ],
                         ),
@@ -949,8 +963,16 @@ class _CartScreenState extends ConsumerState<CartScreen> {
                           ),
                         if (taxPercentage > 0 && effectiveGstAmount > 0)
                           _buildBillRow(
-                            'Govt Taxes & GST (${taxPercentage.toStringAsFixed(taxPercentage.truncateToDouble() == taxPercentage ? 0 : 1)}%)',
+                            (deliveryCalcResult?.branchGstNumber != null && deliveryCalcResult!.branchGstNumber.isNotEmpty)
+                                ? 'Govt Taxes & GST (${taxPercentage.toStringAsFixed(taxPercentage.truncateToDouble() == taxPercentage ? 0 : 1)}% • GSTIN: ${deliveryCalcResult.branchGstNumber})'
+                                : 'Govt Taxes & GST (${taxPercentage.toStringAsFixed(taxPercentage.truncateToDouble() == taxPercentage ? 0 : 1)}%)',
                             '₹${effectiveGstAmount.toStringAsFixed(2)}',
+                            isDark,
+                          )
+                        else if (deliveryCalcResult?.branchGstNumber != null && deliveryCalcResult!.branchGstNumber.isNotEmpty)
+                          _buildBillRow(
+                            'Branch GSTIN',
+                            deliveryCalcResult!.branchGstNumber,
                             isDark,
                           ),
 

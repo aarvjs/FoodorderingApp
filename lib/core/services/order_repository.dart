@@ -71,6 +71,8 @@ class OrderRepository {
     String? paidAt,
     String? appliedCoupon,
     String? appliedOfferId,
+    String? branchGstNumber,
+    String? branchFssaiNumber,
     String orderType = 'DELIVERY',
   }) async {
     // Idempotency check: prevent duplicate orders for the same transaction ID
@@ -188,6 +190,11 @@ class OrderRepository {
       'rewardTransactionId': generatedRewardTxId ?? '',
       'rewardBranchId': rewardBranchId ?? (branchId.isNotEmpty ? branchId : restaurantId),
       'appliedCoupon': appliedCoupon ?? '',
+      'branchGstNumber': branchGstNumber ?? '',
+      'gstNumber': branchGstNumber ?? '',
+      'branchFssaiNumber': branchFssaiNumber ?? '',
+      'fssaiNumber': branchFssaiNumber ?? '',
+      'fssai': branchFssaiNumber ?? '',
       'totalAmount': grandTotal,
       'grandTotal': grandTotal,
       'paymentMethod': paymentMethod,
