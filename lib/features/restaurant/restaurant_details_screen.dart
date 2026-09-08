@@ -2142,7 +2142,10 @@ class _TableBookingBottomSheetState extends ConsumerState<_TableBookingBottomShe
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label, style: const TextStyle(fontSize: 12, color: Colors.grey)),
+          Expanded(
+            child: Text(label, style: const TextStyle(fontSize: 12, color: Colors.grey)),
+          ),
+          const SizedBox(width: 8),
           Text(
             val,
             style: TextStyle(

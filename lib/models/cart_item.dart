@@ -5,31 +5,89 @@ class ComboCustomizationSelection {
   final String optionId;
   final String optionName;
   final double additionalPrice;
+  final double basePrice;
+  final double extraPrice;
+  final int quantity;
+  final double unitPrice;
+  final double subtotal;
+  final String? productId;
+  final String? comboId;
+  final String? variantId;
 
   const ComboCustomizationSelection({
     required this.groupName,
     required this.optionId,
     required this.optionName,
     required this.additionalPrice,
-  });
+    this.basePrice = 0.0,
+    this.extraPrice = 0.0,
+    this.quantity = 1,
+    double? unitPrice,
+    double? subtotal,
+    this.productId,
+    this.comboId,
+    this.variantId,
+  })  : unitPrice = unitPrice ?? (extraPrice > 0 ? extraPrice : additionalPrice),
+        subtotal = subtotal ?? ((unitPrice ?? (extraPrice > 0 ? extraPrice : additionalPrice)) * (quantity > 0 ? quantity : 1));
 
   Map<String, dynamic> toMap() => {
         'groupName': groupName,
         'optionId': optionId,
         'optionName': optionName,
         'additionalPrice': additionalPrice,
+        'basePrice': basePrice,
+        'extraPrice': extraPrice,
+        'quantity': quantity,
+        'unitPrice': unitPrice,
+        'subtotal': subtotal,
+        if (productId != null) 'productId': productId,
+        if (comboId != null) 'comboId': comboId,
+        if (variantId != null) 'variantId': variantId,
       };
 
   factory ComboCustomizationSelection.fromMap(Map<String, dynamic> data) {
-    final priceVal = data['additionalPrice'] ?? data['price'] ?? 0;
+    final priceVal = data['additionalPrice'] ?? data['extraPrice'] ?? data['price'] ?? 0;
     final double price = (priceVal is num)
         ? priceVal.toDouble()
         : double.tryParse(priceVal?.toString() ?? '0.0') ?? 0.0;
+
+    final bpVal = data['basePrice'] ?? 0;
+    final double basePrice = (bpVal is num)
+        ? bpVal.toDouble()
+        : double.tryParse(bpVal?.toString() ?? '0.0') ?? 0.0;
+
+    final epVal = data['extraPrice'] ?? data['additionalPrice'] ?? price;
+    final double extraPrice = (epVal is num)
+        ? epVal.toDouble()
+        : double.tryParse(epVal?.toString() ?? '0.0') ?? price;
+
+    final qVal = data['quantity'] ?? data['qty'] ?? 1;
+    final int qty = (qVal is num) ? qVal.toInt() : 1;
+
+    final calcUnitPrice = basePrice + extraPrice;
+    final uPriceVal = data['unitPrice'] ?? (calcUnitPrice > 0 ? calcUnitPrice : price);
+    final double unitPrice = (uPriceVal is num)
+        ? uPriceVal.toDouble()
+        : double.tryParse(uPriceVal?.toString() ?? '0.0') ?? (calcUnitPrice > 0 ? calcUnitPrice : price);
+
+    final subVal = data['subtotal'] ?? (unitPrice * qty);
+    final double subtotal = (subVal is num)
+        ? subVal.toDouble()
+        : double.tryParse(subVal?.toString() ?? '0.0') ?? (unitPrice * qty);
+
     return ComboCustomizationSelection(
       groupName: (data['groupName'] ?? data['group'] ?? 'Option').toString(),
       optionId: (data['optionId'] ?? data['id'] ?? '').toString(),
       optionName: (data['optionName'] ?? data['name'] ?? '').toString(),
       additionalPrice: price,
+      basePrice: basePrice,
+      extraPrice: extraPrice,
+      quantity: qty > 0 ? qty : 1,
+      unitPrice: unitPrice,
+      subtotal: subtotal,
+      productId: data['productId']?.toString(),
+      comboId: data['comboId']?.toString(),
+      variantId: data['variantId']?.toString(),
     );
   }
 }
@@ -92,7 +150,7 @@ class CartItem {
 
   double get addonsTotalPrice {
     if (customizationSelections.isNotEmpty) {
-      return customizationSelections.fold(0.0, (sum, c) => sum + c.additionalPrice);
+      return customizationSelections.fold(0.0, (sum, c) => sum + c.subtotal);
     }
     final diff = unitPrice - displayBasePrice;
     return diff > 0 ? diff : 0.0;
@@ -106,7 +164,7 @@ class CartItem {
     final replStr = replacements.join('_');
     final addonsStr = selectedAddons.join('_');
     final selStr = customizationSelections
-        .map((s) => '${s.groupName}:${s.optionName}:${s.additionalPrice}')
+        .map((s) => '${s.groupName}:${s.optionName}:${s.quantity}:${s.unitPrice}')
         .join('_');
     final noteStr = customInstructions ?? '';
     return '${foodItem.id}_${isCombo}_${cId}_${sizeStr}_${customsStr}_${remStr}_${replStr}_${addonsStr}_${selStr}_$noteStr';

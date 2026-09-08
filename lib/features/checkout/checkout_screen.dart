@@ -7,7 +7,8 @@ import '../../core/config/app_colors.dart';
 import '../../core/widgets/custom_button.dart';
 import '../../core/services/state_providers.dart';
 import '../../core/services/delivery_charge_service.dart';
-import '../../core/services/payu_service.dart';
+import 'package:razorpay_flutter/razorpay_flutter.dart';
+import '../../core/services/razorpay_service.dart';
 import '../../models/address.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../home/providers/restaurant_providers.dart';
@@ -27,6 +28,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   String? _selectedAddressId;
   bool _isPlacingOrder = false;
   final TextEditingController _deliveryAddressController = TextEditingController();
+  late final RazorpayService _razorpayService;
 
   String _sanitizeAddressForDisplay(String rawAddress) {
     if (rawAddress.isEmpty) return '';
@@ -46,6 +48,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   @override
   void initState() {
     super.initState();
+    _razorpayService = RazorpayService();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref.read(cartProvider.notifier).checkAndExpireItems();
       final addressState = ref.read(addressProvider);
@@ -64,6 +67,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
 
   @override
   void dispose() {
+    _razorpayService.clear();
     _deliveryAddressController.dispose();
     super.dispose();
   }
@@ -261,99 +265,70 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     });
 
     if (_selectedPaymentMethod == 'ONLINE') {
-      final txnId = PayUService.generateTransactionId();
-      final payuService = PayUService();
-
-      await payuService.startPayment(
-        transactionId: txnId,
+      _razorpayService.startPayment(
         amount: effectiveGrandTotal,
         customerName: customerName,
         customerPhone: customerPhone,
-        productInfo: 'Food Order - ${cartState.items.length} items',
-        onSuccess: (response) async {
-          // Verify transaction with Next.js backend
-          final verifyRes = await PayUService.verifyPaymentWithServer(
-            transactionId: txnId,
-            payuResponse: response,
-          );
-
+        customerEmail: authState.userModel?.email,
+        description: 'Food Order - ${cartState.items.length} items',
+        onSuccess: (PaymentSuccessResponse response) async {
           if (!mounted) return;
+          final String paymentId = (response.paymentId != null && response.paymentId!.isNotEmpty)
+              ? response.paymentId!
+              : 'pay_${DateTime.now().millisecondsSinceEpoch}';
 
-          if (verifyRes['verified'] == true || verifyRes['paymentStatus'] == 'SUCCESS') {
-            await _finalizePaidOrder(
-              restId: restId,
-              branchId: branchId,
-              restName: restName,
-              customerId: customerId,
-              customerName: customerName,
-              customerPhone: customerPhone,
-              manualAddress: manualAddress,
-              lat: lat,
-              lng: lng,
-              cartState: cartState,
-              effectiveGstAmount: effectiveGstAmount,
-              taxPercentage: taxPercentage,
-              effectiveDeliveryFee: effectiveDeliveryFee,
-              effectivePackagingCharge: effectivePackagingCharge,
-              effectiveDistanceKm: effectiveDistanceKm,
-              effectiveGrandTotal: effectiveGrandTotal,
-              paymentMethod: 'ONLINE',
-              paymentGateway: 'PAYU',
-              paymentStatus: 'SUCCESS',
-              transactionId: txnId,
-              orderType: isTakeAway ? 'TAKE_AWAY' : 'DELIVERY',
+          await _finalizePaidOrder(
+            restId: restId,
+            branchId: branchId,
+            restName: restName,
+            customerId: customerId,
+            customerName: customerName,
+            customerPhone: customerPhone,
+            manualAddress: manualAddress,
+            lat: lat,
+            lng: lng,
+            cartState: cartState,
+            effectiveGstAmount: effectiveGstAmount,
+            taxPercentage: taxPercentage,
+            effectiveDeliveryFee: effectiveDeliveryFee,
+            effectivePackagingCharge: effectivePackagingCharge,
+            effectiveDistanceKm: effectiveDistanceKm,
+            effectiveGrandTotal: effectiveGrandTotal,
+            paymentMethod: 'ONLINE',
+            paymentGateway: 'RAZORPAY',
+            paymentStatus: 'SUCCESS',
+            transactionId: paymentId,
+            orderType: isTakeAway ? 'TAKE_AWAY' : 'DELIVERY',
+          );
+        },
+        onFailure: (PaymentFailureResponse response) {
+          if (!mounted) return;
+          setState(() {
+            _isPlacingOrder = false;
+          });
+          if (response.code == Razorpay.PAYMENT_CANCELLED) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Payment cancelled. Your cart remains intact.'),
+                backgroundColor: Colors.orange,
+                behavior: SnackBarBehavior.floating,
+              ),
             );
           } else {
-            setState(() {
-              _isPlacingOrder = false;
-            });
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                content: Text(verifyRes['message'] ?? 'Payment verification failed. Please try again.'),
+                content: Text(response.message ?? 'Payment failed. You can retry payment.'),
                 backgroundColor: AppColors.error,
                 behavior: SnackBarBehavior.floating,
               ),
             );
           }
         },
-        onFailure: (response) {
+        onExternalWallet: (ExternalWalletResponse response) {
           if (!mounted) return;
           setState(() {
             _isPlacingOrder = false;
           });
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Payment failed. You can retry payment with a new transaction ID.'),
-              backgroundColor: AppColors.error,
-              behavior: SnackBarBehavior.floating,
-            ),
-          );
-        },
-        onCancel: (response) {
-          if (!mounted) return;
-          setState(() {
-            _isPlacingOrder = false;
-          });
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Payment cancelled. Your cart remains intact.'),
-              backgroundColor: Colors.orange,
-              behavior: SnackBarBehavior.floating,
-            ),
-          );
-        },
-        onError: (response) {
-          if (!mounted) return;
-          setState(() {
-            _isPlacingOrder = false;
-          });
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(response['message'] ?? 'Payment gateway error occurred.'),
-              backgroundColor: AppColors.error,
-              behavior: SnackBarBehavior.floating,
-            ),
-          );
         },
       );
     } else if (isTakeAway || _selectedPaymentMethod == 'PAY_AT_STORE') {
@@ -477,7 +452,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         userId: customerId,
         orderId: createdOrder.id,
         title: 'Order Placed! 🛵',
-        body: 'Your order #${createdOrder.orderNumber} for $restName has been placed successfully (${paymentGateway == 'PAYU' ? 'Online Paid via PayU' : 'Cash on Delivery'}).',
+        body: 'Your order #${createdOrder.orderNumber} for $restName has been placed successfully (${paymentGateway == 'RAZORPAY' ? 'Online Paid via Razorpay' : 'Cash on Delivery'}).',
         type: 'delivery',
       );
 
@@ -517,10 +492,10 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     final currentPaymentMethods = isTakeAway
         ? const [
             {'id': 'PAY_AT_STORE', 'name': 'Pay at Store / Restaurant', 'icon': Iconsax.shop},
-            {'id': 'ONLINE', 'name': 'Online Payment — PayU', 'icon': Iconsax.card_pos},
+            {'id': 'ONLINE', 'name': 'Online Payment — Razorpay', 'icon': Iconsax.card_pos},
           ]
         : const [
-            {'id': 'ONLINE', 'name': 'Online Payment — PayU', 'icon': Iconsax.card_pos},
+            {'id': 'ONLINE', 'name': 'Online Payment — Razorpay', 'icon': Iconsax.card_pos},
             {'id': 'COD', 'name': 'Cash on Delivery (COD)', 'icon': Iconsax.wallet_3},
           ];
 
@@ -1000,7 +975,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                               ? 'Pay Now & Place Take Away Order'
                               : 'Confirm Take Away Order (Pay at Store)')
                           : (_selectedPaymentMethod == 'ONLINE'
-                              ? 'Pay Now & Place Order (PayU)'
+                              ? 'Pay Now & Place Order (Razorpay)'
                               : 'Confirm & Place Order (COD)')),
                   isLoading: _isPlacingOrder,
                   onPressed: isOutsideRadius
@@ -1128,7 +1103,26 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                                 child: Text('Add-ons: ${item.selectedAddons.join(", ")}',
                                     style: const TextStyle(fontSize: 11, color: Colors.blue, fontWeight: FontWeight.w600)),
                               ),
-                            if (item.selectedCustomizations.isNotEmpty)
+                            if (item.customizationSelections.isNotEmpty)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 2),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: item.customizationSelections.map((c) {
+                                    final optQty = c.quantity > 0 ? c.quantity : 1;
+                                    final uPrice = c.unitPrice > 0 ? c.unitPrice : c.additionalPrice;
+                                    final subtotal = c.subtotal > 0 ? c.subtotal : uPrice * optQty;
+                                    final priceStr = uPrice > 0
+                                        ? ' × $optQty @ ₹${uPrice.toStringAsFixed(0)} = ₹${subtotal.toStringAsFixed(0)}'
+                                        : (optQty > 1 ? ' × $optQty' : '');
+                                    return Text(
+                                      '• ${c.groupName}: ${c.optionName}$priceStr',
+                                      style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: isDark ? Colors.amber.shade300 : Colors.amber.shade900),
+                                    );
+                                  }).toList(),
+                                ),
+                              )
+                            else if (item.selectedCustomizations.isNotEmpty)
                               Padding(
                                 padding: const EdgeInsets.only(top: 2),
                                 child: Column(
@@ -1159,10 +1153,13 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(
-            label,
-            style: TextStyle(fontSize: 12, color: isDark ? Colors.grey.shade400 : AppColors.textLight),
+          Expanded(
+            child: Text(
+              label,
+              style: TextStyle(fontSize: 12, color: isDark ? Colors.grey.shade400 : AppColors.textLight),
+            ),
           ),
+          const SizedBox(width: 8),
           Text(
             value,
             style: TextStyle(

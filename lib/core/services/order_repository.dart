@@ -332,8 +332,21 @@ class OrderRepository {
         'updatedAt': nowIso,
       };
 
-      if ((data['paymentStatus'] ?? '').toString().toUpperCase() == 'PAID') {
-        updates['paymentStatus'] = 'REFUNDED';
+      final payMethod = (data['paymentMethod'] ?? '').toString().toUpperCase();
+      final payGateway = (data['paymentGateway'] ?? '').toString().toUpperCase();
+      final payStatus = (data['paymentStatus'] ?? '').toString().toUpperCase();
+
+      if ((payMethod == 'ONLINE' || payGateway == 'RAZORPAY') && (payStatus == 'PAID' || payStatus == 'SUCCESS')) {
+        final double totalAmt = (data['totalAmount'] is num)
+            ? (data['totalAmount'] as num).toDouble()
+            : (data['grandTotal'] is num ? (data['grandTotal'] as num).toDouble() : 0.0);
+
+        updates['refundStatus'] = 'PROCESSING';
+        updates['refundAmount'] = totalAmt;
+        updates['refundMessage'] = 'Your refund of ₹${totalAmt.toStringAsFixed(2)} has been initiated. It may take 2–4 business days to reflect in your original payment method.';
+      } else {
+        updates['refundStatus'] = 'NOT_APPLICABLE';
+        updates['refundAmount'] = 0.0;
       }
 
       await docRef.update(updates);

@@ -1,28 +1,69 @@
 import 'food_item.dart';
 
+List<dynamic> _rawToList(dynamic val) {
+  if (val is List) return val;
+  if (val is Map) return val.values.toList();
+  return [];
+}
+
 class ComboVariantOption {
   final String id;
   final String name;
   final double additionalPrice;
+  final double basePrice;
+  final double extraPrice;
+  final int minQuantity;
+  final int maxQuantity;
+  final int quantityStep;
+  final bool allowQuantity;
   final bool isActive;
 
   const ComboVariantOption({
     required this.id,
     required this.name,
     required this.additionalPrice,
+    this.basePrice = 0.0,
+    this.extraPrice = 0.0,
+    this.minQuantity = 1,
+    this.maxQuantity = 10,
+    this.quantityStep = 1,
+    this.allowQuantity = true,
     this.isActive = true,
   });
 
+  double get unitPrice => (basePrice > 0 ? basePrice : 0.0) + (extraPrice > 0 ? extraPrice : additionalPrice);
+
   factory ComboVariantOption.fromMap(Map<String, dynamic> data) {
-    final priceVal = data['additionalPrice'] ?? data['price'] ?? 0;
+    final priceVal = data['additionalPrice'] ?? data['extraPrice'] ?? data['price'] ?? 0;
     final double price = (priceVal is num)
         ? priceVal.toDouble()
         : double.tryParse(priceVal?.toString() ?? '0.0') ?? 0.0;
+
+    final bpVal = data['basePrice'] ?? 0;
+    final double basePrice = (bpVal is num)
+        ? bpVal.toDouble()
+        : double.tryParse(bpVal?.toString() ?? '0.0') ?? 0.0;
+
+    final epVal = data['extraPrice'] ?? data['additionalPrice'] ?? price;
+    final double extraPrice = (epVal is num)
+        ? epVal.toDouble()
+        : double.tryParse(epVal?.toString() ?? '0.0') ?? price;
+
+    final minQ = data['minQuantity'] ?? data['minQty'] ?? 1;
+    final maxQ = data['maxQuantity'] ?? data['maxQty'] ?? 10;
+    final stepQ = data['quantityStep'] ?? data['step'] ?? 1;
     final active = data['isActive'] ?? data['isAvailable'] ?? data['active'] ?? true;
+
     return ComboVariantOption(
       id: (data['id'] ?? '').toString(),
       name: (data['name'] ?? '').toString(),
       additionalPrice: price,
+      basePrice: basePrice,
+      extraPrice: extraPrice,
+      minQuantity: (minQ is num) ? minQ.toInt() : 1,
+      maxQuantity: (maxQ is num) ? maxQ.toInt() : 10,
+      quantityStep: (stepQ is num) ? stepQ.toInt() : 1,
+      allowQuantity: data['allowQuantity'] != false,
       isActive: active == true || active.toString().toLowerCase() == 'true',
     );
   }
@@ -52,7 +93,7 @@ class ComboVariantItem {
   });
 
   factory ComboVariantItem.fromMap(Map<String, dynamic> data) {
-    final rawOptions = data['options'] as List? ?? [];
+    final rawOptions = _rawToList(data['options']);
     final optionsList = <ComboVariantOption>[];
     for (final item in rawOptions) {
       if (item is Map) {
@@ -69,10 +110,10 @@ class ComboVariantItem {
     final isReqBool = isReq == true || isReq.toString().toLowerCase() == 'true';
     final minSel = (data['minSelection'] is num)
         ? (data['minSelection'] as num).toInt()
-        : (isReqBool ? 1 : 0);
+        : (int.tryParse(data['minSelection']?.toString() ?? '') ?? (isReqBool ? 1 : 0));
     final maxSel = (data['maxSelection'] is num)
         ? (data['maxSelection'] as num).toInt()
-        : (selType == 'SINGLE' ? 1 : 5);
+        : (int.tryParse(data['maxSelection']?.toString() ?? '') ?? (selType == 'SINGLE' ? 1 : 5));
 
     return ComboVariantItem(
       id: (data['id'] ?? '').toString(),
@@ -117,12 +158,12 @@ class ComboItemVariant {
     final isReqBool = isReq == true || isReq.toString().toLowerCase() == 'true';
     final minSel = (data['minSelection'] is num)
         ? (data['minSelection'] as num).toInt()
-        : (isReqBool ? 1 : 0);
+        : (int.tryParse(data['minSelection']?.toString() ?? '') ?? (isReqBool ? 1 : 0));
     final maxSel = (data['maxSelection'] is num)
         ? (data['maxSelection'] as num).toInt()
-        : (selType == 'SINGLE' ? 1 : 5);
+        : (int.tryParse(data['maxSelection']?.toString() ?? '') ?? (selType == 'SINGLE' ? 1 : 5));
 
-    final rawItems = data['items'] as List? ?? [];
+    final rawItems = _rawToList(data['items']);
     final itemsList = <ComboVariantItem>[];
     for (final item in rawItems) {
       if (item is Map) {
@@ -133,8 +174,8 @@ class ComboItemVariant {
       }
     }
 
-    if (itemsList.isEmpty && data['options'] is List) {
-      final rawLegacyOptions = data['options'] as List;
+    if (itemsList.isEmpty && data['options'] != null) {
+      final rawLegacyOptions = _rawToList(data['options']);
       final legacyOpts = <ComboVariantOption>[];
       for (final item in rawLegacyOptions) {
         if (item is Map) {
@@ -176,27 +217,60 @@ class ComboCustomizationOptionModel {
   final String id;
   final String name;
   final double price;
+  final double basePrice;
+  final double extraPrice;
+  final int minQuantity;
+  final int maxQuantity;
+  final int quantityStep;
+  final bool allowQuantity;
   final bool isAvailable;
 
   const ComboCustomizationOptionModel({
     required this.id,
     required this.name,
     required this.price,
+    this.basePrice = 0.0,
+    this.extraPrice = 0.0,
+    this.minQuantity = 1,
+    this.maxQuantity = 10,
+    this.quantityStep = 1,
+    this.allowQuantity = true,
     this.isAvailable = true,
   });
 
+  double get unitPrice => (basePrice > 0 ? basePrice : 0.0) + (extraPrice > 0 ? extraPrice : price);
+
   factory ComboCustomizationOptionModel.fromMap(Map<String, dynamic> data) {
-    final priceVal = data['price'] ?? data['additionalPrice'] ?? 0;
+    final priceVal = data['price'] ?? data['extraPrice'] ?? data['additionalPrice'] ?? 0;
     final double price = (priceVal is num)
         ? priceVal.toDouble()
         : double.tryParse(priceVal?.toString() ?? '0.0') ?? 0.0;
 
+    final bpVal = data['basePrice'] ?? 0;
+    final double basePrice = (bpVal is num)
+        ? bpVal.toDouble()
+        : double.tryParse(bpVal?.toString() ?? '0.0') ?? 0.0;
+
+    final epVal = data['extraPrice'] ?? data['additionalPrice'] ?? price;
+    final double extraPrice = (epVal is num)
+        ? epVal.toDouble()
+        : double.tryParse(epVal?.toString() ?? '0.0') ?? price;
+
+    final minQ = data['minQuantity'] ?? data['minQty'] ?? 1;
+    final maxQ = data['maxQuantity'] ?? data['maxQty'] ?? 10;
+    final stepQ = data['quantityStep'] ?? data['step'] ?? 1;
     final avail = data['isAvailable'] ?? data['available'] ?? data['isActive'] ?? data['active'] ?? true;
 
     return ComboCustomizationOptionModel(
       id: (data['id'] ?? '').toString(),
       name: (data['name'] ?? data['optionName'] ?? data['title'] ?? '').toString(),
       price: price,
+      basePrice: basePrice,
+      extraPrice: extraPrice,
+      minQuantity: (minQ is num) ? minQ.toInt() : (int.tryParse(minQ?.toString() ?? '1') ?? 1),
+      maxQuantity: (maxQ is num) ? maxQ.toInt() : (int.tryParse(maxQ?.toString() ?? '10') ?? 10),
+      quantityStep: (stepQ is num) ? stepQ.toInt() : (int.tryParse(stepQ?.toString() ?? '1') ?? 1),
+      allowQuantity: data['allowQuantity'] != false,
       isAvailable: avail == true || avail.toString().toLowerCase() == 'true',
     );
   }
@@ -222,7 +296,7 @@ class ComboCustomizationGroupModel {
   });
 
   factory ComboCustomizationGroupModel.fromMap(Map<String, dynamic> data) {
-    final rawOptions = data['options'] as List? ?? [];
+    final rawOptions = _rawToList(data['options']);
     final optionsList = <ComboCustomizationOptionModel>[];
 
     for (final item in rawOptions) {
@@ -239,18 +313,19 @@ class ComboCustomizationGroupModel {
     final selType = selTypeRaw.contains('MULTI') ? 'MULTI' : 'SINGLE';
 
     final isReq = data['isRequired'] ?? data['required'] ?? true;
+    final isReqBool = isReq == true || isReq.toString().toLowerCase() == 'true';
     final minSel = (data['minSelection'] is num)
         ? (data['minSelection'] as num).toInt()
-        : (isReq ? 1 : 0);
+        : (int.tryParse(data['minSelection']?.toString() ?? '') ?? (isReqBool ? 1 : 0));
     final maxSel = (data['maxSelection'] is num)
         ? (data['maxSelection'] as num).toInt()
-        : (selType == 'SINGLE' ? 1 : 5);
+        : (int.tryParse(data['maxSelection']?.toString() ?? '') ?? (selType == 'SINGLE' ? 1 : 5));
 
     return ComboCustomizationGroupModel(
       id: (data['id'] ?? '').toString(),
       name: (data['title'] ?? data['name'] ?? data['groupName'] ?? 'Options').toString(),
       selectionType: selType,
-      isRequired: isReq == true || isReq.toString().toLowerCase() == 'true',
+      isRequired: isReqBool,
       minSelection: minSel,
       maxSelection: maxSel,
       options: optionsList,
@@ -408,10 +483,10 @@ class ComboItemModel {
   }
 
   factory ComboItemModel.fromFirestore(Map<String, dynamic> data, String docId) {
-    final branchIdsList = (data['branchIds'] as List?)
-            ?.map((b) => b.toString().trim())
-            .toList() ??
-        [];
+    final branchIdsList = _rawToList(data['branchIds'])
+        .map((b) => b.toString().trim())
+        .where((b) => b.isNotEmpty)
+        .toList();
 
     final priceVal = data['price'] ?? data['displayPrice'] ?? data['basePrice'] ?? 0;
     final double price = (priceVal is num)
@@ -443,7 +518,8 @@ class ComboItemModel {
         ? Map<String, dynamic>.from(data['branchAvailability'])
         : null;
 
-    final rawGroups = data['customizationGroups'] as List? ?? data['customizations'] as List? ?? [];
+    final rawGroupsData = data['customizationGroups'] ?? data['customizations'];
+    final rawGroups = _rawToList(rawGroupsData);
     final parsedGroups = <ComboCustomizationGroupModel>[];
     for (final item in rawGroups) {
       if (item is Map) {
@@ -455,7 +531,7 @@ class ComboItemModel {
     final bool isVariantEnabled = data['isVariantEnabled'] == true ||
         data['isVariantEnabled'].toString().toLowerCase() == 'true';
 
-    final rawVariants = data['variants'] as List? ?? [];
+    final rawVariants = _rawToList(data['variants']);
     final parsedVariants = <ComboItemVariant>[];
     for (final item in rawVariants) {
       if (item is Map) {
@@ -470,7 +546,9 @@ class ComboItemModel {
     if (data['createdAt'] is String) {
       createdAt = DateTime.tryParse(data['createdAt']);
     }
-    final List<String>? availableDays = (data['availableDays'] as List?)?.map((e) => e.toString()).toList();
+    final List<String>? availableDays = data['availableDays'] != null
+        ? _rawToList(data['availableDays']).map((e) => e.toString()).toList()
+        : null;
 
     return ComboItemModel(
       id: docId,
@@ -504,38 +582,35 @@ class ComboItemModel {
 /// Helper class for calculating Combo Variant base prices and unit prices
 class ComboCalculator {
   /// Calculates the dynamic base price for a specific size variant based on its REQUIRED items/options.
-  /// 
-  /// If [selectedVariantOptions] is provided, calculates using the selected options within required groups.
-  /// If [selectedVariantOptions] is null or doesn't have a selection for a required group, defaults to the
-  /// configured default required choice(s) (first option for single selection, or first minSelection options for multi selection).
-  /// Optional items/groups are NEVER included in the Size Base Price.
   static double calculateVariantBasePrice(
     ComboItemVariant variant, [
     Map<String, Set<String>>? selectedVariantOptions,
+    Map<String, int>? optionQuantities,
   ]) {
     double basePrice = 0.0;
 
     for (final varItem in variant.items) {
       if (!varItem.isActive) continue;
 
-      // Only REQUIRED items contribute to the Size Base Price
       if (varItem.isRequired) {
         final selectedSet = selectedVariantOptions?[varItem.id];
 
         if (selectedSet != null && selectedSet.isNotEmpty) {
-          // Add prices of explicitly selected options in this required group
           for (final option in varItem.options) {
             if (option.isActive && selectedSet.contains(option.id)) {
-              basePrice += option.additionalPrice;
+              final qKey = '${varItem.id}:${option.id}';
+              final qty = optionQuantities?[qKey] ?? 1;
+              basePrice += option.unitPrice * qty;
             }
           }
         } else if (varItem.options.isNotEmpty) {
-          // Fallback to default required selection(s) if no user selection is present yet
           final isSingle = varItem.selectionType == 'SINGLE';
           final countToTake = isSingle ? 1 : (varItem.minSelection > 0 ? varItem.minSelection : 1);
           final defaultOpts = varItem.options.where((o) => o.isActive).take(countToTake);
           for (final opt in defaultOpts) {
-            basePrice += opt.additionalPrice;
+            final qKey = '${varItem.id}:${opt.id}';
+            final qty = optionQuantities?[qKey] ?? 1;
+            basePrice += opt.unitPrice * qty;
           }
         }
       }
@@ -545,30 +620,27 @@ class ComboCalculator {
   }
 
   /// Calculates the final combo unit price.
-  /// 
-  /// When [isVariantEnabled] is true:
-  ///   UnitPrice = calculateVariantBasePrice(selectedVariant, selectedVariantOptions) + Sum(selected OPTIONAL options)
-  /// When [isVariantEnabled] is false:
-  ///   UnitPrice = currentItem.price + Sum(selected customization options)
   static double calculateComboFinalPrice({
     required ComboItemModel currentItem,
     ComboItemVariant? selectedVariant,
     Map<String, Set<String>>? selectedVariantOptions,
     Map<String, Set<String>>? selectedGroupOptions,
+    Map<String, int>? optionQuantities,
   }) {
     if (currentItem.isVariantEnabled && selectedVariant != null) {
-      final basePrice = calculateVariantBasePrice(selectedVariant, selectedVariantOptions);
+      final basePrice = calculateVariantBasePrice(selectedVariant, selectedVariantOptions, optionQuantities);
       double optionalAdditions = 0.0;
 
       for (final varItem in selectedVariant.items) {
         if (!varItem.isActive) continue;
-        // Only OPTIONAL items add on top of the Size Base Price
         if (!varItem.isRequired) {
           final selectedSet = selectedVariantOptions?[varItem.id];
           if (selectedSet != null && selectedSet.isNotEmpty) {
             for (final option in varItem.options) {
               if (option.isActive && selectedSet.contains(option.id)) {
-                optionalAdditions += option.additionalPrice;
+                final qKey = '${varItem.id}:${option.id}';
+                final qty = optionQuantities?[qKey] ?? 1;
+                optionalAdditions += option.unitPrice * qty;
               }
             }
           }
@@ -584,7 +656,9 @@ class ComboCalculator {
           if (selectedSet != null && selectedSet.isNotEmpty) {
             for (final option in group.options) {
               if (option.isAvailable && selectedSet.contains(option.id)) {
-                total += option.price;
+                final qKey = '${group.id}:${option.id}';
+                final qty = optionQuantities?[qKey] ?? 1;
+                total += option.unitPrice * qty;
               }
             }
           }

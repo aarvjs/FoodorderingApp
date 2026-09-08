@@ -384,7 +384,33 @@ class _CartScreenState extends ConsumerState<CartScreen> {
                                            ),
                                          ),
 
-                                       if (item.selectedCustomizations.isNotEmpty)
+                                       if (item.customizationSelections.isNotEmpty)
+                                         Padding(
+                                           padding: const EdgeInsets.only(top: 3),
+                                           child: Column(
+                                             crossAxisAlignment: CrossAxisAlignment.start,
+                                             children: item.customizationSelections.map((c) {
+                                               final optQty = c.quantity > 0 ? c.quantity : 1;
+                                               final uPrice = c.unitPrice > 0 ? c.unitPrice : c.additionalPrice;
+                                               final subtotal = c.subtotal > 0 ? c.subtotal : uPrice * optQty;
+                                               final priceStr = uPrice > 0
+                                                   ? ' × $optQty @ ₹${uPrice.toStringAsFixed(0)} = ₹${subtotal.toStringAsFixed(0)}'
+                                                   : (optQty > 1 ? ' × $optQty' : '');
+                                               return Padding(
+                                                 padding: const EdgeInsets.only(bottom: 1.5),
+                                                 child: Text(
+                                                   '• ${c.groupName}: ${c.optionName}$priceStr',
+                                                   style: TextStyle(
+                                                     fontSize: 11,
+                                                     fontWeight: FontWeight.w600,
+                                                     color: isDark ? Colors.amber.shade300 : Colors.amber.shade900,
+                                                   ),
+                                                 ),
+                                               );
+                                             }).toList(),
+                                           ),
+                                         )
+                                       else if (item.selectedCustomizations.isNotEmpty)
                                          Padding(
                                            padding: const EdgeInsets.only(top: 3),
                                            child: Column(
@@ -1181,10 +1207,13 @@ class _CartScreenState extends ConsumerState<CartScreen> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(
-            label,
-            style: TextStyle(fontSize: 13, color: isDark ? Colors.grey.shade400 : AppColors.textLight),
+          Expanded(
+            child: Text(
+              label,
+              style: TextStyle(fontSize: 13, color: isDark ? Colors.grey.shade400 : AppColors.textLight),
+            ),
           ),
+          const SizedBox(width: 8),
           Text(
             value,
             style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: valColor),

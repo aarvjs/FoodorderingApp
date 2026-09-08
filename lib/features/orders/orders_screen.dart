@@ -383,8 +383,8 @@ class OrdersScreen extends ConsumerWidget {
                         Text(
                           order.paymentMethod == 'PAY_AT_STORE'
                               ? 'Payment: Pay at Store'
-                              : (order.paymentMethod == 'ONLINE' || order.paymentGateway == 'PAYU'
-                                  ? 'Payment: Online • PayU'
+                              : (order.paymentMethod == 'ONLINE' || order.paymentGateway == 'RAZORPAY' || order.paymentGateway == 'PAYU'
+                                  ? 'Payment: Online • Razorpay'
                                   : 'Payment: Cash on Delivery'),
                           style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.textLight),
                           maxLines: 2,
@@ -630,6 +630,8 @@ class _CancelOrderDialogState extends ConsumerState<_CancelOrderDialog> {
       Navigator.of(context).pop();
 
       if (res['success'] == true) {
+        final bool isOnlinePaid = widget.order.isOnlinePaid;
+
         ref.read(ordersProvider.notifier).updateOrder(
           widget.order.copyWith(
             status: 'CANCELLED',
@@ -637,11 +639,28 @@ class _CancelOrderDialogState extends ConsumerState<_CancelOrderDialog> {
             cancellationReason: finalReason,
             cancellationNote: _noteController.text.trim(),
             cancelledAt: DateTime.now(),
+            refundStatus: isOnlinePaid ? 'PROCESSING' : 'NOT_APPLICABLE',
+            refundAmount: isOnlinePaid ? widget.order.totalAmount : 0.0,
+            refundMessage: isOnlinePaid
+                ? 'Your refund of ₹${widget.order.totalAmount.toStringAsFixed(2)} has been initiated. It may take 2–4 business days to reflect in your original payment method.'
+                : '',
           ),
         );
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Order cancelled successfully.')),
-        );
+
+        if (isOnlinePaid) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Order cancelled successfully. Your refund of ₹${widget.order.totalAmount.toStringAsFixed(2)} has been initiated. It may take 2–4 business days to reflect in your original payment method.'),
+              duration: const Duration(seconds: 6),
+              backgroundColor: Colors.orange.shade900,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Order cancelled successfully.')),
+          );
+        }
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(res['message'] ?? 'Failed to cancel order.')),
@@ -1052,7 +1071,26 @@ class _OrderBillSheet extends StatelessWidget {
                           child: Text('Add-ons: ${item.selectedAddons.join(", ")}',
                               style: const TextStyle(fontSize: 10.5, color: Colors.blue, fontWeight: FontWeight.w600)),
                         ),
-                      if (item.selectedCustomizations.isNotEmpty)
+                      if (item.customizationSelections.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 2),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: item.customizationSelections.map((c) {
+                              final optQty = c.quantity > 0 ? c.quantity : 1;
+                              final uPrice = c.unitPrice > 0 ? c.unitPrice : c.additionalPrice;
+                              final subtotal = c.subtotal > 0 ? c.subtotal : uPrice * optQty;
+                              final priceStr = uPrice > 0
+                                  ? ' × $optQty @ ₹${uPrice.toStringAsFixed(0)} = ₹${subtotal.toStringAsFixed(0)}'
+                                  : (optQty > 1 ? ' × $optQty' : '');
+                              return Text(
+                                '• ${c.groupName}: ${c.optionName}$priceStr',
+                                style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w600, color: isDark ? Colors.amber.shade300 : Colors.amber.shade900),
+                              );
+                            }).toList(),
+                          ),
+                        )
+                      else if (item.selectedCustomizations.isNotEmpty)
                         Padding(
                           padding: const EdgeInsets.only(top: 2),
                           child: Column(
@@ -1166,7 +1204,10 @@ class _OrderBillSheet extends StatelessWidget {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label, style: const TextStyle(fontSize: 12, color: AppColors.textLight)),
+          Expanded(
+            child: Text(label, style: const TextStyle(fontSize: 12, color: AppColors.textLight)),
+          ),
+          const SizedBox(width: 8),
           Text(
             value,
             style: TextStyle(

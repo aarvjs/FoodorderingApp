@@ -30,7 +30,7 @@ class Order {
   final String? branchGstNumber;
   final String? branchFssaiNumber;
   final String paymentMethod; // "CASH_ON_DELIVERY", "COD", "ONLINE"
-  final String paymentGateway; // "PAYU", "COD"
+  final String paymentGateway; // "RAZORPAY", "COD"
   final String paymentStatus; // "PENDING", "COD_PENDING", "SUCCESS", "PAID"
   final String? transactionId;
   final DateTime? paidAt;
@@ -44,6 +44,11 @@ class Order {
   final String? cancellationNote;
   final DateTime? cancelledAt;
   final DateTime orderDate;
+  final String? refundStatus; // "REFUNDED", "REFUND_PENDING", "NO_REFUND", "PROCESSING", "FAILED"
+  final double? refundAmount;
+  final DateTime? refundDate;
+  final String? refundId;
+  final String? refundMessage;
 
   const Order({
     required this.id,
@@ -87,6 +92,11 @@ class Order {
     this.cancellationNote,
     this.cancelledAt,
     required this.orderDate,
+    this.refundStatus,
+    this.refundAmount,
+    this.refundDate,
+    this.refundId,
+    this.refundMessage,
   });
 
   bool get isTakeAway => orderType.toUpperCase() == 'TAKE_AWAY';
@@ -132,6 +142,50 @@ class Order {
       status.toUpperCase() == 'PREPARING' ||
       status.toUpperCase() == 'READY' ||
       status.toUpperCase() == 'OUT_FOR_DELIVERY';
+
+  bool get isOnlinePaid =>
+      (paymentMethod.toUpperCase() == 'ONLINE' || paymentGateway.toUpperCase() == 'RAZORPAY') &&
+      (paymentStatus.toUpperCase() == 'SUCCESS' || paymentStatus.toUpperCase() == 'PAID');
+
+  String get displayRefundStatus {
+    final statusUpper = refundStatus?.toUpperCase();
+    if (statusUpper == 'REFUNDED') return 'REFUNDED';
+    if (statusUpper == 'FAILED') return 'FAILED';
+    if (statusUpper == 'NOT_APPLICABLE' || statusUpper == 'NO_REFUND') return 'NOT_APPLICABLE';
+    if (statusUpper == 'PROCESSING' || statusUpper == 'PENDING' || statusUpper == 'REFUND_PENDING') {
+      return 'PROCESSING';
+    }
+
+    if (isCancelled) {
+      return isOnlinePaid ? 'PROCESSING' : 'NOT_APPLICABLE';
+    }
+    return 'NOT_APPLICABLE';
+  }
+
+  String get displayRefundStatusLabel {
+    final s = displayRefundStatus;
+    if (s == 'REFUNDED') return 'Refunded';
+    if (s == 'FAILED') return 'Refund Failed';
+    if (s == 'PROCESSING') return 'Refund Processing';
+    return 'Not Applicable';
+  }
+
+  String get customerRefundNotice {
+    final s = displayRefundStatus;
+    if (s == 'REFUNDED') {
+      return 'Your refund of ₹${(refundAmount ?? totalAmount).toStringAsFixed(2)} has been completed successfully.';
+    }
+    if (s == 'FAILED') {
+      return 'Refund processing failed. Please contact customer support for assistance.';
+    }
+    if (s == 'PROCESSING') {
+      if (refundMessage != null && refundMessage!.isNotEmpty) {
+        return refundMessage!;
+      }
+      return 'Your refund of ₹${(refundAmount ?? totalAmount).toStringAsFixed(2)} has been initiated. It may take 2–4 business days to reflect in your original payment method.';
+    }
+    return '';
+  }
 
   factory Order.fromFirestore(Map<String, dynamic> data, String docId) {
     final rawItems = data['items'] as List? ?? [];
@@ -268,7 +322,7 @@ class Order {
       branchGstNumber: (data['branchGstNumber'] ?? data['gstNumber'] ?? '').toString(),
       branchFssaiNumber: (data['branchFssaiNumber'] ?? data['fssaiNumber'] ?? data['fssai'] ?? '').toString(),
       paymentMethod: (data['paymentMethod'] ?? 'CASH_ON_DELIVERY').toString(),
-      paymentGateway: (data['paymentGateway'] ?? (data['paymentMethod'] == 'ONLINE' ? 'PAYU' : 'COD')).toString(),
+      paymentGateway: (data['paymentGateway'] ?? (data['paymentMethod'] == 'ONLINE' ? 'RAZORPAY' : 'COD')).toString(),
       paymentStatus: (data['paymentStatus'] ?? 'PENDING').toString(),
       transactionId: data['transactionId']?.toString(),
       paidAt: data['paidAt'] != null
@@ -298,6 +352,17 @@ class Order {
                   : null))
           : null,
       orderDate: parsedDate,
+      refundStatus: data['refundStatus']?.toString(),
+      refundAmount: data['refundAmount'] != null ? _numToDouble(data['refundAmount']) : null,
+      refundDate: data['refundDate'] != null
+          ? (data['refundDate'] is String
+              ? DateTime.tryParse(data['refundDate'])
+              : (data['refundDate'] is Map && data['refundDate']['seconds'] != null
+                  ? DateTime.fromMillisecondsSinceEpoch((data['refundDate']['seconds'] as int) * 1000)
+                  : null))
+          : null,
+      refundId: data['refundId']?.toString() ?? data['refundTxnId']?.toString(),
+      refundMessage: data['refundMessage']?.toString(),
     );
   }
 
@@ -347,6 +412,11 @@ class Order {
     String? cancellationNote,
     DateTime? cancelledAt,
     DateTime? orderDate,
+    String? refundStatus,
+    double? refundAmount,
+    DateTime? refundDate,
+    String? refundId,
+    String? refundMessage,
   }) {
     return Order(
       id: id ?? this.id,
@@ -384,6 +454,11 @@ class Order {
       cancellationNote: cancellationNote ?? this.cancellationNote,
       cancelledAt: cancelledAt ?? this.cancelledAt,
       orderDate: orderDate ?? this.orderDate,
+      refundStatus: refundStatus ?? this.refundStatus,
+      refundAmount: refundAmount ?? this.refundAmount,
+      refundDate: refundDate ?? this.refundDate,
+      refundId: refundId ?? this.refundId,
+      refundMessage: refundMessage ?? this.refundMessage,
     );
   }
 }

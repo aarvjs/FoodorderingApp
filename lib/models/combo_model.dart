@@ -22,10 +22,12 @@ class ComboModel {
   });
 
   factory ComboModel.fromFirestore(Map<String, dynamic> data, String docId) {
-    final branchIdsList = (data['branchIds'] as List?)
-            ?.map((b) => b.toString().trim())
-            .toList() ??
-        [];
+    final rawBranchIds = data['branchIds'];
+    final List<String> branchIdsList = (rawBranchIds is List)
+        ? rawBranchIds.map((b) => b.toString().trim()).where((b) => b.isNotEmpty).toList()
+        : (rawBranchIds is Map
+            ? rawBranchIds.values.map((b) => b.toString().trim()).where((b) => b.isNotEmpty).toList()
+            : []);
 
     final String name = (data['name'] ?? data['title'] ?? 'Combo').toString();
     final String image = (data['image'] ?? data['imageUrl'] ?? data['bannerUrl'] ?? 'https://images.unsplash.com/photo-1513104890138-7c749659a591?w=500&auto=format&fit=crop').toString();

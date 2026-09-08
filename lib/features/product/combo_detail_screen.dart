@@ -85,6 +85,7 @@ class ComboDetailScreen extends ConsumerWidget {
         comboId: combo.id,
         comboName: combo.name,
         comboItemId: item.id,
+        basePrice: item.price,
         unitPrice: item.price,
       );
 

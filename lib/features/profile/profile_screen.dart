@@ -729,6 +729,13 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                     ),
                     const Divider(height: 1),
                     ListTile(
+                      leading: const Icon(Iconsax.receipt_item, color: AppColors.primary),
+                      title: const Text('Transaction History', style: TextStyle(fontWeight: FontWeight.bold)),
+                      trailing: const Icon(Icons.chevron_right_rounded),
+                      onTap: () => context.push('/transaction-history'),
+                    ),
+                    const Divider(height: 1),
+                    ListTile(
                       leading: const Icon(Iconsax.setting, color: AppColors.primary),
                       title: const Text('Settings', style: TextStyle(fontWeight: FontWeight.bold)),
                       trailing: const Icon(Icons.chevron_right_rounded),

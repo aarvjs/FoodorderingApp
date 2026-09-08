@@ -45,10 +45,112 @@ class _ComboProductCustomizationSheetState
   // Selected option IDs in Standard Mode: groupId -> Set of option IDs
   final Map<String, Set<String>> _selectedGroupOptions = {};
 
+  // Option Quantities map: key "${groupIdOrVarItemId}:${optionId}" -> quantity
+  final Map<String, int> _optionQuantities = {};
+
   @override
   void initState() {
     super.initState();
     _initDefaults(widget.item);
+  }
+
+  Widget _buildOptionQuantitySelector({
+    required int quantity,
+    required int maxQty,
+    required VoidCallback onDecrement,
+    required VoidCallback onIncrement,
+    required bool isDark,
+  }) {
+    return Container(
+      margin: const EdgeInsets.only(left: 8),
+      decoration: BoxDecoration(
+        color: isDark ? AppColors.darkCard : Colors.white,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppColors.primary.withValues(alpha: 0.4)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          InkWell(
+            onTap: onDecrement,
+            borderRadius: BorderRadius.circular(8),
+            child: const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+              child: Icon(Icons.remove, size: 14, color: AppColors.primary),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            child: Text(
+              '$quantity',
+              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+            ),
+          ),
+          InkWell(
+            onTap: quantity < maxQty ? onIncrement : null,
+            borderRadius: BorderRadius.circular(8),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+              child: Icon(
+                Icons.add,
+                size: 14,
+                color: quantity < maxQty ? AppColors.primary : Colors.grey,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  int _getOptionQuantity(String key, int minQty) {
+    final val = _optionQuantities[key];
+    if (val != null && val > 0) return val;
+    return minQty > 0 ? minQty : 1;
+  }
+
+  void _incrementOptionQuantity(String key, int maxQty, int step) {
+    setState(() {
+      final current = _getOptionQuantity(key, 1);
+      final limit = maxQty > 0 ? maxQty : 10;
+      if (current + step <= limit) {
+        _optionQuantities[key] = current + step;
+      }
+    });
+  }
+
+  void _decrementOptionQuantity(
+    String groupOrVarId,
+    String optionId,
+    String key,
+    int minQty,
+    int step,
+    bool isVariantMode,
+    bool isRequired,
+    int groupMinSelection,
+  ) {
+    setState(() {
+      final current = _getOptionQuantity(key, minQty);
+      final next = current - step;
+      final effectiveMin = minQty > 0 ? minQty : 1;
+
+      if (next >= effectiveMin) {
+        _optionQuantities[key] = next;
+      } else {
+        _optionQuantities.remove(key);
+        if (isVariantMode) {
+          final currentSet = _selectedVariantOptions[groupOrVarId] ?? <String>{};
+          if (!isRequired || currentSet.length > groupMinSelection) {
+            currentSet.remove(optionId);
+          }
+        } else {
+          final currentSet = _selectedGroupOptions[groupOrVarId] ?? <String>{};
+          if (!isRequired || currentSet.length > groupMinSelection) {
+            currentSet.remove(optionId);
+          }
+        }
+      }
+    });
   }
 
   void _onVariantSelected(ComboItemVariant variant) {
@@ -63,12 +165,15 @@ class _ComboProductCustomizationSheetState
         if (varItem.isRequired && varItem.options.isNotEmpty) {
           final isSingle = varItem.selectionType == 'SINGLE';
           if (isSingle) {
-            _selectedVariantOptions[varItem.id]!.add(varItem.options.first.id);
+            final firstOpt = varItem.options.first;
+            _selectedVariantOptions[varItem.id]!.add(firstOpt.id);
+            _optionQuantities['${varItem.id}:${firstOpt.id}'] = firstOpt.minQuantity > 0 ? firstOpt.minQuantity : 1;
           } else {
             final countToTake = varItem.minSelection > 0 ? varItem.minSelection : 1;
             final defaultOpts = varItem.options.take(countToTake);
             for (final opt in defaultOpts) {
               _selectedVariantOptions[varItem.id]!.add(opt.id);
+              _optionQuantities['${varItem.id}:${opt.id}'] = opt.minQuantity > 0 ? opt.minQuantity : 1;
             }
           }
         }
@@ -89,15 +194,18 @@ class _ComboProductCustomizationSheetState
           final isReq = varItem.isRequired;
 
           if (!_selectedVariantOptions.containsKey(varItem.id)) {
-            _selectedVariantOptions[varItem.id] = <String>{};
+            final targetSet = _selectedVariantOptions.putIfAbsent(varItem.id, () => <String>{});
             if (isReq && varItem.options.isNotEmpty) {
               if (isSingle) {
-                _selectedVariantOptions[varItem.id]!.add(varItem.options.first.id);
+                final firstOpt = varItem.options.first;
+                targetSet.add(firstOpt.id);
+                _optionQuantities['${varItem.id}:${firstOpt.id}'] = firstOpt.minQuantity > 0 ? firstOpt.minQuantity : 1;
               } else {
                 final countToTake = varItem.minSelection > 0 ? varItem.minSelection : 1;
                 final defaultOpts = varItem.options.take(countToTake);
                 for (final opt in defaultOpts) {
-                  _selectedVariantOptions[varItem.id]!.add(opt.id);
+                  targetSet.add(opt.id);
+                  _optionQuantities['${varItem.id}:${opt.id}'] = opt.minQuantity > 0 ? opt.minQuantity : 1;
                 }
               }
             }
@@ -110,12 +218,14 @@ class _ComboProductCustomizationSheetState
         final isReq = group.isRequired && group.minSelection >= 1;
 
         if (!_selectedGroupOptions.containsKey(group.id)) {
-          _selectedGroupOptions[group.id] = <String>{};
+          final targetSet = _selectedGroupOptions.putIfAbsent(group.id, () => <String>{});
           if (isReq && group.options.isNotEmpty) {
-            _selectedGroupOptions[group.id]!.add(group.options.first.id);
+            final firstOpt = group.options.first;
+            targetSet.add(firstOpt.id);
+            _optionQuantities['${group.id}:${firstOpt.id}'] = firstOpt.minQuantity > 0 ? firstOpt.minQuantity : 1;
           }
         } else {
-          final currentSet = _selectedGroupOptions[group.id]!;
+          final currentSet = _selectedGroupOptions[group.id] ?? <String>{};
           if (isSingle && currentSet.length > 1) {
             _selectedGroupOptions[group.id] = {currentSet.first};
           }
@@ -130,6 +240,7 @@ class _ComboProductCustomizationSheetState
       selectedVariant: _selectedVariant,
       selectedVariantOptions: _selectedVariantOptions,
       selectedGroupOptions: _selectedGroupOptions,
+      optionQuantities: _optionQuantities,
     );
   }
 
@@ -138,25 +249,27 @@ class _ComboProductCustomizationSheetState
       final currentSet = _selectedVariantOptions[varItem.id] ?? <String>{};
       final isSingle = varItem.selectionType == 'SINGLE';
       final isReq = varItem.isRequired && varItem.minSelection >= 1;
+      final qKey = '${varItem.id}:${option.id}';
 
       if (isSingle) {
         if (isReq) {
-          // Single + Required (Min >= 1): Radio button - selecting another option replaces previous
           _selectedVariantOptions[varItem.id] = {option.id};
+          _optionQuantities[qKey] = option.minQuantity > 0 ? option.minQuantity : 1;
         } else {
-          // Single + Optional (Min = 0): Unselect if already selected, or replace with new single option
           if (currentSet.contains(option.id)) {
             _selectedVariantOptions[varItem.id] = <String>{};
+            _optionQuantities.remove(qKey);
           } else {
             _selectedVariantOptions[varItem.id] = {option.id};
+            _optionQuantities[qKey] = option.minQuantity > 0 ? option.minQuantity : 1;
           }
         }
       } else {
-        // Multi-selection
         final newSet = Set<String>.from(currentSet);
         if (newSet.contains(option.id)) {
           if (!isReq || newSet.length > varItem.minSelection) {
             newSet.remove(option.id);
+            _optionQuantities.remove(qKey);
           } else {
             AppSnackbar.show(
               context,
@@ -167,6 +280,7 @@ class _ComboProductCustomizationSheetState
         } else {
           if (newSet.length < varItem.maxSelection) {
             newSet.add(option.id);
+            _optionQuantities[qKey] = option.minQuantity > 0 ? option.minQuantity : 1;
           } else {
             AppSnackbar.show(
               context,
@@ -185,15 +299,19 @@ class _ComboProductCustomizationSheetState
       final currentSet = _selectedGroupOptions[group.id] ?? <String>{};
       final isSingle = group.selectionType == 'SINGLE';
       final isReq = group.isRequired && group.minSelection >= 1;
+      final qKey = '${group.id}:${option.id}';
 
       if (isSingle) {
         if (isReq) {
           _selectedGroupOptions[group.id] = {option.id};
+          _optionQuantities[qKey] = option.minQuantity > 0 ? option.minQuantity : 1;
         } else {
           if (currentSet.contains(option.id)) {
             _selectedGroupOptions[group.id] = <String>{};
+            _optionQuantities.remove(qKey);
           } else {
             _selectedGroupOptions[group.id] = {option.id};
+            _optionQuantities[qKey] = option.minQuantity > 0 ? option.minQuantity : 1;
           }
         }
       } else {
@@ -201,6 +319,7 @@ class _ComboProductCustomizationSheetState
         if (newSet.contains(option.id)) {
           if (!isReq || newSet.length > group.minSelection) {
             newSet.remove(option.id);
+            _optionQuantities.remove(qKey);
           } else {
             AppSnackbar.show(
               context,
@@ -211,6 +330,7 @@ class _ComboProductCustomizationSheetState
         } else {
           if (newSet.length < group.maxSelection) {
             newSet.add(option.id);
+            _optionQuantities[qKey] = option.minQuantity > 0 ? option.minQuantity : 1;
           } else {
             AppSnackbar.show(
               context,
@@ -233,10 +353,15 @@ class _ComboProductCustomizationSheetState
         final selectedSet = _selectedVariantOptions[varItem.id] ?? <String>{};
         for (final option in varItem.options) {
           if (selectedSet.contains(option.id)) {
-            if (option.additionalPrice > 0) {
-              summaries.add('${varItem.name}: ${option.name} (+₹${option.additionalPrice.toStringAsFixed(0)})');
+            final qKey = '${varItem.id}:${option.id}';
+            final qty = _getOptionQuantity(qKey, option.minQuantity);
+            final unitP = option.unitPrice;
+            final subtotal = unitP * qty;
+
+            if (unitP > 0) {
+              summaries.add('${varItem.name}: ${option.name} × $qty (@ ₹${unitP.toStringAsFixed(0)} = ₹${subtotal.toStringAsFixed(0)})');
             } else {
-              summaries.add('${varItem.name}: ${option.name}');
+              summaries.add('${varItem.name}: ${option.name} × $qty');
             }
           }
         }
@@ -246,10 +371,15 @@ class _ComboProductCustomizationSheetState
         final selectedSet = _selectedGroupOptions[group.id] ?? <String>{};
         for (final option in group.options) {
           if (selectedSet.contains(option.id)) {
-            if (option.price > 0) {
-              summaries.add('${group.name}: ${option.name} (+₹${option.price.toStringAsFixed(0)})');
+            final qKey = '${group.id}:${option.id}';
+            final qty = _getOptionQuantity(qKey, option.minQuantity);
+            final unitP = option.unitPrice;
+            final subtotal = unitP * qty;
+
+            if (unitP > 0) {
+              summaries.add('${group.name}: ${option.name} × $qty (@ ₹${unitP.toStringAsFixed(0)} = ₹${subtotal.toStringAsFixed(0)})');
             } else {
-              summaries.add('${group.name}: ${option.name}');
+              summaries.add('${group.name}: ${option.name} × $qty');
             }
           }
         }
@@ -312,11 +442,23 @@ class _ComboProductCustomizationSheetState
         final selectedSet = _selectedVariantOptions[varItem.id] ?? <String>{};
         for (final option in varItem.options) {
           if (selectedSet.contains(option.id)) {
+            final qKey = '${varItem.id}:${option.id}';
+            final qty = _getOptionQuantity(qKey, option.minQuantity);
+            final unitP = option.unitPrice;
+            final subtotal = unitP * qty;
+
             list.add(ComboCustomizationSelection(
               groupName: varItem.name,
               optionId: option.id,
               optionName: option.name,
               additionalPrice: option.additionalPrice,
+              basePrice: option.basePrice,
+              extraPrice: option.extraPrice,
+              quantity: qty,
+              unitPrice: unitP,
+              subtotal: subtotal,
+              comboId: currentItem.comboId,
+              variantId: _selectedVariant?.id,
             ));
           }
         }
@@ -326,11 +468,22 @@ class _ComboProductCustomizationSheetState
         final selectedSet = _selectedGroupOptions[group.id] ?? <String>{};
         for (final option in group.options) {
           if (selectedSet.contains(option.id)) {
+            final qKey = '${group.id}:${option.id}';
+            final qty = _getOptionQuantity(qKey, option.minQuantity);
+            final unitP = option.unitPrice;
+            final subtotal = unitP * qty;
+
             list.add(ComboCustomizationSelection(
               groupName: group.name,
               optionId: option.id,
               optionName: option.name,
               additionalPrice: option.price,
+              basePrice: option.basePrice,
+              extraPrice: option.extraPrice,
+              quantity: qty,
+              unitPrice: unitP,
+              subtotal: subtotal,
+              comboId: currentItem.comboId,
             ));
           }
         }
@@ -755,57 +908,112 @@ class _ComboProductCustomizationSheetState
                             else
                               ...varItem.options.map((option) {
                                 final isSelected = selectedSet.contains(option.id);
+                                final qKey = '${varItem.id}:${option.id}';
+                                final qty = _getOptionQuantity(qKey, option.minQuantity);
+                                final unitP = option.unitPrice;
+                                final subtotal = unitP * qty;
 
-                                return InkWell(
-                                  onTap: () => _toggleVariantOption(varItem, option),
-                                  borderRadius: BorderRadius.circular(10),
-                                  child: Padding(
-                                    padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+                                return Padding(
+                                  padding: const EdgeInsets.symmetric(vertical: 4),
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
+                                    decoration: BoxDecoration(
+                                      color: isSelected
+                                          ? AppColors.primary.withValues(alpha: 0.06)
+                                          : Colors.transparent,
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
                                     child: Row(
                                       children: [
-                                        // Radio vs Checkbox Icon based on Selection Type
-                                        Icon(
-                                          isSingle
-                                              ? (isSelected
-                                                  ? Icons.radio_button_checked_rounded
-                                                  : Icons.radio_button_off_rounded)
-                                              : (isSelected
-                                                  ? Icons.check_box_rounded
-                                                  : Icons.check_box_outline_blank_rounded),
-                                          size: 20,
-                                          color: isSelected
-                                              ? AppColors.primary
-                                              : (isDark ? Colors.grey.shade500 : Colors.grey.shade400),
+                                        InkWell(
+                                          onTap: () => _toggleVariantOption(varItem, option),
+                                          child: Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Icon(
+                                                isSingle
+                                                    ? (isSelected
+                                                        ? Icons.radio_button_checked_rounded
+                                                        : Icons.radio_button_off_rounded)
+                                                    : (isSelected
+                                                        ? Icons.check_box_rounded
+                                                        : Icons.check_box_outline_blank_rounded),
+                                                size: 20,
+                                                color: isSelected
+                                                    ? AppColors.primary
+                                                    : (isDark ? Colors.grey.shade500 : Colors.grey.shade400),
+                                              ),
+                                              const Gap(10),
+                                            ],
+                                          ),
                                         ),
-                                        const Gap(10),
 
-                                        // Option Name
                                         Expanded(
-                                          child: Text(
-                                            option.name,
-                                            style: TextStyle(
-                                              fontSize: 13,
-                                              fontWeight: isSelected ? FontWeight.w800 : FontWeight.w500,
-                                              color: isSelected
-                                                  ? (isDark ? Colors.white : AppColors.textDark)
-                                                  : (isDark ? Colors.grey.shade300 : Colors.grey.shade800),
+                                          child: InkWell(
+                                            onTap: () => _toggleVariantOption(varItem, option),
+                                            child: Column(
+                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              children: [
+                                                Text(
+                                                  option.name,
+                                                  style: TextStyle(
+                                                    fontSize: 13,
+                                                    fontWeight: isSelected ? FontWeight.w800 : FontWeight.w500,
+                                                    color: isSelected
+                                                        ? (isDark ? Colors.white : AppColors.textDark)
+                                                        : (isDark ? Colors.grey.shade300 : Colors.grey.shade800),
+                                                  ),
+                                                ),
+                                                if (isSelected && qty > 1 && unitP > 0) ...[
+                                                  const Gap(2),
+                                                  Text(
+                                                    '₹${unitP.toStringAsFixed(0)} × $qty = ₹${subtotal.toStringAsFixed(0)}',
+                                                    style: const TextStyle(
+                                                      fontSize: 11,
+                                                      fontWeight: FontWeight.w700,
+                                                      color: AppColors.primary,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ],
                                             ),
                                           ),
                                         ),
 
-                                        // Additional Price Tag
                                         Text(
-                                          option.additionalPrice > 0
-                                              ? '+₹${option.additionalPrice.toStringAsFixed(0)}'
+                                          unitP > 0
+                                              ? '+₹${unitP.toStringAsFixed(0)}'
                                               : 'Free',
                                           style: TextStyle(
                                             fontSize: 12.5,
                                             fontWeight: FontWeight.w800,
-                                            color: option.additionalPrice > 0
+                                            color: unitP > 0
                                                 ? AppColors.primary
                                                 : const Color(0xFF10B981),
                                           ),
                                         ),
+
+                                        if (isSelected && option.allowQuantity)
+                                          _buildOptionQuantitySelector(
+                                            quantity: qty,
+                                            maxQty: option.maxQuantity,
+                                            onDecrement: () => _decrementOptionQuantity(
+                                              varItem.id,
+                                              option.id,
+                                              qKey,
+                                              option.minQuantity,
+                                              option.quantityStep,
+                                              true,
+                                              varItem.isRequired,
+                                              varItem.minSelection,
+                                            ),
+                                            onIncrement: () => _incrementOptionQuantity(
+                                              qKey,
+                                              option.maxQuantity,
+                                              option.quantityStep,
+                                            ),
+                                            isDark: isDark,
+                                          ),
                                       ],
                                     ),
                                   ),
@@ -893,54 +1101,112 @@ class _ComboProductCustomizationSheetState
 
                             ...group.options.map((option) {
                               final isSelected = selectedSet.contains(option.id);
+                              final qKey = '${group.id}:${option.id}';
+                              final qty = _getOptionQuantity(qKey, option.minQuantity);
+                              final unitP = option.unitPrice;
+                              final subtotal = unitP * qty;
 
-                              return InkWell(
-                                onTap: () => _toggleGroupOption(group, option),
-                                borderRadius: BorderRadius.circular(10),
-                                child: Padding(
-                                  padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+                              return Padding(
+                                padding: const EdgeInsets.symmetric(vertical: 4),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
+                                  decoration: BoxDecoration(
+                                    color: isSelected
+                                        ? AppColors.primary.withValues(alpha: 0.06)
+                                        : Colors.transparent,
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
                                   child: Row(
                                     children: [
-                                      Icon(
-                                        isSingle
-                                            ? (isSelected
-                                                ? Icons.radio_button_checked_rounded
-                                                : Icons.radio_button_off_rounded)
-                                            : (isSelected
-                                                ? Icons.check_box_rounded
-                                                : Icons.check_box_outline_blank_rounded),
-                                        size: 20,
-                                        color: isSelected
-                                            ? AppColors.primary
-                                            : (isDark ? Colors.grey.shade500 : Colors.grey.shade400),
+                                      InkWell(
+                                        onTap: () => _toggleGroupOption(group, option),
+                                        child: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Icon(
+                                              isSingle
+                                                  ? (isSelected
+                                                      ? Icons.radio_button_checked_rounded
+                                                      : Icons.radio_button_off_rounded)
+                                                  : (isSelected
+                                                      ? Icons.check_box_rounded
+                                                      : Icons.check_box_outline_blank_rounded),
+                                              size: 20,
+                                              color: isSelected
+                                                  ? AppColors.primary
+                                                  : (isDark ? Colors.grey.shade500 : Colors.grey.shade400),
+                                            ),
+                                            const Gap(10),
+                                          ],
+                                        ),
                                       ),
-                                      const Gap(10),
 
                                       Expanded(
-                                        child: Text(
-                                          option.name,
-                                          style: TextStyle(
-                                            fontSize: 13,
-                                            fontWeight: isSelected ? FontWeight.w800 : FontWeight.w500,
-                                            color: isSelected
-                                                ? (isDark ? Colors.white : AppColors.textDark)
-                                                : (isDark ? Colors.grey.shade300 : Colors.grey.shade800),
+                                        child: InkWell(
+                                          onTap: () => _toggleGroupOption(group, option),
+                                          child: Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: [
+                                              Text(
+                                                option.name,
+                                                style: TextStyle(
+                                                  fontSize: 13,
+                                                  fontWeight: isSelected ? FontWeight.w800 : FontWeight.w500,
+                                                  color: isSelected
+                                                      ? (isDark ? Colors.white : AppColors.textDark)
+                                                      : (isDark ? Colors.grey.shade300 : Colors.grey.shade800),
+                                                ),
+                                              ),
+                                              if (isSelected && qty > 1 && unitP > 0) ...[
+                                                const Gap(2),
+                                                Text(
+                                                  '₹${unitP.toStringAsFixed(0)} × $qty = ₹${subtotal.toStringAsFixed(0)}',
+                                                  style: const TextStyle(
+                                                    fontSize: 11,
+                                                    fontWeight: FontWeight.w700,
+                                                    color: AppColors.primary,
+                                                  ),
+                                                ),
+                                              ],
+                                            ],
                                           ),
                                         ),
                                       ),
 
                                       Text(
-                                        option.price > 0
-                                            ? '+₹${option.price.toStringAsFixed(0)}'
+                                        unitP > 0
+                                            ? '+₹${unitP.toStringAsFixed(0)}'
                                             : 'Free',
                                         style: TextStyle(
                                           fontSize: 12.5,
                                           fontWeight: FontWeight.w800,
-                                          color: option.price > 0
+                                          color: unitP > 0
                                               ? AppColors.primary
                                               : const Color(0xFF10B981),
                                         ),
                                       ),
+
+                                      if (isSelected && option.allowQuantity)
+                                        _buildOptionQuantitySelector(
+                                          quantity: qty,
+                                          maxQty: option.maxQuantity,
+                                          onDecrement: () => _decrementOptionQuantity(
+                                            group.id,
+                                            option.id,
+                                            qKey,
+                                            option.minQuantity,
+                                            option.quantityStep,
+                                            false,
+                                            group.isRequired,
+                                            group.minSelection,
+                                          ),
+                                          onIncrement: () => _incrementOptionQuantity(
+                                            qKey,
+                                            option.maxQuantity,
+                                            option.quantityStep,
+                                          ),
+                                          isDark: isDark,
+                                        ),
                                     ],
                                   ),
                                 ),

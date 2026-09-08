@@ -257,6 +257,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "0.7.14"
+  eventify:
+    dependency: transitive
+    description:
+      name: eventify
+      sha256: b829429f08586cc2001c628e7499e3e3c2493a1d895fd73b00ecb23351aa5a66
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.0.1"
   fake_async:
     dependency: transitive
     description:
@@ -1016,14 +1024,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.3.0"
-  payu_checkoutpro_flutter:
-    dependency: "direct main"
-    description:
-      name: payu_checkoutpro_flutter
-      sha256: "04502bb7570b8f38c15174f11f021eadd26025805071f00ae2cbfcc8f8aad8d5"
-      url: "https://pub.dev"
-    source: hosted
-    version: "1.4.5"
   permission_handler:
     dependency: "direct main"
     description:
@@ -1120,6 +1120,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.2.0"
+  razorpay_flutter:
+    dependency: "direct main"
+    description:
+      name: razorpay_flutter
+      sha256: c8a3202f84e28051949fd70d80cba78e2e8575db3114b14b316dc0484cd86468
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.4.6"
   record_use:
     dependency: transitive
     description:

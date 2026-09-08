@@ -18,6 +18,7 @@ import '../features/address/address_screen.dart';
 import '../features/offers/offers_screen.dart';
 import '../features/notifications/notifications_screen.dart';
 import '../features/settings/settings_screen.dart';
+import '../features/settings/transaction_history_screen.dart';
 import '../features/premium/premium_screen.dart';
 import '../auth/screens/login/login_screen.dart';
 import '../auth/screens/otp/otp_screen.dart';
@@ -58,6 +59,7 @@ class AppRoutes {
   static const String rewards = '/rewards';
   static const String notifications = '/notifications';
   static const String settings = '/settings';
+  static const String transactionHistory = '/transaction-history';
   static const String premium = '/premium';
   static const String bookings = '/bookings';
   static const String referral = '/referral';
@@ -206,6 +208,10 @@ class AppRoutes {
       GoRoute(
         path: settings,
         builder: (context, state) => const SettingsScreen(),
+      ),
+      GoRoute(
+        path: transactionHistory,
+        builder: (context, state) => const TransactionHistoryScreen(),
       ),
       GoRoute(
         path: premium,
