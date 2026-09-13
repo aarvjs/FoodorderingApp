@@ -14,6 +14,7 @@ import '../address/widgets/address_selection_bottom_sheet.dart';
 import '../rewards/repositories/reward_repository.dart';
 import 'widgets/coupon_selection_bottom_sheet.dart';
 import '../home/providers/restaurant_providers.dart';
+import '../../models/restaurant.dart';
 
 class CartScreen extends ConsumerStatefulWidget {
   const CartScreen({super.key});
@@ -114,7 +115,8 @@ class _CartScreenState extends ConsumerState<CartScreen> {
       );
     }
 
-    final restaurantId = cartState.items.first.restaurantId;
+    final firstCartItem = cartState.items.first;
+    final targetBranchId = firstCartItem.branchId.isNotEmpty ? firstCartItem.branchId : firstCartItem.restaurantId;
 
     return Scaffold(
       appBar: AppBar(
@@ -122,7 +124,7 @@ class _CartScreenState extends ConsumerState<CartScreen> {
           children: [
             const Text('Your Cart', style: TextStyle(fontWeight: FontWeight.bold)),
             Text(
-              'Ordering from ${cartState.items.first.restaurantName}',
+              'Ordering from ${firstCartItem.restaurantName}',
               style: TextStyle(
                 fontSize: 11,
                 color: isDark ? Colors.grey.shade400 : AppColors.textLight,
@@ -248,43 +250,101 @@ class _CartScreenState extends ConsumerState<CartScreen> {
                   ),
 
                   if (cartState.isTakeAway) ...[
-                    Container(
-                      margin: const EdgeInsets.only(bottom: 16),
-                      padding: const EdgeInsets.all(14),
-                      decoration: BoxDecoration(
-                        color: Colors.amber.shade50,
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: Colors.amber.shade200),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(Iconsax.shop, color: Colors.amber.shade900, size: 22),
-                          const Gap(10),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'Self Pickup Order (Take Away)',
-                                  style: TextStyle(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.amber.shade900,
+                    Builder(
+                      builder: (context) {
+                        final targetBranchId = cartState.items.firstOrNull?.branchId ?? cartState.items.firstOrNull?.restaurantId ?? '';
+                        final branchAsync = targetBranchId.isNotEmpty
+                            ? ref.watch(restaurantDetailsStreamProvider(targetBranchId))
+                            : const AsyncValue<Restaurant?>.data(null);
+                        final branch = branchAsync.value;
+
+                        final branchDisplayName = (branch?.branchName.isNotEmpty == true)
+                            ? branch!.branchName
+                            : (branch?.name ?? cartState.items.first.restaurantName);
+                        final branchAddress = branch?.address.isNotEmpty == true ? branch!.address : '';
+                        final branchPhone = branch?.phone.isNotEmpty == true ? branch!.phone : '';
+
+                        return Container(
+                          margin: const EdgeInsets.only(bottom: 16),
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: Colors.amber.shade50,
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(color: Colors.amber.shade200),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Icon(Iconsax.shop, color: Colors.amber.shade900, size: 20),
+                                  const Gap(8),
+                                  Text(
+                                    'Takeaway From',
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.amber.shade900,
+                                    ),
                                   ),
+                                ],
+                              ),
+                              const Gap(8),
+                              Text(
+                                branchDisplayName,
+                                style: TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w800,
+                                  color: Colors.amber.shade900,
                                 ),
-                                const Gap(2),
-                                Text(
-                                  'You will pick up this order directly at ${cartState.items.first.restaurantName}. No delivery charges apply.',
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    color: Colors.amber.shade800,
-                                  ),
+                              ),
+                              if (branchAddress.isNotEmpty) ...[
+                                const Gap(6),
+                                Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Text('📍 ', style: TextStyle(fontSize: 13)),
+                                    Expanded(
+                                      child: Text(
+                                        branchAddress,
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          color: Colors.amber.shade800,
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ],
-                            ),
+                              if (branchPhone.isNotEmpty) ...[
+                                const Gap(4),
+                                Row(
+                                  children: [
+                                    const Text('📞 ', style: TextStyle(fontSize: 13)),
+                                    Text(
+                                      branchPhone,
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: Colors.amber.shade800,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                              const Gap(8),
+                              Text(
+                                'You will pick up this order directly at this branch. No delivery charges apply.',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: Colors.amber.shade800.withValues(alpha: 0.8),
+                                ),
+                              ),
+                            ],
                           ),
-                        ],
-                      ),
+                        );
+                      },
                     ),
                   ],
 
@@ -476,7 +536,7 @@ class _CartScreenState extends ConsumerState<CartScreen> {
                         
                         // Add More Items row
                         GestureDetector(
-                          onTap: () => context.push('/restaurant/$restaurantId'),
+                          onTap: () => context.push('/restaurant/$targetBranchId'),
                           child: Row(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
@@ -598,7 +658,7 @@ class _CartScreenState extends ConsumerState<CartScreen> {
                             onTap: () {
                               CouponSelectionBottomSheet.show(
                                 context,
-                                restaurantId: restaurantId,
+                                restaurantId: targetBranchId,
                                 restaurantName: cartState.items.first.restaurantName,
                               );
                             },
@@ -737,7 +797,7 @@ class _CartScreenState extends ConsumerState<CartScreen> {
                                   onPressed: () {
                                     CouponSelectionBottomSheet.show(
                                       context,
-                                      restaurantId: restaurantId,
+                                      restaurantId: targetBranchId,
                                       restaurantName: cartState.items.first.restaurantName,
                                     );
                                   },
@@ -1123,7 +1183,7 @@ class _CartScreenState extends ConsumerState<CartScreen> {
                                 : 'Proceed to Pay'),
                         height: 48,
                         onPressed: () {
-                          final detailsAsync = ref.read(restaurantDetailsStreamProvider(restaurantId));
+                          final detailsAsync = ref.read(restaurantDetailsStreamProvider(targetBranchId));
                           final cartRest = detailsAsync.value;
                           if (cartRest != null && !cartRest.isCurrentlyOpen) {
                             ScaffoldMessenger.of(context).showSnackBar(

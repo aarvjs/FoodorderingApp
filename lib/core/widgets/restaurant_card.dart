@@ -97,26 +97,6 @@ class RestaurantCard extends ConsumerWidget {
                     ),
                   ),
 
-                // Offer Badge
-                Positioned(
-                  bottom: 12,
-                  left: 12,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                    decoration: BoxDecoration(
-                      gradient: AppColors.primaryGradient,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Text(
-                      restaurant.offerText,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                ),
                 // Delivery Time & Distance badge
                 Positioned(
                   bottom: 12,

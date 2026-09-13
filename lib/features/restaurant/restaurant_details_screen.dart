@@ -8,6 +8,7 @@ import 'package:gap/gap.dart';
 import 'package:shimmer/shimmer.dart';
 import '../../core/config/app_colors.dart';
 import '../../core/widgets/food_card.dart';
+import '../../core/widgets/quantity_selector.dart';
 import '../../core/services/state_providers.dart';
 import '../../models/food_item.dart';
 import '../../models/restaurant.dart';
@@ -84,61 +85,19 @@ class _RestaurantDetailsScreenState extends ConsumerState<RestaurantDetailsScree
         : targetBranchId;
     final String targetRestName = restaurant.name;
 
-    final groups = item.customizationGroups;
-    if (groups.isNotEmpty || item.isCustomisable || item.isVariantEnabled) {
-      showModalBottomSheet(
-        context: context,
-        useRootNavigator: true,
-        isScrollControlled: true,
-        backgroundColor: Colors.transparent,
-        builder: (ctx) => ComboProductCustomizationSheet(
-          item: item,
-          combo: combo,
-          restaurantId: targetRestId,
-          branchId: targetBranchId,
-          restaurantName: targetRestName,
-        ),
-      );
-    } else {
-      final foodItem = FoodItem(
-        id: item.id,
-        name: '${combo.name} - ${item.name}',
-        description: item.description,
-        price: item.price,
-        imageUrl: item.image,
-        isVeg: item.isVeg,
-        rating: item.rating,
-        reviewCount: item.ratingCount,
-        ingredients: const [],
-        nutrition: const {},
-        reviews: const [],
-        restaurantId: targetRestId,
-        branchId: targetBranchId,
-        category: 'Combos',
-        isAvailable: true,
-      );
-
-      final cartItem = CartItem(
-        foodItem: foodItem,
-        quantity: 1,
+    showModalBottomSheet(
+      context: context,
+      useRootNavigator: true,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => ComboProductCustomizationSheet(
+        item: item,
+        combo: combo,
         restaurantId: targetRestId,
         branchId: targetBranchId,
         restaurantName: targetRestName,
-        isCombo: true,
-        comboId: combo.id,
-        comboName: combo.name,
-        comboItemId: item.id,
-        unitPrice: item.price,
-        basePrice: item.price,
-      );
-
-      ref.read(cartProvider.notifier).addItem(cartItem);
-
-      TopToast.show(
-        context,
-        'Added "${item.name}" to cart!',
-      );
-    }
+      ),
+    );
   }
 
   @override
@@ -1347,7 +1306,7 @@ class _RestaurantDetailsScreenState extends ConsumerState<RestaurantDetailsScree
             );
           }
 
-          if (index == 1) {
+          if (index == combosList.length + 1) {
             final isSelected = _selectedNavId == 'MENU';
             return GestureDetector(
               onTap: () {
@@ -1404,7 +1363,7 @@ class _RestaurantDetailsScreenState extends ConsumerState<RestaurantDetailsScree
             );
           }
 
-          final combo = combosList[index - 2];
+          final combo = combosList[index - 1];
           final isSelected = _selectedNavId == combo.id;
 
           return GestureDetector(
@@ -1493,43 +1452,7 @@ class _RestaurantDetailsScreenState extends ConsumerState<RestaurantDetailsScree
       builder: (context, ref, child) {
         final List<Widget> sliverWidgets = [];
 
-        // 1. Normal Menu Items Section
-        if (filteredMenuItems.isNotEmpty) {
-          if (combosList.isNotEmpty) {
-            sliverWidgets.add(
-              Padding(
-                padding: const EdgeInsets.only(top: 8, bottom: 10),
-                child: Row(
-                  children: [
-                    const Icon(Iconsax.element_4, size: 16, color: AppColors.primary),
-                    const Gap(6),
-                    Text(
-                      'Menu Items (${filteredMenuItems.length})',
-                      style: TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.bold,
-                        color: isDark ? Colors.white : AppColors.textDark,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            );
-          }
-
-          for (final foodItem in filteredMenuItems) {
-            sliverWidgets.add(
-              FoodCard(
-                foodItem: foodItem,
-                restaurantId: restaurant.id,
-                restaurantName: restaurant.name,
-                onTap: () => context.push('/product/${restaurant.id}/${foodItem.id}'),
-              ),
-            );
-          }
-        }
-
-        // 2. Combos Section
+        // 1. Combos Section (Displayed First inside ALL)
         int totalMatchingComboItems = 0;
 
         for (final combo in combosList) {
@@ -1585,6 +1508,42 @@ class _RestaurantDetailsScreenState extends ConsumerState<RestaurantDetailsScree
                 ),
               );
             }
+          }
+        }
+
+        // 2. Normal Menu Items Section (Displayed After Combos inside ALL)
+        if (filteredMenuItems.isNotEmpty) {
+          if (combosList.isNotEmpty) {
+            sliverWidgets.add(
+              Padding(
+                padding: const EdgeInsets.only(top: 14, bottom: 10),
+                child: Row(
+                  children: [
+                    const Icon(Iconsax.element_4, size: 16, color: AppColors.primary),
+                    const Gap(6),
+                    Text(
+                      'Menu Items (${filteredMenuItems.length})',
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.bold,
+                        color: isDark ? Colors.white : AppColors.textDark,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }
+
+          for (final foodItem in filteredMenuItems) {
+            sliverWidgets.add(
+              FoodCard(
+                foodItem: foodItem,
+                restaurantId: restaurant.id,
+                restaurantName: restaurant.name,
+                onTap: () => context.push('/product/${restaurant.id}/${foodItem.id}'),
+              ),
+            );
           }
         }
 
@@ -1835,10 +1794,14 @@ class _RestaurantDetailsScreenState extends ConsumerState<RestaurantDetailsScree
     required Restaurant restaurant,
     required bool isDark,
   }) {
+    final cartState = ref.watch(cartProvider);
+    final matchingItems = cartState.items.where(
+      (cartItem) => cartItem.isCombo && (cartItem.comboItemId == item.id || cartItem.foodItem.id == item.id),
+    ).toList();
+    final int inCartQty = matchingItems.fold(0, (sum, cartItem) => sum + cartItem.quantity);
     return Container(
       key: ValueKey(item.id),
       margin: const EdgeInsets.only(bottom: 14),
-      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: isDark ? AppColors.darkCard : Colors.white,
         borderRadius: BorderRadius.circular(18),
@@ -1853,9 +1816,36 @@ class _RestaurantDetailsScreenState extends ConsumerState<RestaurantDetailsScree
           ),
         ],
       ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
+      child: InkWell(
+        onTap: () {
+          final String targetBranchId = (restaurant.branchId.isNotEmpty)
+              ? restaurant.branchId
+              : (restaurant.id.isNotEmpty ? restaurant.id : item.restaurantId);
+          final String targetRestId = (restaurant.restaurantId.isNotEmpty)
+              ? restaurant.restaurantId
+              : targetBranchId;
+          final String targetRestName = restaurant.name;
+
+          showModalBottomSheet(
+            context: context,
+            useRootNavigator: true,
+            isScrollControlled: true,
+            backgroundColor: Colors.transparent,
+            builder: (ctx) => ComboProductCustomizationSheet(
+              item: item,
+              combo: combo,
+              restaurantId: targetRestId,
+              branchId: targetBranchId,
+              restaurantName: targetRestName,
+            ),
+          );
+        },
+        borderRadius: BorderRadius.circular(18),
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -1961,27 +1951,44 @@ class _RestaurantDetailsScreenState extends ConsumerState<RestaurantDetailsScree
                 ),
               ),
               const Gap(8),
-              ElevatedButton(
-                onPressed: () => _onAddComboItem(item, combo, restaurant),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: combo.isActive ? AppColors.primary : Colors.grey.shade400,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-                  minimumSize: const Size(76, 32),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  elevation: 1,
-                ),
-                child: const Text(
-                  'ADD',
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: 0.5,
-                  ),
-                ),
-              ),
+              inCartQty == 0
+                  ? ElevatedButton(
+                      onPressed: () => _onAddComboItem(item, combo, restaurant),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: combo.isActive ? AppColors.primary : Colors.grey.shade400,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                        minimumSize: const Size(76, 32),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        elevation: 1,
+                      ),
+                      child: const Text(
+                        'ADD',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                    )
+                  : QuantitySelector(
+                      quantity: inCartQty,
+                      width: 85,
+                      height: 34,
+                      onChanged: (newQty) {
+                        final cartNotifier = ref.read(cartProvider.notifier);
+                        final lastIndex = cartState.items.lastIndexWhere(
+                          (cartItem) => cartItem.isCombo && (cartItem.comboItemId == item.id || cartItem.foodItem.id == item.id),
+                        );
+                        if (lastIndex >= 0) {
+                          final diff = newQty - inCartQty;
+                          final targetQty = cartState.items[lastIndex].quantity + diff;
+                          cartNotifier.updateQuantityAtIndex(lastIndex, targetQty);
+                        }
+                      },
+                    ),
               if (item.isCustomisable || item.customizationGroups.isNotEmpty || item.isVariantEnabled) ...[
                 const Gap(3),
                 Text(
@@ -1998,7 +2005,9 @@ class _RestaurantDetailsScreenState extends ConsumerState<RestaurantDetailsScree
           ),
         ],
       ),
-    );
+    ),
+  ),
+);
   }
 }
 

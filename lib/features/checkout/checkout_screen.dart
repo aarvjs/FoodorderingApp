@@ -12,6 +12,7 @@ import '../../core/services/razorpay_service.dart';
 import '../../models/address.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../home/providers/restaurant_providers.dart';
+import '../../models/restaurant.dart';
 
 
 
@@ -530,71 +531,117 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                 children: [
                   if (isTakeAway) ...[
                     // Take Away Store Pickup Location Card
-                    Container(
-                      margin: const EdgeInsets.only(bottom: 20),
-                      decoration: BoxDecoration(
-                        color: isDark ? AppColors.darkCard : Colors.amber.shade50.withValues(alpha: 0.5),
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(
-                          color: Colors.amber.shade300,
-                          width: 1.5,
-                        ),
-                      ),
-                      padding: const EdgeInsets.all(16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
+                    Builder(
+                      builder: (context) {
+                        final targetBranchId = cartState.items.firstOrNull?.branchId ?? cartState.items.firstOrNull?.restaurantId ?? '';
+                        final branchAsync = targetBranchId.isNotEmpty
+                            ? ref.watch(restaurantDetailsStreamProvider(targetBranchId))
+                            : const AsyncValue<Restaurant?>.data(null);
+                        final branch = branchAsync.value;
+
+                        final branchDisplayName = (branch?.branchName.isNotEmpty == true)
+                            ? branch!.branchName
+                            : (branch?.name ?? cartState.items.first.restaurantName);
+                        final branchAddress = branch?.address.isNotEmpty == true ? branch!.address : '';
+                        final branchPhone = branch?.phone.isNotEmpty == true ? branch!.phone : '';
+
+                        return Container(
+                          margin: const EdgeInsets.only(bottom: 20),
+                          decoration: BoxDecoration(
+                            color: isDark ? AppColors.darkCard : Colors.amber.shade50.withValues(alpha: 0.5),
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(
+                              color: Colors.amber.shade300,
+                              width: 1.5,
+                            ),
+                          ),
+                          padding: const EdgeInsets.all(16),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              const Icon(Iconsax.shop, size: 20, color: Color(0xFFD97706)),
-                              const Gap(8),
-                              const Text(
-                                'Store Pickup Location (Take Away)',
+                              Row(
+                                children: [
+                                  const Icon(Iconsax.shop, size: 20, color: Color(0xFFD97706)),
+                                  const Gap(8),
+                                  const Text(
+                                    'Takeaway From',
+                                    style: TextStyle(
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.bold,
+                                      color: Color(0xFF92400E),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const Gap(10),
+                              Text(
+                                branchDisplayName,
                                 style: TextStyle(
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.bold,
-                                  color: Color(0xFF92400E),
+                                  fontWeight: FontWeight.w900,
+                                  fontSize: 16,
+                                  color: isDark ? Colors.white : AppColors.textDark,
+                                ),
+                              ),
+                              if (branchAddress.isNotEmpty) ...[
+                                const Gap(6),
+                                Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Text('📍 ', style: TextStyle(fontSize: 13)),
+                                    Expanded(
+                                      child: Text(
+                                        branchAddress,
+                                        style: TextStyle(
+                                          fontSize: 13,
+                                          color: isDark ? Colors.grey.shade300 : const Color(0xFF78350F),
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                              if (branchPhone.isNotEmpty) ...[
+                                const Gap(4),
+                                Row(
+                                  children: [
+                                    const Text('📞 ', style: TextStyle(fontSize: 13)),
+                                    Text(
+                                      branchPhone,
+                                      style: TextStyle(
+                                        fontSize: 13,
+                                        color: isDark ? Colors.grey.shade300 : const Color(0xFF78350F),
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                              const Gap(12),
+                              Container(
+                                padding: const EdgeInsets.all(10),
+                                decoration: BoxDecoration(
+                                  color: isDark ? Colors.black26 : Colors.white,
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(color: Colors.amber.shade200),
+                                ),
+                                child: const Row(
+                                  children: [
+                                    Icon(Icons.info_outline_rounded, size: 16, color: Color(0xFFD97706)),
+                                    Gap(8),
+                                    Expanded(
+                                      child: Text(
+                                        'Visit the branch counter with your Order ID to collect your order & make payment.',
+                                        style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF92400E)),
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ),
                             ],
                           ),
-                          const Gap(10),
-                          Text(
-                            cartState.items.first.restaurantName,
-                            style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16),
-                          ),
-                          const Gap(4),
-                          Text(
-                            'Restaurant: ${cartState.items.first.restaurantName}',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: isDark ? Colors.grey.shade400 : AppColors.textLight,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                          const Gap(8),
-                          Container(
-                            padding: const EdgeInsets.all(10),
-                            decoration: BoxDecoration(
-                              color: isDark ? Colors.black26 : Colors.white,
-                              borderRadius: BorderRadius.circular(10),
-                              border: Border.all(color: Colors.amber.shade200),
-                            ),
-                            child: const Row(
-                              children: [
-                                Icon(Icons.info_outline_rounded, size: 16, color: Color(0xFFD97706)),
-                                Gap(8),
-                                Expanded(
-                                  child: Text(
-                                    'Visit the restaurant/branch counter with your Order ID to collect your order & make payment.',
-                                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF92400E)),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
+                        );
+                      },
                     ),
                   ] else ...[
                     // Section Delivery Address

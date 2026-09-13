@@ -34,7 +34,6 @@ class ComboProductCustomizationSheet extends ConsumerStatefulWidget {
 
 class _ComboProductCustomizationSheetState
     extends ConsumerState<ComboProductCustomizationSheet> {
-  int _quantity = 1;
 
   // Selected Size Variant (when isVariantEnabled is true)
   ComboItemVariant? _selectedVariant;
@@ -54,103 +53,8 @@ class _ComboProductCustomizationSheetState
     _initDefaults(widget.item);
   }
 
-  Widget _buildOptionQuantitySelector({
-    required int quantity,
-    required int maxQty,
-    required VoidCallback onDecrement,
-    required VoidCallback onIncrement,
-    required bool isDark,
-  }) {
-    return Container(
-      margin: const EdgeInsets.only(left: 8),
-      decoration: BoxDecoration(
-        color: isDark ? AppColors.darkCard : Colors.white,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: AppColors.primary.withValues(alpha: 0.4)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          InkWell(
-            onTap: onDecrement,
-            borderRadius: BorderRadius.circular(8),
-            child: const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-              child: Icon(Icons.remove, size: 14, color: AppColors.primary),
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 4),
-            child: Text(
-              '$quantity',
-              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
-            ),
-          ),
-          InkWell(
-            onTap: quantity < maxQty ? onIncrement : null,
-            borderRadius: BorderRadius.circular(8),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-              child: Icon(
-                Icons.add,
-                size: 14,
-                color: quantity < maxQty ? AppColors.primary : Colors.grey,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   int _getOptionQuantity(String key, int minQty) {
-    final val = _optionQuantities[key];
-    if (val != null && val > 0) return val;
-    return minQty > 0 ? minQty : 1;
-  }
-
-  void _incrementOptionQuantity(String key, int maxQty, int step) {
-    setState(() {
-      final current = _getOptionQuantity(key, 1);
-      final limit = maxQty > 0 ? maxQty : 10;
-      if (current + step <= limit) {
-        _optionQuantities[key] = current + step;
-      }
-    });
-  }
-
-  void _decrementOptionQuantity(
-    String groupOrVarId,
-    String optionId,
-    String key,
-    int minQty,
-    int step,
-    bool isVariantMode,
-    bool isRequired,
-    int groupMinSelection,
-  ) {
-    setState(() {
-      final current = _getOptionQuantity(key, minQty);
-      final next = current - step;
-      final effectiveMin = minQty > 0 ? minQty : 1;
-
-      if (next >= effectiveMin) {
-        _optionQuantities[key] = next;
-      } else {
-        _optionQuantities.remove(key);
-        if (isVariantMode) {
-          final currentSet = _selectedVariantOptions[groupOrVarId] ?? <String>{};
-          if (!isRequired || currentSet.length > groupMinSelection) {
-            currentSet.remove(optionId);
-          }
-        } else {
-          final currentSet = _selectedGroupOptions[groupOrVarId] ?? <String>{};
-          if (!isRequired || currentSet.length > groupMinSelection) {
-            currentSet.remove(optionId);
-          }
-        }
-      }
-    });
+    return 1;
   }
 
   void _onVariantSelected(ComboItemVariant variant) {
@@ -181,7 +85,61 @@ class _ComboProductCustomizationSheetState
     });
   }
 
+  bool _initializedFromCart = false;
+
   void _initDefaults(ComboItemModel currentItem) {
+    if (!_initializedFromCart) {
+      final cartState = ref.read(cartProvider);
+      final lastCartIndex = cartState.items.lastIndexWhere(
+        (i) => i.isCombo &&
+            (i.comboItemId == currentItem.id || i.foodItem.id == currentItem.id) &&
+            (i.customizationSelections.isNotEmpty || i.selectedSize != null),
+      );
+
+      if (lastCartIndex >= 0) {
+        final existingItem = cartState.items[lastCartIndex];
+        if (existingItem.customizationSelections.isNotEmpty || existingItem.selectedSize != null) {
+          if (currentItem.isVariantEnabled && currentItem.variants.isNotEmpty) {
+            ComboItemVariant matchedVariant = currentItem.variants.first;
+            if (existingItem.selectedSize != null) {
+              matchedVariant = currentItem.variants.firstWhere(
+                (v) => v.name == existingItem.selectedSize,
+                orElse: () => currentItem.variants.first,
+              );
+            }
+            _selectedVariant = matchedVariant;
+            _selectedVariantOptions.clear();
+
+            for (final sel in existingItem.customizationSelections) {
+              for (final varItem in matchedVariant.items) {
+                for (final opt in varItem.options) {
+                  if (opt.id == sel.optionId || opt.name == sel.optionName) {
+                    final set = _selectedVariantOptions.putIfAbsent(varItem.id, () => <String>{});
+                    set.add(opt.id);
+                  }
+                }
+              }
+            }
+          } else {
+            _selectedGroupOptions.clear();
+            for (final sel in existingItem.customizationSelections) {
+              for (final group in currentItem.customizationGroups) {
+                for (final opt in group.options) {
+                  if (opt.id == sel.optionId || opt.name == sel.optionName) {
+                    final set = _selectedGroupOptions.putIfAbsent(group.id, () => <String>{});
+                    set.add(opt.id);
+                  }
+                }
+              }
+            }
+          }
+
+          _initializedFromCart = true;
+          return;
+        }
+      }
+    }
+
     if (currentItem.isVariantEnabled && currentItem.variants.isNotEmpty) {
       if (_selectedVariant == null || !currentItem.variants.any((v) => v.id == _selectedVariant!.id)) {
         _selectedVariant = currentItem.variants.first;
@@ -199,13 +157,11 @@ class _ComboProductCustomizationSheetState
               if (isSingle) {
                 final firstOpt = varItem.options.first;
                 targetSet.add(firstOpt.id);
-                _optionQuantities['${varItem.id}:${firstOpt.id}'] = firstOpt.minQuantity > 0 ? firstOpt.minQuantity : 1;
               } else {
                 final countToTake = varItem.minSelection > 0 ? varItem.minSelection : 1;
                 final defaultOpts = varItem.options.take(countToTake);
                 for (final opt in defaultOpts) {
                   targetSet.add(opt.id);
-                  _optionQuantities['${varItem.id}:${opt.id}'] = opt.minQuantity > 0 ? opt.minQuantity : 1;
                 }
               }
             }
@@ -222,7 +178,6 @@ class _ComboProductCustomizationSheetState
           if (isReq && group.options.isNotEmpty) {
             final firstOpt = group.options.first;
             targetSet.add(firstOpt.id);
-            _optionQuantities['${group.id}:${firstOpt.id}'] = firstOpt.minQuantity > 0 ? firstOpt.minQuantity : 1;
           }
         } else {
           final currentSet = _selectedGroupOptions[group.id] ?? <String>{};
@@ -232,6 +187,7 @@ class _ComboProductCustomizationSheetState
         }
       }
     }
+    _initializedFromCart = true;
   }
 
   double _calculateUnitPrice(ComboItemModel currentItem) {
@@ -353,15 +309,11 @@ class _ComboProductCustomizationSheetState
         final selectedSet = _selectedVariantOptions[varItem.id] ?? <String>{};
         for (final option in varItem.options) {
           if (selectedSet.contains(option.id)) {
-            final qKey = '${varItem.id}:${option.id}';
-            final qty = _getOptionQuantity(qKey, option.minQuantity);
             final unitP = option.unitPrice;
-            final subtotal = unitP * qty;
-
             if (unitP > 0) {
-              summaries.add('${varItem.name}: ${option.name} × $qty (@ ₹${unitP.toStringAsFixed(0)} = ₹${subtotal.toStringAsFixed(0)})');
+              summaries.add('${varItem.name}: ${option.name} (+₹${unitP.toStringAsFixed(0)})');
             } else {
-              summaries.add('${varItem.name}: ${option.name} × $qty');
+              summaries.add('${varItem.name}: ${option.name}');
             }
           }
         }
@@ -371,15 +323,11 @@ class _ComboProductCustomizationSheetState
         final selectedSet = _selectedGroupOptions[group.id] ?? <String>{};
         for (final option in group.options) {
           if (selectedSet.contains(option.id)) {
-            final qKey = '${group.id}:${option.id}';
-            final qty = _getOptionQuantity(qKey, option.minQuantity);
             final unitP = option.unitPrice;
-            final subtotal = unitP * qty;
-
             if (unitP > 0) {
-              summaries.add('${group.name}: ${option.name} × $qty (@ ₹${unitP.toStringAsFixed(0)} = ₹${subtotal.toStringAsFixed(0)})');
+              summaries.add('${group.name}: ${option.name} (+₹${unitP.toStringAsFixed(0)})');
             } else {
-              summaries.add('${group.name}: ${option.name} × $qty');
+              summaries.add('${group.name}: ${option.name}');
             }
           }
         }
@@ -442,11 +390,7 @@ class _ComboProductCustomizationSheetState
         final selectedSet = _selectedVariantOptions[varItem.id] ?? <String>{};
         for (final option in varItem.options) {
           if (selectedSet.contains(option.id)) {
-            final qKey = '${varItem.id}:${option.id}';
-            final qty = _getOptionQuantity(qKey, option.minQuantity);
             final unitP = option.unitPrice;
-            final subtotal = unitP * qty;
-
             list.add(ComboCustomizationSelection(
               groupName: varItem.name,
               optionId: option.id,
@@ -454,9 +398,9 @@ class _ComboProductCustomizationSheetState
               additionalPrice: option.additionalPrice,
               basePrice: option.basePrice,
               extraPrice: option.extraPrice,
-              quantity: qty,
+              quantity: 1,
               unitPrice: unitP,
-              subtotal: subtotal,
+              subtotal: unitP,
               comboId: currentItem.comboId,
               variantId: _selectedVariant?.id,
             ));
@@ -468,11 +412,7 @@ class _ComboProductCustomizationSheetState
         final selectedSet = _selectedGroupOptions[group.id] ?? <String>{};
         for (final option in group.options) {
           if (selectedSet.contains(option.id)) {
-            final qKey = '${group.id}:${option.id}';
-            final qty = _getOptionQuantity(qKey, option.minQuantity);
             final unitP = option.unitPrice;
-            final subtotal = unitP * qty;
-
             list.add(ComboCustomizationSelection(
               groupName: group.name,
               optionId: option.id,
@@ -480,9 +420,9 @@ class _ComboProductCustomizationSheetState
               additionalPrice: option.price,
               basePrice: option.basePrice,
               extraPrice: option.extraPrice,
-              quantity: qty,
+              quantity: 1,
               unitPrice: unitP,
-              subtotal: subtotal,
+              subtotal: unitP,
               comboId: currentItem.comboId,
             ));
           }
@@ -493,7 +433,7 @@ class _ComboProductCustomizationSheetState
     return list;
   }
 
-  void _handleAddToCart(ComboItemModel currentItem) {
+  void _handleProceedToCart(ComboItemModel currentItem) {
     if (!_validateRequiredSelections(context, currentItem)) return;
 
     final unitPrice = _calculateUnitPrice(currentItem);
@@ -529,31 +469,51 @@ class _ComboProductCustomizationSheetState
         ? widget.branchId!
         : widget.restaurantId;
 
-    final cartItem = CartItem(
-      foodItem: foodItem,
-      quantity: _quantity,
-      selectedSize: selectedSizeStr,
-      restaurantId: widget.restaurantId,
-      branchId: targetBranchId,
-      restaurantName: widget.restaurantName,
-      isCombo: true,
-      comboId: widget.combo.id,
-      comboName: widget.combo.name,
-      comboItemId: currentItem.id,
-      basePrice: calculatedBasePrice,
-      unitPrice: unitPrice,
-      selectedCustomizations: customizations,
-      customizationSelections: customizationObjects,
+    final cartNotifier = ref.read(cartProvider.notifier);
+    final cartState = ref.read(cartProvider);
+
+    final existingIndex = cartState.items.indexWhere(
+      (i) => i.isCombo && (i.comboItemId == currentItem.id || i.foodItem.id == currentItem.id),
     );
 
-    ref.read(cartProvider.notifier).addItem(cartItem);
+    if (existingIndex >= 0) {
+      final existingItem = cartState.items[existingIndex];
+      final updatedItem = existingItem.copyWith(
+        foodItem: foodItem,
+        selectedSize: selectedSizeStr,
+        basePrice: calculatedBasePrice,
+        unitPrice: unitPrice,
+        selectedCustomizations: customizations,
+        customizationSelections: customizationObjects,
+        quantity: existingItem.quantity > 0 ? existingItem.quantity : 1,
+      );
+      cartNotifier.updateItemAtIndex(existingIndex, updatedItem);
+    } else {
+      final cartItem = CartItem(
+        foodItem: foodItem,
+        quantity: 1,
+        selectedSize: selectedSizeStr,
+        restaurantId: widget.restaurantId,
+        branchId: targetBranchId,
+        restaurantName: widget.restaurantName,
+        isCombo: true,
+        comboId: widget.combo.id,
+        comboName: widget.combo.name,
+        comboItemId: currentItem.id,
+        basePrice: calculatedBasePrice,
+        unitPrice: unitPrice,
+        selectedCustomizations: customizations,
+        customizationSelections: customizationObjects,
+      );
+      cartNotifier.addItem(cartItem);
+    }
 
     Navigator.of(context).pop();
 
     final sizeInfo = selectedSizeStr != null ? ' ($selectedSizeStr)' : '';
     TopToast.show(
       context,
-      'Added "${currentItem.name}"$sizeInfo to cart!',
+      'Saved "${currentItem.name}"$sizeInfo customization!',
     );
   }
 
@@ -578,7 +538,6 @@ class _ComboProductCustomizationSheetState
     _initDefaults(item);
 
     final unitPrice = _calculateUnitPrice(item);
-    final totalPrice = unitPrice * _quantity;
 
     return Container(
       constraints: BoxConstraints(
@@ -964,17 +923,6 @@ class _ComboProductCustomizationSheetState
                                                         : (isDark ? Colors.grey.shade300 : Colors.grey.shade800),
                                                   ),
                                                 ),
-                                                if (isSelected && qty > 1 && unitP > 0) ...[
-                                                  const Gap(2),
-                                                  Text(
-                                                    '₹${unitP.toStringAsFixed(0)} × $qty = ₹${subtotal.toStringAsFixed(0)}',
-                                                    style: const TextStyle(
-                                                      fontSize: 11,
-                                                      fontWeight: FontWeight.w700,
-                                                      color: AppColors.primary,
-                                                    ),
-                                                  ),
-                                                ],
                                               ],
                                             ),
                                           ),
@@ -992,28 +940,6 @@ class _ComboProductCustomizationSheetState
                                                 : const Color(0xFF10B981),
                                           ),
                                         ),
-
-                                        if (isSelected && option.allowQuantity)
-                                          _buildOptionQuantitySelector(
-                                            quantity: qty,
-                                            maxQty: option.maxQuantity,
-                                            onDecrement: () => _decrementOptionQuantity(
-                                              varItem.id,
-                                              option.id,
-                                              qKey,
-                                              option.minQuantity,
-                                              option.quantityStep,
-                                              true,
-                                              varItem.isRequired,
-                                              varItem.minSelection,
-                                            ),
-                                            onIncrement: () => _incrementOptionQuantity(
-                                              qKey,
-                                              option.maxQuantity,
-                                              option.quantityStep,
-                                            ),
-                                            isDark: isDark,
-                                          ),
                                       ],
                                     ),
                                   ),
@@ -1157,17 +1083,6 @@ class _ComboProductCustomizationSheetState
                                                       : (isDark ? Colors.grey.shade300 : Colors.grey.shade800),
                                                 ),
                                               ),
-                                              if (isSelected && qty > 1 && unitP > 0) ...[
-                                                const Gap(2),
-                                                Text(
-                                                  '₹${unitP.toStringAsFixed(0)} × $qty = ₹${subtotal.toStringAsFixed(0)}',
-                                                  style: const TextStyle(
-                                                    fontSize: 11,
-                                                    fontWeight: FontWeight.w700,
-                                                    color: AppColors.primary,
-                                                  ),
-                                                ),
-                                              ],
                                             ],
                                           ),
                                         ),
@@ -1185,28 +1100,6 @@ class _ComboProductCustomizationSheetState
                                               : const Color(0xFF10B981),
                                         ),
                                       ),
-
-                                      if (isSelected && option.allowQuantity)
-                                        _buildOptionQuantitySelector(
-                                          quantity: qty,
-                                          maxQty: option.maxQuantity,
-                                          onDecrement: () => _decrementOptionQuantity(
-                                            group.id,
-                                            option.id,
-                                            qKey,
-                                            option.minQuantity,
-                                            option.quantityStep,
-                                            false,
-                                            group.isRequired,
-                                            group.minSelection,
-                                          ),
-                                          onIncrement: () => _incrementOptionQuantity(
-                                            qKey,
-                                            option.maxQuantity,
-                                            option.quantityStep,
-                                          ),
-                                          isDark: isDark,
-                                        ),
                                     ],
                                   ),
                                 ),
@@ -1243,67 +1136,35 @@ class _ComboProductCustomizationSheetState
                   ),
                 ],
               ),
-              child: Row(
-                children: [
-                  // Quantity Counter
-                  Container(
-                    decoration: BoxDecoration(
-                      color: isDark ? AppColors.darkBackground : Colors.grey.shade100,
-                      borderRadius: BorderRadius.circular(12),
+              child: SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () => _handleProceedToCart(item),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
                     ),
-                    child: Row(
-                      children: [
-                        IconButton(
-                          icon: const Icon(Icons.remove, size: 16),
-                          onPressed: _quantity > 1
-                              ? () => setState(() => _quantity--)
-                              : null,
-                        ),
-                        Text(
-                          '$_quantity',
-                          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.add, size: 16),
-                          onPressed: () => setState(() => _quantity++),
-                        ),
-                      ],
-                    ),
+                    elevation: 2,
                   ),
-
-                  const Gap(14),
-
-                  // Add to Cart Button with Calculated Dynamic Price
-                  Expanded(
-                    child: ElevatedButton(
-                      onPressed: () => _handleAddToCart(item),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.primary,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Iconsax.shopping_bag, size: 18),
+                      const Gap(8),
+                      Text(
+                        'Proceed to Cart  •  ₹${unitPrice.toStringAsFixed(0)}',
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: -0.2,
                         ),
-                        elevation: 2,
                       ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          const Icon(Iconsax.shopping_bag, size: 18),
-                          const Gap(8),
-                          Text(
-                            'Add to Cart  •  ₹${totalPrice.toStringAsFixed(0)}',
-                            style: const TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w900,
-                              letterSpacing: -0.2,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
+                    ],
                   ),
-                ],
+                ),
               ),
             ),
           ),

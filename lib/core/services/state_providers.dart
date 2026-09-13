@@ -79,6 +79,11 @@ class CartState {
   final String? appliedCoupon;
   final String? appliedOfferId;
   final double discountPercentage;
+  final double? appliedCouponMinOrder;
+  final List<String>? appliedCouponExcludedCategories;
+  final String? appliedDiscountType;
+  final double? appliedDiscountValue;
+  final double? appliedMaxDiscountCap;
   final int appliedRewardPoints;
   final double pointValue;
   final double? appliedRewardMinOrder;
@@ -91,6 +96,11 @@ class CartState {
     this.appliedCoupon,
     this.appliedOfferId,
     this.discountPercentage = 0.0,
+    this.appliedCouponMinOrder,
+    this.appliedCouponExcludedCategories,
+    this.appliedDiscountType,
+    this.appliedDiscountValue,
+    this.appliedMaxDiscountCap,
     this.appliedRewardPoints = 0,
     this.pointValue = 0.25,
     this.appliedRewardMinOrder,
@@ -153,6 +163,11 @@ class CartState {
     String? appliedCoupon,
     String? appliedOfferId,
     double? discountPercentage,
+    double? appliedCouponMinOrder,
+    List<String>? appliedCouponExcludedCategories,
+    String? appliedDiscountType,
+    double? appliedDiscountValue,
+    double? appliedMaxDiscountCap,
     int? appliedRewardPoints,
     double? pointValue,
     double? appliedRewardMinOrder,
@@ -167,6 +182,11 @@ class CartState {
       appliedCoupon: clearCoupon ? null : (appliedCoupon ?? this.appliedCoupon),
       appliedOfferId: clearCoupon ? null : (appliedOfferId ?? this.appliedOfferId),
       discountPercentage: clearCoupon ? 0.0 : (discountPercentage ?? this.discountPercentage),
+      appliedCouponMinOrder: clearCoupon ? null : (appliedCouponMinOrder ?? this.appliedCouponMinOrder),
+      appliedCouponExcludedCategories: clearCoupon ? null : (appliedCouponExcludedCategories ?? this.appliedCouponExcludedCategories),
+      appliedDiscountType: clearCoupon ? null : (appliedDiscountType ?? this.appliedDiscountType),
+      appliedDiscountValue: clearCoupon ? null : (appliedDiscountValue ?? this.appliedDiscountValue),
+      appliedMaxDiscountCap: clearCoupon ? null : (appliedMaxDiscountCap ?? this.appliedMaxDiscountCap),
       appliedRewardPoints: clearReward ? 0 : (appliedRewardPoints ?? this.appliedRewardPoints),
       pointValue: pointValue ?? this.pointValue,
       appliedRewardMinOrder: clearReward ? null : (appliedRewardMinOrder ?? this.appliedRewardMinOrder),
@@ -251,8 +271,51 @@ class CartNotifier extends Notifier<CartState> {
       }
     }
 
-    if (state.appliedCoupon != null && state.subtotal <= 0) {
-      state = state.copyWith(clearCoupon: true);
+    if (state.appliedCoupon != null) {
+      if (state.subtotal <= 0) {
+        state = state.copyWith(clearCoupon: true);
+        return;
+      }
+
+      final minReq = state.appliedCouponMinOrder ?? 0.0;
+      final excludedCategories = state.appliedCouponExcludedCategories ?? [];
+
+      // Recalculate current eligible product subtotal for Menu + Combo items
+      double eligibleSubtotal = 0.0;
+      for (final item in state.items) {
+        final itemCat = item.foodItem.category.trim().toUpperCase();
+        final itemId = item.foodItem.id.trim().toUpperCase();
+        final bool isExcluded = excludedCategories.any((cat) => cat.toUpperCase() == itemCat || cat.toUpperCase() == itemId);
+        if (!isExcluded) {
+          eligibleSubtotal += item.totalPrice;
+        }
+      }
+
+      // If current eligible subtotal < coupon minimum order requirement, auto-remove coupon
+      if (minReq > 0 && eligibleSubtotal < minReq) {
+        debugPrint('[CartNotifier] Auto-removing coupon "${state.appliedCoupon}": eligible subtotal (₹$eligibleSubtotal) < minOrder (₹$minReq)');
+        state = state.copyWith(clearCoupon: true);
+      } else {
+        // Recalculate discount percentage / amount for updated subtotal
+        final discountType = state.appliedDiscountType ?? '';
+        final rawDisc = state.appliedDiscountValue ?? 0.0;
+        final maxDiscountCap = state.appliedMaxDiscountCap ?? 0.0;
+
+        if (rawDisc > 0 && state.subtotal > 0) {
+          double finalDiscountAmount = 0.0;
+          if (discountType == 'FIXED_AMOUNT' || discountType == 'FLAT' || (rawDisc >= 100.0 && discountType != 'PERCENTAGE')) {
+            finalDiscountAmount = rawDisc.clamp(0.0, eligibleSubtotal);
+          } else {
+            final pct = (rawDisc > 1.0) ? (rawDisc / 100.0) : rawDisc;
+            finalDiscountAmount = eligibleSubtotal * pct;
+            if (maxDiscountCap > 0 && finalDiscountAmount > maxDiscountCap) {
+              finalDiscountAmount = maxDiscountCap;
+            }
+          }
+          final double newDiscountPct = (finalDiscountAmount / state.subtotal).clamp(0.0, 1.0);
+          state = state.copyWith(discountPercentage: newDiscountPct);
+        }
+      }
     }
   }
 
@@ -284,6 +347,14 @@ class CartNotifier extends Notifier<CartState> {
     } else {
       state = state.copyWith(items: [...state.items, item]);
     }
+    _revalidateDiscounts();
+  }
+
+  void updateItemAtIndex(int index, CartItem newItem) {
+    if (index < 0 || index >= state.items.length) return;
+    final updatedItems = List<CartItem>.from(state.items);
+    updatedItems[index] = newItem;
+    state = state.copyWith(items: updatedItems);
     _revalidateDiscounts();
   }
 
@@ -399,8 +470,63 @@ class CartNotifier extends Notifier<CartState> {
     try {
       final snap = await FirebaseFirestore.instance.collection('offers').get();
       
-      final currentRestId = state.items.first.restaurantId.trim();
-      final currentBranchId = (state.items.first.foodItem.branchId ?? '').trim();
+      // 2. Build comprehensive, case-insensitive set of candidate IDs for the active cart branch & parent restaurant
+      final Set<String> rawCandidateIds = {};
+      for (final item in state.items) {
+        if (item.branchId.trim().isNotEmpty) rawCandidateIds.add(item.branchId.trim());
+        if (item.restaurantId.trim().isNotEmpty) rawCandidateIds.add(item.restaurantId.trim());
+        final fBranch = (item.foodItem.branchId ?? '').trim();
+        final fRest = (item.foodItem.restaurantId ?? '').trim();
+        if (fBranch.isNotEmpty) rawCandidateIds.add(fBranch);
+        if (fRest.isNotEmpty) rawCandidateIds.add(fRest);
+      }
+
+      final List<String> initialLookupIds = List<String>.from(rawCandidateIds);
+      for (final lookupId in initialLookupIds) {
+        try {
+          final branchDoc = await FirebaseFirestore.instance.collection('branches').doc(lookupId).get();
+          if (branchDoc.exists && branchDoc.data() != null) {
+            final bData = branchDoc.data()!;
+            rawCandidateIds.add(branchDoc.id.trim());
+            final bFields = [
+              bData['restaurantId'],
+              bData['restaurant_id'],
+              bData['parentId'],
+              bData['parent_id'],
+              bData['branchId'],
+              bData['branch_id'],
+              bData['id'],
+              bData['branchCode'],
+              bData['code'],
+            ];
+            for (final f in bFields) {
+              if (f != null && f.toString().trim().isNotEmpty) {
+                rawCandidateIds.add(f.toString().trim());
+              }
+            }
+          }
+        } catch (_) {}
+
+        try {
+          final restDoc = await FirebaseFirestore.instance.collection('restaurants').doc(lookupId).get();
+          if (restDoc.exists && restDoc.data() != null) {
+            final rData = restDoc.data()!;
+            rawCandidateIds.add(restDoc.id.trim());
+            final rFields = [rData['restaurantId'], rData['restaurant_id'], rData['id']];
+            for (final f in rFields) {
+              if (f != null && f.toString().trim().isNotEmpty) {
+                rawCandidateIds.add(f.toString().trim());
+              }
+            }
+          }
+        } catch (_) {}
+      }
+
+      final Set<String> upperCandidateIds = rawCandidateIds
+          .map((id) => id.toUpperCase().trim())
+          .where((id) => id.isNotEmpty)
+          .toSet();
+
       final currentSubtotal = state.subtotal;
       final now = DateTime.now();
 
@@ -500,28 +626,42 @@ class CartNotifier extends Notifier<CartState> {
         }
 
         // Strict Restaurant ID & Branch ID validation
-        final String oRestId = (data['restaurantId'] ?? '').toString().trim();
-        final String oBranchId = (data['branchId'] ?? '').toString().trim();
-        final List<String> oBranchIds = (data['branchIds'] is List)
-            ? (data['branchIds'] as List).map((e) => e.toString().trim()).toList()
-            : [];
+        final String oRestId = (data['restaurantId'] ?? data['restaurant_id'] ?? '').toString().trim();
+        final String oBranchId = (data['branchId'] ?? data['branch_id'] ?? data['applicableBranchId'] ?? data['restaurantBranchId'] ?? '').toString().trim();
+        
+        final List<String> oBranchIds = [];
+        final rawBIds = data['branchIds'] ?? data['branch_ids'] ?? data['applicableBranchIds'];
+        if (rawBIds is List) {
+          for (final b in rawBIds) {
+            if (b != null && b.toString().trim().isNotEmpty) {
+              oBranchIds.add(b.toString().trim());
+            }
+          }
+        }
+        if (oBranchId.isNotEmpty && !oBranchIds.contains(oBranchId)) {
+          oBranchIds.add(oBranchId);
+        }
 
-        final String activeBranchId = state.items.first.branchId.isNotEmpty
-            ? state.items.first.branchId
-            : state.items.first.restaurantId;
-        final String activeParentRestId = state.items.first.restaurantId;
+        final String oBranchIdUpper = oBranchId.toUpperCase();
+        final String oRestIdUpper = oRestId.toUpperCase();
+        final List<String> oBranchIdsUpper = oBranchIds.map((b) => b.toUpperCase()).toList();
 
-        final bool isGlobal = oBranchId.isEmpty ||
-            oBranchId.toUpperCase() == 'ALL' ||
-            oBranchIds.contains('ALL') ||
-            (oBranchId.isEmpty && oBranchIds.isEmpty && (oRestId.isEmpty || oRestId.toUpperCase() == 'ALL'));
+        final bool isGlobal = oBranchIdUpper.isEmpty ||
+            oBranchIdUpper == 'ALL' ||
+            oBranchIdsUpper.contains('ALL') ||
+            (oBranchIdUpper.isEmpty && oBranchIdsUpper.isEmpty && (oRestIdUpper.isEmpty || oRestIdUpper == 'ALL'));
+
+        debugPrint('[ApplyCoupon] Code: $normalizedCode | OfferId: ${doc.id}');
+        debugPrint('[ApplyCoupon] Offer branchId: $oBranchId | branchIds: $oBranchIds | restId: $oRestId | isGlobal: $isGlobal');
+        debugPrint('[ApplyCoupon] Cart Active Branch Candidates: $upperCandidateIds');
 
         if (!isGlobal) {
-          final bool matchesBranchId = oBranchId == activeBranchId || oBranchId == activeParentRestId;
-          final bool matchesBranchIds = oBranchIds.contains(activeBranchId) || oBranchIds.contains(activeParentRestId);
-          final bool matchesRestId = oBranchId.isEmpty && oBranchIds.isEmpty && (oRestId == activeParentRestId || oRestId == activeBranchId);
+          final bool matchesBranchId = oBranchIdUpper.isNotEmpty && upperCandidateIds.contains(oBranchIdUpper);
+          final bool matchesBranchIds = oBranchIdsUpper.any((b) => upperCandidateIds.contains(b));
+          final bool matchesRestId = oRestIdUpper.isNotEmpty && upperCandidateIds.contains(oRestIdUpper);
 
           if (!matchesBranchId && !matchesBranchIds && !matchesRestId) {
+            debugPrint('[ApplyCoupon] Branch check failed for code: $normalizedCode against candidates: $upperCandidateIds');
             return const CouponApplyResult(
               isSuccess: false,
               message: 'This coupon is not valid for this branch.',
@@ -542,7 +682,7 @@ class CartNotifier extends Notifier<CartState> {
           final itemId = item.foodItem.id.trim().toUpperCase();
           final bool isExcluded = excludedCatList.contains(itemCat) || excludedCatList.contains(itemId);
           if (!isExcluded) {
-            eligibleSubtotal += item.foodItem.price * item.quantity;
+            eligibleSubtotal += item.totalPrice;
           }
         }
 
@@ -590,6 +730,11 @@ class CartNotifier extends Notifier<CartState> {
           appliedCoupon: appliedCodeName,
           appliedOfferId: doc.id,
           discountPercentage: discountPctForCart,
+          appliedCouponMinOrder: minOrderVal,
+          appliedCouponExcludedCategories: excludedCatList,
+          appliedDiscountType: discountType,
+          appliedDiscountValue: rawDisc,
+          appliedMaxDiscountCap: maxDiscountCap,
         );
 
         return CouponApplyResult(

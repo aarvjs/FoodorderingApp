@@ -6,6 +6,7 @@ import 'package:shimmer/shimmer.dart';
 import '../../core/config/app_colors.dart';
 import '../../core/services/state_providers.dart';
 import '../../core/utils/snackbar_utils.dart';
+import '../../core/widgets/quantity_selector.dart';
 import '../../models/cart_item.dart';
 import '../../models/combo_model.dart';
 import '../../models/combo_item_model.dart';
@@ -41,61 +42,19 @@ class ComboDetailScreen extends ConsumerWidget {
         : targetBranchId;
     final String targetRestName = restaurant?.name ?? 'Restaurant';
 
-    final groups = item.customizationGroups;
-    if (groups.isNotEmpty || item.isCustomisable || item.isVariantEnabled) {
-      showModalBottomSheet(
-        context: context,
-        useRootNavigator: true,
-        isScrollControlled: true,
-        backgroundColor: Colors.transparent,
-        builder: (ctx) => ComboProductCustomizationSheet(
-          item: item,
-          combo: combo,
-          restaurantId: targetRestId,
-          branchId: targetBranchId,
-          restaurantName: targetRestName,
-        ),
-      );
-    } else {
-      final foodItem = FoodItem(
-        id: item.id,
-        name: '${combo.name} - ${item.name}',
-        description: item.description,
-        price: item.price,
-        imageUrl: item.image,
-        isVeg: item.isVeg,
-        rating: item.rating,
-        reviewCount: item.ratingCount,
-        ingredients: const [],
-        nutrition: const {},
-        reviews: const [],
-        restaurantId: targetRestId,
-        branchId: targetBranchId,
-        category: 'Combos',
-        isAvailable: true,
-      );
-
-      final cartItem = CartItem(
-        foodItem: foodItem,
-        quantity: 1,
+    showModalBottomSheet(
+      context: context,
+      useRootNavigator: true,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => ComboProductCustomizationSheet(
+        item: item,
+        combo: combo,
         restaurantId: targetRestId,
         branchId: targetBranchId,
         restaurantName: targetRestName,
-        isCombo: true,
-        comboId: combo.id,
-        comboName: combo.name,
-        comboItemId: item.id,
-        basePrice: item.price,
-        unitPrice: item.price,
-      );
-
-      ref.read(cartProvider.notifier).addItem(cartItem);
-
-      TopToast.show(
-        context,
-        'Added "${item.name}" to cart!',
-      );
-    }
+      ),
+    );
   }
 
   @override
@@ -358,10 +317,15 @@ class ComboDetailScreen extends ConsumerWidget {
                           (context, index) {
                             final item = comboItems[index];
 
+                            final cartState = ref.watch(cartProvider);
+                            final matchingItems = cartState.items.where(
+                              (cartItem) => cartItem.isCombo && (cartItem.comboItemId == item.id || cartItem.foodItem.id == item.id),
+                            ).toList();
+                            final int inCartQty = matchingItems.fold(0, (sum, cartItem) => sum + cartItem.quantity);
+
                             return Container(
                               key: ValueKey(item.id),
                               margin: const EdgeInsets.only(bottom: 14),
-                              padding: const EdgeInsets.all(14),
                               decoration: BoxDecoration(
                                 color: isDark ? AppColors.darkCard : Colors.white,
                                 borderRadius: BorderRadius.circular(18),
@@ -376,7 +340,34 @@ class ComboDetailScreen extends ConsumerWidget {
                                   ),
                                 ],
                               ),
-                              child: Column(
+                              child: InkWell(
+                                onTap: () {
+                                  final String targetBranchId = (restaurant?.branchId.isNotEmpty == true)
+                                      ? restaurant!.branchId
+                                      : (restaurant?.id.isNotEmpty == true ? restaurant!.id : item.restaurantId);
+                                  final String targetRestId = (restaurant?.restaurantId.isNotEmpty == true)
+                                      ? restaurant!.restaurantId
+                                      : targetBranchId;
+                                  final String targetRestName = restaurant?.name ?? 'Restaurant';
+
+                                  showModalBottomSheet(
+                                    context: context,
+                                    useRootNavigator: true,
+                                    isScrollControlled: true,
+                                    backgroundColor: Colors.transparent,
+                                    builder: (ctx) => ComboProductCustomizationSheet(
+                                      item: item,
+                                      combo: combo,
+                                      restaurantId: targetRestId,
+                                      branchId: targetBranchId,
+                                      restaurantName: targetRestName,
+                                    ),
+                                  );
+                                },
+                                borderRadius: BorderRadius.circular(18),
+                                child: Padding(
+                                  padding: const EdgeInsets.all(14),
+                                  child: Column(
                                 children: [
                                   Row(
                                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -516,27 +507,44 @@ class ComboDetailScreen extends ConsumerWidget {
                                           ),
                                           const Gap(8),
                                           // Prominent ADD button
-                                          ElevatedButton(
-                                            onPressed: () => _onAddItem(context, ref, item, isComboActive: isComboActive),
-                                            style: ElevatedButton.styleFrom(
-                                              backgroundColor: isComboActive ? AppColors.primary : Colors.grey.shade400,
-                                              foregroundColor: Colors.white,
-                                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-                                              minimumSize: const Size(80, 32),
-                                              shape: RoundedRectangleBorder(
-                                                borderRadius: BorderRadius.circular(10),
-                                              ),
-                                              elevation: 1,
-                                            ),
-                                            child: const Text(
-                                              'ADD',
-                                              style: TextStyle(
-                                                fontSize: 12,
-                                                fontWeight: FontWeight.w900,
-                                                letterSpacing: 0.5,
-                                              ),
-                                            ),
-                                          ),
+                                          inCartQty == 0
+                                              ? ElevatedButton(
+                                                  onPressed: () => _onAddItem(context, ref, item, isComboActive: isComboActive),
+                                                  style: ElevatedButton.styleFrom(
+                                                    backgroundColor: isComboActive ? AppColors.primary : Colors.grey.shade400,
+                                                    foregroundColor: Colors.white,
+                                                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                                                    minimumSize: const Size(80, 32),
+                                                    shape: RoundedRectangleBorder(
+                                                      borderRadius: BorderRadius.circular(10),
+                                                    ),
+                                                    elevation: 1,
+                                                  ),
+                                                  child: const Text(
+                                                    'ADD',
+                                                    style: TextStyle(
+                                                      fontSize: 12,
+                                                      fontWeight: FontWeight.w900,
+                                                      letterSpacing: 0.5,
+                                                    ),
+                                                  ),
+                                                )
+                                              : QuantitySelector(
+                                                  quantity: inCartQty,
+                                                  width: 85,
+                                                  height: 34,
+                                                  onChanged: (newQty) {
+                                                    final cartNotifier = ref.read(cartProvider.notifier);
+                                                    final lastIndex = cartState.items.lastIndexWhere(
+                                                      (cartItem) => cartItem.isCombo && (cartItem.comboItemId == item.id || cartItem.foodItem.id == item.id),
+                                                    );
+                                                    if (lastIndex >= 0) {
+                                                      final diff = newQty - inCartQty;
+                                                      final targetQty = cartState.items[lastIndex].quantity + diff;
+                                                      cartNotifier.updateQuantityAtIndex(lastIndex, targetQty);
+                                                    }
+                                                  },
+                                                ),
                                           if (item.isCustomisable || item.customizationGroups.isNotEmpty) ...[
                                             const Gap(3),
                                             Text(
@@ -547,19 +555,19 @@ class ComboDetailScreen extends ConsumerWidget {
                                                 color: isDark ? Colors.grey.shade400 : Colors.grey.shade500,
                                                 letterSpacing: 0.3,
                                               ),
-                                            ),
-                                          ],
-                                        ],
-                                      ),
-                                    ],
+                                                                                 ],
+                                        ),
+                                      ],
+                                    ),
                                   ),
-                                ],
+                                ),
                               ),
                             );
                           },
                           childCount: comboItems.length,
                         ),
-                      )),
+                      ),      ),
+                    )),
           ),
         ],
       ),

@@ -22,70 +22,37 @@ class FoodAuthIllustration extends StatelessWidget {
 
     return Column(
       children: [
-        Stack(
-          alignment: Alignment.center,
-          children: [
-            // Soft ambient glow circle
-            Container(
-              width: 140,
-              height: 140,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: primaryColor.withOpacity(0.12),
+        // Perfect Pizza Brand App Logo
+        Container(
+          width: 110,
+          height: 110,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(24),
+            boxShadow: [
+              BoxShadow(
+                color: primaryColor.withOpacity(0.2),
+                blurRadius: 18,
+                offset: const Offset(0, 6),
               ),
-            ).animate().scale(duration: 800.ms, curve: Curves.easeOut),
-
-            // Floating Emoji Badges around center icon
-            Positioned(
-              top: 10,
-              left: 20,
-              child: const Text('🍕', style: TextStyle(fontSize: 22))
-                  .animate()
-                  .fade(duration: 500.ms)
-                  .shake(duration: 1000.ms),
-            ),
-            Positioned(
-              bottom: 10,
-              right: 20,
-              child: const Text('🍔', style: TextStyle(fontSize: 22))
-                  .animate()
-                  .fade(delay: 200.ms, duration: 500.ms)
-                  .shake(delay: 300.ms, duration: 1000.ms),
-            ),
-            Positioned(
-              top: 15,
-              right: 25,
-              child: const Text('🛵', style: TextStyle(fontSize: 20))
-                  .animate()
-                  .fade(delay: 400.ms, duration: 500.ms),
-            ),
-
-            // Main Brand / Food Icon Container
-            Container(
-              width: 90,
-              height: 90,
-              decoration: BoxDecoration(
-                gradient: isDark ? AppColors.darkGradient : AppColors.primaryGradient,
-                shape: BoxShape.circle,
-                boxShadow: [
-                  BoxShadow(
-                    color: primaryColor.withOpacity(0.35),
-                    blurRadius: 24,
-                    offset: const Offset(0, 8),
-                  ),
-                ],
+            ],
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(24),
+            child: Image.asset(
+              'assets/images/app_logo_1.png',
+              width: 110,
+              height: 110,
+              fit: BoxFit.cover,
+              errorBuilder: (context, error, stackTrace) => Container(
+                color: primaryColor,
+                child: const Icon(Icons.local_pizza_rounded, size: 50, color: Colors.white),
               ),
-              child: Icon(
-                icon,
-                color: Colors.white,
-                size: 42,
-              ),
-            )
-                .animate()
-                .scale(duration: 600.ms, curve: Curves.elasticOut)
-                .slideY(begin: -0.2, end: 0, duration: 600.ms),
-          ],
-        ),
+            ),
+          ),
+        )
+            .animate()
+            .scale(duration: 600.ms, curve: Curves.easeOutBack)
+            .fadeIn(duration: 400.ms),
         const SizedBox(height: 24),
         Text(
           title,

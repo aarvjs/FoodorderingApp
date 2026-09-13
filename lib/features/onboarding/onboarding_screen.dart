@@ -84,7 +84,7 @@ const List<_SlideData> _kSlides = [
     subtitle:
         'Discover handpicked premium dining and street food with your family — with massive exclusive discounts.',
     imageUrl:
-        'https://images.unsplash.com/photo-1544025162-d76694265947?w=900&q=90&auto=format&fit=crop',
+        'https://images.unsplash.com/photo-1628840042765-356cda07504e?w=900&q=90&auto=format&fit=crop',
     gradientColors: [Color(0xFF11998E), Color(0xFF38EF7D), Color(0xFF0A4A30)],
     floatingItems: [
       _FloatingItem(emoji: '🍽️', topFrac: 0.06, leftFrac: 0.03, scale: 1.7, phaseOffset: 0.0),

@@ -164,7 +164,12 @@ class CartItem {
     final replStr = replacements.join('_');
     final addonsStr = selectedAddons.join('_');
     final selStr = customizationSelections
-        .map((s) => '${s.groupName}:${s.optionName}:${s.quantity}:${s.unitPrice}')
+        .map((s) {
+          final optId = s.optionId.isNotEmpty ? s.optionId : s.optionName;
+          final varId = s.variantId ?? '';
+          final prodId = s.productId ?? '';
+          return '${s.groupName}:$optId:$varId:$prodId:${s.quantity}:${s.unitPrice}';
+        })
         .join('_');
     final noteStr = customInstructions ?? '';
     return '${foodItem.id}_${isCombo}_${cId}_${sizeStr}_${customsStr}_${remStr}_${replStr}_${addonsStr}_${selStr}_$noteStr';

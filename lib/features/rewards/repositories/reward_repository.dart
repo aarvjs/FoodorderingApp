@@ -123,15 +123,13 @@ class RewardRepository {
         return 0;
       }
 
-      // 2. Calculate eligible menu product total ONLY (excluding combos)
-      double eligibleMenuTotal = 0.0;
+      // 2. Calculate eligible product subtotal (Menu products + Combo products)
+      double eligibleProductTotal = 0.0;
       for (final item in order.items) {
-        if (!item.isCombo) {
-          eligibleMenuTotal += (item.unitPrice * item.quantity);
-        }
+        eligibleProductTotal += (item.unitPrice * item.quantity);
       }
 
-      if (eligibleMenuTotal <= 0) {
+      if (eligibleProductTotal <= 0) {
         return 0;
       }
 
@@ -142,7 +140,7 @@ class RewardRepository {
       }
 
       // 4. Calculate points earned using dynamic slabs
-      final pointsToAward = config.calculateEarnedPoints(eligibleMenuTotal);
+      final pointsToAward = config.calculateEarnedPoints(eligibleProductTotal);
       if (pointsToAward <= 0) {
         return 0;
       }
@@ -168,7 +166,7 @@ class RewardRepository {
         orderNumber: order.orderNumber.isNotEmpty ? order.orderNumber : order.id,
         points: pointsToAward,
         monetaryValue: monetaryVal,
-        qualifyingAmount: eligibleMenuTotal,
+        qualifyingAmount: eligibleProductTotal,
         restaurantId: order.restaurantId,
         branchId: order.branchId,
         branchName: order.branchName.isNotEmpty ? order.branchName : order.restaurantName,
@@ -342,18 +340,16 @@ class RewardRepository {
           }
 
           final order = Order.fromFirestore(data, docSnap.id);
-          double eligibleMenuTotal = 0.0;
+          double eligibleProductTotal = 0.0;
           for (final item in order.items) {
-            if (!item.isCombo) {
-              eligibleMenuTotal += (item.unitPrice * item.quantity);
-            }
+            eligibleProductTotal += (item.unitPrice * item.quantity);
           }
 
-          if (eligibleMenuTotal <= 0) continue;
+          if (eligibleProductTotal <= 0) continue;
 
           final config = await getRewardConfigByBranch(order.branchId, order.restaurantId);
           if (config != null && config.isActive) {
-            final pts = config.calculateEarnedPoints(eligibleMenuTotal);
+            final pts = config.calculateEarnedPoints(eligibleProductTotal);
             if (pts > 0) {
               unclaimedPoints += pts;
             }
