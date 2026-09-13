@@ -5,6 +5,7 @@ import 'package:iconsax/iconsax.dart';
 import 'package:gap/gap.dart';
 import '../../../core/config/app_colors.dart';
 import '../../../models/address.dart';
+import '../../../auth/services/location_service.dart';
 import '../providers/address_provider.dart';
 import 'add_edit_address_modal.dart';
 
@@ -17,7 +18,7 @@ class AddressSelectionBottomSheet extends ConsumerStatefulWidget {
 
 class _AddressSelectionBottomSheetState extends ConsumerState<AddressSelectionBottomSheet> {
   final TextEditingController _searchController = TextEditingController();
-  List<Address> _searchResults = [];
+  List<GooglePlaceSuggestion> _searchResults = [];
   bool _isSearchingPlaces = false;
 
   @override
@@ -28,9 +29,9 @@ class _AddressSelectionBottomSheetState extends ConsumerState<AddressSelectionBo
 
   void _onSearchChanged(String val) async {
     ref.read(addressProvider.notifier).setSearchQuery(val);
-    if (val.trim().length >= 3) {
+    if (val.trim().length >= 2) {
       setState(() => _isSearchingPlaces = true);
-      final results = await ref.read(addressProvider.notifier).searchPlaces(val);
+      final results = await ref.read(addressProvider.notifier).getGoogleAutocompleteSuggestions(val);
       if (mounted) {
         setState(() {
           _searchResults = results;
@@ -201,23 +202,59 @@ class _AddressSelectionBottomSheetState extends ConsumerState<AddressSelectionBo
                 itemCount: _searchResults.length,
                 separatorBuilder: (_, __) => const Divider(height: 1),
                 itemBuilder: (context, idx) {
-                  final place = _searchResults[idx];
+                  final item = _searchResults[idx];
                   return ListTile(
                     dense: true,
                     leading: const Icon(Iconsax.location5, color: AppColors.primary, size: 18),
-                    title: Text(
-                      place.area.isNotEmpty ? place.area : place.city,
-                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: isDark ? Colors.white : AppColors.textDark),
+                    title: Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            item.primaryText,
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 13,
+                              color: isDark ? Colors.white : AppColors.textDark,
+                            ),
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                          decoration: BoxDecoration(
+                            color: Colors.blue.shade50,
+                            borderRadius: BorderRadius.circular(4),
+                            border: Border.all(color: Colors.blue.shade100),
+                          ),
+                          child: Text(
+                            'Google Maps',
+                            style: TextStyle(
+                              fontSize: 8,
+                              fontWeight: FontWeight.w900,
+                              color: Colors.blue.shade700,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                     subtitle: Text(
-                      place.fullAddress,
+                      item.secondaryText.isNotEmpty ? item.secondaryText : item.fullText,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(fontSize: 11, color: isDark ? Colors.grey.shade400 : AppColors.textLight),
                     ),
-                    onTap: () {
-                      ref.read(addressProvider.notifier).addAddress(place, ref);
-                      Navigator.pop(context);
+                    onTap: () async {
+                      setState(() => _isSearchingPlaces = true);
+                      final selectedAddr = await ref.read(addressProvider.notifier).selectGooglePlaceSuggestion(item, ref);
+                      if (mounted) {
+                        setState(() => _isSearchingPlaces = false);
+                        if (selectedAddr != null) {
+                          Navigator.pop(context);
+                        } else {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Unable to fetch place details from Google. Please try again.')),
+                          );
+                        }
+                      }
                     },
                   );
                 },

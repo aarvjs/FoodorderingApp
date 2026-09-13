@@ -260,79 +260,174 @@ class LocationService {
     return null;
   }
 
-  /// Search places by text query (Layer 1: Native locationFromAddress; Layer 2: Nominatim Search API)
-  Future<List<UserLocation>> searchPlaces(String query) async {
-    if (query.trim().isEmpty) return [];
+  static const String _googleApiKey = 'AIzaSyC4zEkcRePCJWM0WMtZs1IIGEbxnvKMjJM';
 
-    // Layer 1: Try Native locationFromAddress
-    try {
-      final locations = await locationFromAddress(query).timeout(const Duration(seconds: 4));
-      final results = <UserLocation>[];
-      for (var loc in locations.take(5)) {
-        try {
-          final userLoc = await getLocationFromCoordinates(loc.latitude, loc.longitude);
-          results.add(userLoc);
-        } catch (_) {
-          results.add(UserLocation(
-            latitude: loc.latitude,
-            longitude: loc.longitude,
-            formattedAddress: query,
-            city: query,
-            state: '',
-            pincode: '',
-          ));
-        }
-      }
-      if (results.isNotEmpty) return results;
-    } catch (_) {}
+  /// Google Places API (New) Autocomplete REST Endpoint
+  Future<List<GooglePlaceSuggestion>> getGoogleAutocompleteSuggestions(String query) async {
+    final trimmed = query.trim();
+    if (trimmed.length < 2) return [];
 
-    // Layer 2 Fallback: Nominatim Search REST API
     final client = HttpClient();
     client.connectionTimeout = const Duration(seconds: 8);
+
     try {
-      final encoded = Uri.encodeComponent(query);
-      final url = Uri.parse(
-        'https://nominatim.openstreetmap.org/search?q=$encoded&format=json&addressdetails=1&limit=5',
-      );
-      final request = await client.getUrl(url);
-      request.headers.set('User-Agent', 'FoodOrderingApp/1.0 (Flutter App)');
+      final url = Uri.parse('https://places.googleapis.com/v1/places:autocomplete');
+      final request = await client.postUrl(url);
+      request.headers.set('Content-Type', 'application/json');
+      request.headers.set('X-Goog-Api-Key', _googleApiKey);
+
+      final payload = jsonEncode({
+        'input': trimmed,
+        'includedRegionCodes': ['IN'],
+      });
+
+      request.write(payload);
       final response = await request.close();
 
       if (response.statusCode == 200) {
         final body = await response.transform(utf8.decoder).join();
-        final list = jsonDecode(body) as List? ?? [];
-        final results = <UserLocation>[];
+        final data = jsonDecode(body) as Map<String, dynamic>;
+        final suggestions = data['suggestions'] as List? ?? [];
 
-        for (var item in list) {
-          final map = item as Map<String, dynamic>;
-          final lat = double.tryParse(map['lat'].toString()) ?? 0.0;
-          final lng = double.tryParse(map['lon'].toString()) ?? 0.0;
-          final displayName = map['display_name'] as String? ?? '';
-          final addr = map['address'] as Map<String, dynamic>? ?? {};
+        final results = <GooglePlaceSuggestion>[];
 
-          if (lat != 0.0 && lng != 0.0 && displayName.isNotEmpty) {
-            final sublocality = (addr['suburb'] ?? addr['neighbourhood'] ?? addr['road'] ?? '').toString().trim();
-            final locality = (addr['city'] ?? addr['town'] ?? addr['village'] ?? '').toString().trim();
-            final state = (addr['state'] ?? '').toString().trim();
-            final postcode = (addr['postcode'] ?? '').toString().trim();
+        for (var item in suggestions) {
+          final pred = item['placePrediction'] as Map<String, dynamic>?;
+          if (pred == null) continue;
 
-            results.add(UserLocation(
-              latitude: lat,
-              longitude: lng,
-              formattedAddress: displayName,
-              area: sublocality.isNotEmpty ? sublocality : locality,
-              city: locality.isNotEmpty ? locality : sublocality,
-              state: state,
-              pincode: postcode,
-            ));
-          }
+          final rawPlace = (pred['place'] ?? '').toString();
+          final rawPlaceId = (pred['placeId'] ?? '').toString();
+          final cleanPlaceId = rawPlaceId.isNotEmpty
+              ? rawPlaceId.replaceAll(RegExp(r'^places/'), '')
+              : rawPlace.replaceAll(RegExp(r'^places/'), '');
+
+          if (cleanPlaceId.isEmpty) continue;
+
+          final textObj = pred['text'] as Map<String, dynamic>?;
+          final fullText = (textObj?['text'] ?? '').toString();
+
+          final structObj = pred['structuredFormat'] as Map<String, dynamic>?;
+          final mainTextObj = structObj?['mainText'] as Map<String, dynamic>?;
+          final secondaryTextObj = structObj?['secondaryText'] as Map<String, dynamic>?;
+
+          final mainText = (mainTextObj?['text'] ?? '').toString();
+          final secondaryText = (secondaryTextObj?['text'] ?? '').toString();
+
+          results.add(GooglePlaceSuggestion(
+            placeId: cleanPlaceId,
+            primaryText: mainText.isNotEmpty ? mainText : fullText,
+            secondaryText: secondaryText,
+            fullText: fullText.isNotEmpty ? fullText : mainText,
+          ));
         }
+
         return results;
       }
-    } catch (_) {
+    } catch (e) {
+      print('[Google Places Autocomplete] Exception: $e');
     } finally {
       client.close();
     }
     return [];
   }
+
+  /// Google Places API (New) Place Details REST Endpoint
+  Future<UserLocation?> getGooglePlaceDetails(String placeId) async {
+    final cleanId = placeId.trim().replaceAll(RegExp(r'^places/'), '');
+    if (cleanId.isEmpty) return null;
+
+    final client = HttpClient();
+    client.connectionTimeout = const Duration(seconds: 8);
+
+    try {
+      final url = Uri.parse('https://places.googleapis.com/v1/places/$cleanId');
+      final request = await client.getUrl(url);
+      request.headers.set('Content-Type', 'application/json');
+      request.headers.set('X-Goog-Api-Key', _googleApiKey);
+      request.headers.set('X-Goog-FieldMask', 'id,displayName,formattedAddress,location,addressComponents');
+
+      final response = await request.close();
+
+      if (response.statusCode == 200) {
+        final body = await response.transform(utf8.decoder).join();
+        final data = jsonDecode(body) as Map<String, dynamic>;
+
+        final formattedAddr = (data['formattedAddress'] ?? data['displayName']?['text'] ?? '').toString();
+
+        final locObj = data['location'] as Map<String, dynamic>?;
+        final lat = (locObj?['latitude'] as num?)?.toDouble() ?? 0.0;
+        final lng = (locObj?['longitude'] as num?)?.toDouble() ?? 0.0;
+
+        String city = '';
+        String state = '';
+        String pincode = '';
+        String area = '';
+
+        final components = data['addressComponents'] as List? ?? [];
+        for (var comp in components) {
+          final cMap = comp as Map<String, dynamic>;
+          final types = (cMap['types'] as List? ?? []).map((t) => t.toString()).toList();
+          final longText = (cMap['longText'] ?? cMap['shortText'] ?? '').toString().trim();
+
+          if (types.contains('locality') || types.contains('subadministrative_area') || types.contains('administrative_area_level_2')) {
+            if (city.isEmpty) city = longText;
+          } else if (types.contains('administrative_area_level_1')) {
+            if (state.isEmpty) state = longText;
+          } else if (types.contains('postal_code')) {
+            if (pincode.isEmpty) pincode = longText;
+          } else if (types.contains('sublocality') || types.contains('sublocality_level_1') || types.contains('neighborhood') || types.contains('route')) {
+            if (area.isEmpty) area = longText;
+          }
+        }
+
+        if (formattedAddr.isNotEmpty && lat != 0.0 && lng != 0.0) {
+          return UserLocation(
+            latitude: lat,
+            longitude: lng,
+            formattedAddress: formattedAddr,
+            area: area.isNotEmpty ? area : city,
+            city: city,
+            state: state,
+            pincode: pincode,
+          );
+        }
+      }
+    } catch (e) {
+      print('[Google Place Details] Exception: $e');
+    } finally {
+      client.close();
+    }
+    return null;
+  }
+
+  /// Search places by text query via Google Places API (New)
+  Future<List<UserLocation>> searchPlaces(String query) async {
+    if (query.trim().isEmpty) return [];
+
+    final suggestions = await getGoogleAutocompleteSuggestions(query);
+    final results = <UserLocation>[];
+
+    for (var sug in suggestions.take(5)) {
+      final details = await getGooglePlaceDetails(sug.placeId);
+      if (details != null) {
+        results.add(details);
+      }
+    }
+
+    return results;
+  }
+}
+
+class GooglePlaceSuggestion {
+  final String placeId;
+  final String primaryText;
+  final String secondaryText;
+  final String fullText;
+
+  const GooglePlaceSuggestion({
+    required this.placeId,
+    required this.primaryText,
+    required this.secondaryText,
+    required this.fullText,
+  });
 }

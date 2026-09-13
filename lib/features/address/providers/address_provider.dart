@@ -341,6 +341,41 @@ class AddressNotifier extends Notifier<AddressState> {
     state = state.copyWith(searchQuery: query);
   }
 
+  /// Search Google Places Autocomplete suggestions
+  Future<List<GooglePlaceSuggestion>> getGoogleAutocompleteSuggestions(String query) async {
+    if (query.trim().isEmpty) return [];
+    return await _locationService.getGoogleAutocompleteSuggestions(query);
+  }
+
+  /// Select a Google suggestion: fetch Place Details and add/select address
+  Future<Address?> selectGooglePlaceSuggestion(GooglePlaceSuggestion suggestion, WidgetRef? ref) async {
+    final userLoc = await _locationService.getGooglePlaceDetails(suggestion.placeId);
+    if (userLoc == null) return null;
+
+    final String titleLabel = userLoc.area.trim().isNotEmpty
+        ? userLoc.area.trim()
+        : (userLoc.city.trim().isNotEmpty ? userLoc.city.trim() : 'Selected Location');
+
+    final newAddress = Address(
+      id: 'addr_google_${DateTime.now().millisecondsSinceEpoch}',
+      label: titleLabel,
+      formattedAddress: userLoc.formattedAddress,
+      locality: userLoc.area,
+      subLocality: userLoc.area,
+      city: userLoc.city,
+      state: userLoc.state,
+      postalCode: userLoc.pincode,
+      latitude: userLoc.latitude,
+      longitude: userLoc.longitude,
+      isDefault: true,
+      createdAt: DateTime.now(),
+      updatedAt: DateTime.now(),
+    );
+
+    addAddress(newAddress, ref);
+    return newAddress;
+  }
+
   /// Search places by text query via LocationService
   Future<List<Address>> searchPlaces(String query) async {
     if (query.trim().isEmpty) return <Address>[];
