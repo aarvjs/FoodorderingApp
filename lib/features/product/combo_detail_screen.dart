@@ -26,7 +26,14 @@ class ComboDetailScreen extends ConsumerWidget {
   });
 
   void _onAddItem(BuildContext context, WidgetRef ref, ComboItemModel item, {bool isComboActive = true}) {
-    if (!isComboActive) {
+    final String targetBranchId = (restaurant?.branchId.isNotEmpty == true)
+        ? restaurant!.branchId
+        : (restaurant?.id.isNotEmpty == true ? restaurant!.id : item.restaurantId);
+
+    final liveComboAsync = ref.read(singleComboStreamProvider(combo.id));
+    final liveCombo = liveComboAsync.value ?? combo;
+
+    if (!liveCombo.isCurrentlyAvailableForBranch(targetBranchId)) {
       TopToast.show(
         context,
         'This combo is currently unavailable.',
@@ -34,9 +41,6 @@ class ComboDetailScreen extends ConsumerWidget {
       return;
     }
 
-    final String targetBranchId = (restaurant?.branchId.isNotEmpty == true)
-        ? restaurant!.branchId
-        : (restaurant?.id.isNotEmpty == true ? restaurant!.id : item.restaurantId);
     final String targetRestId = (restaurant?.restaurantId.isNotEmpty == true)
         ? restaurant!.restaurantId
         : targetBranchId;
@@ -63,9 +67,15 @@ class ComboDetailScreen extends ConsumerWidget {
     final itemsAsync = ref.watch(comboItemsStreamProvider(combo.id));
     final List<ComboItemModel> comboItems = itemsAsync.value ?? [];
 
+    final String targetBranchId = (restaurant?.branchId.isNotEmpty == true)
+        ? restaurant!.branchId
+        : (restaurant?.id.isNotEmpty == true ? restaurant!.id : combo.restaurantId);
+
     final liveComboAsync = ref.watch(singleComboStreamProvider(combo.id));
     final liveCombo = liveComboAsync.value;
-    final bool isComboActive = (liveCombo != null) ? liveCombo.isActive : combo.isActive;
+    final bool isComboActive = (liveCombo != null)
+        ? liveCombo.isCurrentlyAvailableForBranch(targetBranchId)
+        : combo.isCurrentlyAvailableForBranch(targetBranchId);
 
     return Scaffold(
       backgroundColor: isDark ? AppColors.darkBackground : AppColors.background,
@@ -555,8 +565,8 @@ class ComboDetailScreen extends ConsumerWidget {
                                                 color: isDark ? Colors.grey.shade400 : Colors.grey.shade500,
                                                 letterSpacing: 0.3,
                                               ),
-                                                                                 ],
-                                        ),
+                                            ),
+                                          ],
                                       ],
                                     ),
                                   ),
@@ -566,8 +576,8 @@ class ComboDetailScreen extends ConsumerWidget {
                           },
                           childCount: comboItems.length,
                         ),
-                      ),      ),
-                    )),
+                      ),
+                    ),
           ),
         ],
       ),

@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart' hide Order;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../../models/cart_item.dart';
 import '../../models/order.dart';
 import '../../auth/providers/auth_provider.dart';
@@ -613,7 +614,7 @@ class CartNotifier extends Notifier<CartState> {
           }
         }
 
-        // Requirement 2: Has usage limit been reached?
+        // Requirement 2: Has total usage limit been reached?
         final uLimit = (data['usageLimit'] ?? 0);
         final int usageLimit = (uLimit is num) ? uLimit.toInt() : int.tryParse(uLimit.toString()) ?? 0;
         final uCount = (data['usageCount'] ?? 0);
@@ -623,6 +624,84 @@ class CartNotifier extends Notifier<CartState> {
             isSuccess: false,
             message: 'Sorry, this offer has reached its usage limit.',
           );
+        }
+
+        // Requirement 2b: Has per-user usage limit been reached?
+        final mUsesUser = (data['maxUsesPerUser'] ?? 0);
+        final int maxUsesPerUser = (mUsesUser is num) ? mUsesUser.toInt() : int.tryParse(mUsesUser.toString()) ?? 0;
+        if (maxUsesPerUser > 0) {
+          final authUser = FirebaseAuth.instance.currentUser;
+          final userModel = ref.read(authProvider).userModel;
+          final currentUserId = (authUser?.uid ?? userModel?.uid ?? '').trim();
+          final currentPhone = (authUser?.phoneNumber ?? userModel?.phone ?? ref.read(authProvider).phoneNumber).trim();
+
+          if (currentUserId.isNotEmpty || currentPhone.isNotEmpty) {
+            try {
+              final Map<String, QueryDocumentSnapshot<Map<String, dynamic>>> docMap = {};
+
+              if (currentUserId.isNotEmpty) {
+                final snapById = await FirebaseFirestore.instance
+                    .collection('orders')
+                    .where('customerId', isEqualTo: currentUserId)
+                    .get();
+                for (final docSnap in snapById.docs) {
+                  docMap[docSnap.id] = docSnap;
+                }
+              }
+
+              if (currentPhone.isNotEmpty) {
+                final snapByPhone = await FirebaseFirestore.instance
+                    .collection('orders')
+                    .where('customerPhone', isEqualTo: currentPhone)
+                    .get();
+                for (final docSnap in snapByPhone.docs) {
+                  docMap[docSnap.id] = docSnap;
+                }
+              }
+
+              int userUsageCount = 0;
+              final offerDocId = doc.id.trim();
+              final offerCouponCode = (data['coupon'] ?? data['couponCode'] ?? data['code'] ?? '').toString().trim().toUpperCase();
+              final matchCouponCode = offerCouponCode.isNotEmpty ? offerCouponCode : normalizedCode;
+
+              for (final oDoc in docMap.values) {
+                final oData = oDoc.data();
+                final oStatus = (oData['status'] ?? '').toString().toUpperCase();
+                if (oStatus == 'CANCELLED' || oStatus == 'REJECTED') {
+                  continue;
+                }
+                final oAppliedOfferId = (oData['appliedOfferId'] ?? '').toString().trim();
+                final oAppliedCoupon = (oData['appliedCoupon'] ?? '').toString().trim().toUpperCase();
+
+                bool matches = false;
+                if (oAppliedOfferId.isNotEmpty && oAppliedOfferId == offerDocId) {
+                  matches = true;
+                }
+                if (oAppliedCoupon.isNotEmpty) {
+                  if (oAppliedCoupon == matchCouponCode ||
+                      oAppliedCoupon == normalizedCode ||
+                      (offerCouponCode.isNotEmpty && oAppliedCoupon == offerCouponCode)) {
+                    matches = true;
+                  }
+                }
+
+                if (matches) {
+                  userUsageCount++;
+                }
+              }
+
+              debugPrint('[ApplyCoupon] PerUserCheck - Offer: $offerDocId ($matchCouponCode) | User: $currentUserId / $currentPhone | Count: $userUsageCount / Max: $maxUsesPerUser');
+
+              if (userUsageCount >= maxUsesPerUser) {
+                return const CouponApplyResult(
+                  isSuccess: false,
+                  message: 'You have already used this offer the maximum number of times.',
+                );
+              }
+            } catch (e) {
+              debugPrint('[CartNotifier] Error checking per-user offer limit: $e');
+            }
+          }
         }
 
         // Strict Restaurant ID & Branch ID validation

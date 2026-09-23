@@ -941,16 +941,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                           ),
                         if (taxPercentage > 0 && effectiveGstAmount > 0)
                           _buildRecapRow(
-                            (deliveryCalcResult?.branchGstNumber != null && deliveryCalcResult!.branchGstNumber.isNotEmpty)
-                                ? 'Govt Taxes & GST (${taxPercentage.toStringAsFixed(taxPercentage.truncateToDouble() == taxPercentage ? 0 : 1)}% • GSTIN: ${deliveryCalcResult.branchGstNumber})'
-                                : 'Govt Taxes & GST (${taxPercentage.toStringAsFixed(taxPercentage.truncateToDouble() == taxPercentage ? 0 : 1)}%)',
+                            'Govt Taxes & GST (${taxPercentage.toStringAsFixed(taxPercentage.truncateToDouble() == taxPercentage ? 0 : 1)}%)',
                             '₹${effectiveGstAmount.toStringAsFixed(2)}',
-                            isDark,
-                          )
-                        else if (deliveryCalcResult?.branchGstNumber != null && deliveryCalcResult!.branchGstNumber.isNotEmpty)
-                          _buildRecapRow(
-                            'Branch GSTIN',
-                            deliveryCalcResult!.branchGstNumber,
                             isDark,
                           ),
 

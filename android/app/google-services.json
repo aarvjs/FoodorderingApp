@@ -7,9 +7,47 @@
   "client": [
     {
       "client_info": {
+        "mobilesdk_app_id": "1:385778712226:android:1e842caa64adf16472e1fb",
+        "android_client_info": {
+          "package_name": "com.deliverypartner"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBa4XElGd_jMr6rojcS3OozkWSBHrLdHUA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
         "mobilesdk_app_id": "1:385778712226:android:88650771bc09b61a72e1fb",
         "android_client_info": {
           "package_name": "com.example.food_ordering_app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBa4XElGd_jMr6rojcS3OozkWSBHrLdHUA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:385778712226:android:2f2154ce6c52f7e072e1fb",
+        "android_client_info": {
+          "package_name": "com.perfectpizza.fooddelivery"
         }
       },
       "oauth_client": [],

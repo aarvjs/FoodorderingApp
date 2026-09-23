@@ -22,6 +22,7 @@ final comboRepositoryProvider = Provider<ComboRepository>((ref) {
 
 /// Stream provider family for restaurant combos
 final restaurantCombosStreamProvider = StreamProvider.family<List<ComboModel>, String>((ref, restaurantId) {
+  ref.watch(clockTickProvider);
   final repo = ref.watch(comboRepositoryProvider);
   final detailsAsync = ref.watch(restaurantDetailsStreamProvider(restaurantId));
   final restaurant = detailsAsync.value;
@@ -55,6 +56,7 @@ final restaurantMenuStreamProvider = StreamProvider.family<List<FoodItem>, Strin
 
 /// Stream provider family for a single dynamic combo doc (real-time active/inactive status)
 final singleComboStreamProvider = StreamProvider.family<ComboModel?, String>((ref, comboId) {
+  ref.watch(clockTickProvider);
   final repo = ref.watch(comboRepositoryProvider);
   return repo.streamSingleCombo(comboId);
 });

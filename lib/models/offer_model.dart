@@ -26,6 +26,7 @@ class OfferModel {
   final String? endTime;
   final List<String> applicableDays;
   final int usageLimit;
+  final int maxUsesPerUser;
   final int usageCount;
   final int remainingUses;
   final double minimumOrderAmount;
@@ -56,6 +57,7 @@ class OfferModel {
     this.endTime,
     this.applicableDays = const [],
     this.usageLimit = 0,
+    this.maxUsesPerUser = 0,
     this.usageCount = 0,
     this.remainingUses = 0,
     this.minimumOrderAmount = 0.0,
@@ -95,6 +97,9 @@ class OfferModel {
 
     final uLimit = (data['usageLimit'] ?? 0);
     final uLimitVal = (uLimit is num) ? uLimit.toInt() : int.tryParse(uLimit.toString()) ?? 0;
+
+    final mUsesUser = (data['maxUsesPerUser'] ?? 0);
+    final mUsesUserVal = (mUsesUser is num) ? mUsesUser.toInt() : int.tryParse(mUsesUser.toString()) ?? 0;
 
     final uCount = (data['usageCount'] ?? 0);
     final uCountVal = (uCount is num) ? uCount.toInt() : int.tryParse(uCount.toString()) ?? 0;
@@ -176,6 +181,7 @@ class OfferModel {
       endTime: eTime,
       applicableDays: daysList,
       usageLimit: uLimitVal,
+      maxUsesPerUser: mUsesUserVal,
       usageCount: uCountVal,
       remainingUses: remUsesVal,
       minimumOrderAmount: minOrdVal,

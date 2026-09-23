@@ -19,7 +19,6 @@ import 'package:flutter/services.dart';
 import '../../core/utils/snackbar_utils.dart';
 import '../../models/offer_model.dart';
 import '../../models/combo_item_model.dart';
-import '../../models/cart_item.dart';
 import '../home/providers/restaurant_providers.dart';
 import '../product/combo_customization_sheet.dart';
 
@@ -71,15 +70,18 @@ class _RestaurantDetailsScreenState extends ConsumerState<RestaurantDetailsScree
     ComboModel combo,
     Restaurant restaurant,
   ) {
-    final bool isComboActive = combo.isActive;
-    if (!isComboActive) {
+    final String targetBranchId = (restaurant.branchId.isNotEmpty)
+        ? restaurant.branchId
+        : (restaurant.id.isNotEmpty ? restaurant.id : item.restaurantId);
+
+    final liveComboAsync = ref.read(singleComboStreamProvider(combo.id));
+    final liveCombo = liveComboAsync.value ?? combo;
+
+    if (!liveCombo.isCurrentlyAvailableForBranch(targetBranchId)) {
       TopToast.show(context, 'This combo is currently unavailable.');
       return;
     }
 
-    final String targetBranchId = (restaurant.branchId.isNotEmpty)
-        ? restaurant.branchId
-        : (restaurant.id.isNotEmpty ? restaurant.id : item.restaurantId);
     final String targetRestId = (restaurant.restaurantId.isNotEmpty)
         ? restaurant.restaurantId
         : targetBranchId;
@@ -144,6 +146,13 @@ class _RestaurantDetailsScreenState extends ConsumerState<RestaurantDetailsScree
           child: Text('Outlet details unavailable.'),
         ),
       );
+    }
+
+    // Fallback nav selection if selected combo becomes inactive/unavailable
+    if (_selectedNavId != 'ALL' && _selectedNavId != 'MENU') {
+      if (!combosList.any((c) => c.id == _selectedNavId)) {
+        _selectedNavId = 'ALL';
+      }
     }
 
     // Filter menu items by search query

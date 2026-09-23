@@ -190,6 +190,7 @@ class OrderRepository {
       'rewardTransactionId': generatedRewardTxId ?? '',
       'rewardBranchId': rewardBranchId ?? (branchId.isNotEmpty ? branchId : restaurantId),
       'appliedCoupon': appliedCoupon ?? '',
+      'appliedOfferId': appliedOfferId ?? '',
       'branchGstNumber': branchGstNumber ?? '',
       'gstNumber': branchGstNumber ?? '',
       'branchFssaiNumber': branchFssaiNumber ?? '',
@@ -245,6 +246,65 @@ class OrderRepository {
 
           if (usageLimit > 0 && usageCount >= usageLimit) {
             throw Exception('Sorry, this offer has reached its usage limit.');
+          }
+
+          final mUsesUser = (data['maxUsesPerUser'] ?? 0);
+          final int maxUsesPerUser = (mUsesUser is num) ? mUsesUser.toInt() : int.tryParse(mUsesUser.toString()) ?? 0;
+          if (maxUsesPerUser > 0 && (customerId.isNotEmpty || customerPhone.isNotEmpty)) {
+            final Map<String, QueryDocumentSnapshot<Map<String, dynamic>>> docMap = {};
+
+            if (customerId.isNotEmpty) {
+              final snapById = await _firestore
+                  .collection('orders')
+                  .where('customerId', isEqualTo: customerId)
+                  .get();
+              for (final docSnap in snapById.docs) {
+                docMap[docSnap.id] = docSnap;
+              }
+            }
+
+            if (customerPhone.isNotEmpty) {
+              final snapByPhone = await _firestore
+                  .collection('orders')
+                  .where('customerPhone', isEqualTo: customerPhone)
+                  .get();
+              for (final docSnap in snapByPhone.docs) {
+                docMap[docSnap.id] = docSnap;
+              }
+            }
+
+            int userUsageCount = 0;
+            final offerDocId = offerSnap.id.trim();
+            final offerCoupon = (data['coupon'] ?? data['couponCode'] ?? '').toString().trim().toUpperCase();
+
+            for (final oDoc in docMap.values) {
+              final oData = oDoc.data();
+              final oStatus = (oData['status'] ?? '').toString().toUpperCase();
+              if (oStatus == 'CANCELLED' || oStatus == 'REJECTED') {
+                continue;
+              }
+              final oAppliedOfferId = (oData['appliedOfferId'] ?? '').toString().trim();
+              final oAppliedCoupon = (oData['appliedCoupon'] ?? '').toString().trim().toUpperCase();
+
+              bool matches = false;
+              if (oAppliedOfferId.isNotEmpty && oAppliedOfferId == offerDocId) {
+                matches = true;
+              }
+              if (oAppliedCoupon.isNotEmpty) {
+                if (oAppliedCoupon == offerCoupon ||
+                    (appliedCoupon != null && oAppliedCoupon == appliedCoupon.trim().toUpperCase())) {
+                  matches = true;
+                }
+              }
+
+              if (matches) {
+                userUsageCount++;
+              }
+            }
+
+            if (userUsageCount >= maxUsesPerUser) {
+              throw Exception('You have already used this offer the maximum number of times.');
+            }
           }
 
           final int newCount = usageCount + 1;

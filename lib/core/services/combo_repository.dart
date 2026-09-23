@@ -19,10 +19,6 @@ class ComboRepository {
         .handleError((err) {
           debugPrint('[ComboRepository] Firestore snapshot error on combos collection: $err');
         })
-        .asyncExpand((snapshot) async* {
-          yield snapshot;
-          yield* Stream.periodic(const Duration(seconds: 5), (_) => snapshot);
-        })
         .map((snapshot) {
       final list = snapshot.docs
           .map((doc) {
@@ -30,7 +26,7 @@ class ComboRepository {
             return ComboModel.fromFirestore(data, doc.id);
           })
           .where((combo) {
-            if (!combo.isActive) return false;
+            if (!combo.isCurrentlyAvailableForBranch(targetBranchId)) return false;
 
             final String cRestId = combo.restaurantId.trim();
             final String? cBranchId = combo.branchId?.trim();
@@ -81,10 +77,6 @@ class ComboRepository {
         .snapshots()
         .handleError((err) {
           debugPrint('[ComboRepository] Firestore snapshot error on comboItems collection: $err');
-        })
-        .asyncExpand((snapshot) async* {
-          yield snapshot;
-          yield* Stream.periodic(const Duration(seconds: 5), (_) => snapshot);
         })
         .map((snapshot) {
       final list = snapshot.docs

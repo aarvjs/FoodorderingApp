@@ -598,8 +598,9 @@ class ComboCalculator {
         if (selectedSet != null && selectedSet.isNotEmpty) {
           for (final option in varItem.options) {
             if (option.isActive && selectedSet.contains(option.id)) {
-              final qKey = '${varItem.id}:${option.id}';
-              final qty = optionQuantities?[qKey] ?? 1;
+              final qKey = '${variant.id}:${varItem.id}:${option.id}';
+              final legacyQKey = '${varItem.id}:${option.id}';
+              final qty = optionQuantities?[qKey] ?? optionQuantities?[legacyQKey] ?? 1;
               basePrice += option.unitPrice * qty;
             }
           }
@@ -608,8 +609,9 @@ class ComboCalculator {
           final countToTake = isSingle ? 1 : (varItem.minSelection > 0 ? varItem.minSelection : 1);
           final defaultOpts = varItem.options.where((o) => o.isActive).take(countToTake);
           for (final opt in defaultOpts) {
-            final qKey = '${varItem.id}:${opt.id}';
-            final qty = optionQuantities?[qKey] ?? 1;
+            final qKey = '${variant.id}:${varItem.id}:${opt.id}';
+            final legacyQKey = '${varItem.id}:${opt.id}';
+            final qty = optionQuantities?[qKey] ?? optionQuantities?[legacyQKey] ?? 1;
             basePrice += opt.unitPrice * qty;
           }
         }
@@ -617,6 +619,43 @@ class ComboCalculator {
     }
 
     return basePrice;
+  }
+
+  /// Calculates the final combo unit price for MULTIPLE selected variants.
+  static double calculateMultiVariantComboPrice({
+    required ComboItemModel currentItem,
+    required List<ComboItemVariant> selectedVariants,
+    required Map<String, Map<String, Set<String>>> variantOptionsMap,
+    Map<String, int>? optionQuantities,
+  }) {
+    if (currentItem.isVariantEnabled && selectedVariants.isNotEmpty) {
+      double grandTotal = 0.0;
+      for (final variant in selectedVariants) {
+        final variantOptions = variantOptionsMap[variant.id];
+        final basePrice = calculateVariantBasePrice(variant, variantOptions, optionQuantities);
+        double optionalAdditions = 0.0;
+
+        for (final varItem in variant.items) {
+          if (!varItem.isActive) continue;
+          if (!varItem.isRequired) {
+            final selectedSet = variantOptions?[varItem.id];
+            if (selectedSet != null && selectedSet.isNotEmpty) {
+              for (final option in varItem.options) {
+                if (option.isActive && selectedSet.contains(option.id)) {
+                  final qKey = '${variant.id}:${varItem.id}:${option.id}';
+                  final legacyQKey = '${varItem.id}:${option.id}';
+                  final qty = optionQuantities?[qKey] ?? optionQuantities?[legacyQKey] ?? 1;
+                  optionalAdditions += option.unitPrice * qty;
+                }
+              }
+            }
+          }
+        }
+        grandTotal += (basePrice + optionalAdditions);
+      }
+      return grandTotal;
+    }
+    return currentItem.price;
   }
 
   /// Calculates the final combo unit price.
@@ -638,8 +677,9 @@ class ComboCalculator {
           if (selectedSet != null && selectedSet.isNotEmpty) {
             for (final option in varItem.options) {
               if (option.isActive && selectedSet.contains(option.id)) {
-                final qKey = '${varItem.id}:${option.id}';
-                final qty = optionQuantities?[qKey] ?? 1;
+                final qKey = '${selectedVariant.id}:${varItem.id}:${option.id}';
+                final legacyQKey = '${varItem.id}:${option.id}';
+                final qty = optionQuantities?[qKey] ?? optionQuantities?[legacyQKey] ?? 1;
                 optionalAdditions += option.unitPrice * qty;
               }
             }

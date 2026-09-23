@@ -16,33 +16,13 @@ class RewardsScreen extends ConsumerStatefulWidget {
 class _RewardsScreenState extends ConsumerState<RewardsScreen> {
   int _unclaimedPoints = 0;
   bool _isSyncing = false;
-  double _pointValue = 0.25;
-
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _loadConfigAndSync();
+      _checkUnclaimedAndSync(showToast: false);
     });
-  }
-
-  Future<void> _loadConfigAndSync() async {
-    final userModel = ref.read(authProvider).userModel;
-    final userId = userModel?.uid ?? '';
-    if (userId.isEmpty) return;
-
-    try {
-      final repo = ref.read(rewardRepositoryProvider);
-      final config = await repo.getRewardConfigByBranch('ALL', '');
-      if (config != null) {
-        setState(() {
-          _pointValue = config.pointValue;
-        });
-      }
-    } catch (_) {}
-
-    await _checkUnclaimedAndSync(showToast: false);
   }
 
   Future<void> _checkUnclaimedAndSync({bool showToast = false}) async {
@@ -186,45 +166,30 @@ class _RewardsScreenState extends ConsumerState<RewardsScreen> {
                     const SizedBox(height: 12),
                     pointsAsync.when(
                       data: (pts) {
-                        final rupeeValue = pts * _pointValue;
-                        return Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                        return Row(
+                          crossAxisAlignment: CrossAxisAlignment.baseline,
+                          textBaseline: TextBaseline.alphabetic,
                           children: [
-                            Row(
-                              crossAxisAlignment: CrossAxisAlignment.baseline,
-                              textBaseline: TextBaseline.alphabetic,
-                              children: [
-                                const Text(
-                                  '⭐ ',
-                                  style: TextStyle(fontSize: 28),
-                                ),
-                                Text(
-                                  '$pts',
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 38,
-                                    fontWeight: FontWeight.w900,
-                                    letterSpacing: -0.5,
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                const Text(
-                                  'Points',
-                                  style: TextStyle(
-                                    color: Colors.white70,
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                              ],
+                            const Text(
+                              '⭐ ',
+                              style: TextStyle(fontSize: 28),
                             ),
-                            const SizedBox(height: 4),
                             Text(
-                              'Equivalent Cash Value: ₹${rupeeValue.toStringAsFixed(2)} (1 Pt = ₹${_pointValue.toStringAsFixed(2)})',
+                              '$pts',
                               style: const TextStyle(
-                                color: Color(0xFFFFE082),
-                                fontSize: 12,
-                                fontWeight: FontWeight.bold,
+                                color: Colors.white,
+                                fontSize: 38,
+                                fontWeight: FontWeight.w900,
+                                letterSpacing: -0.5,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            const Text(
+                              'Points',
+                              style: TextStyle(
+                                color: Colors.white70,
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
                               ),
                             ),
                           ],
