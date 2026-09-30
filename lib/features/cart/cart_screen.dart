@@ -416,6 +416,14 @@ class _CartScreenState extends ConsumerState<CartScreen> {
                                          ],
                                        ),
 
+                                       if (item.isCombo && item.comboName != null && item.comboName!.isNotEmpty)
+                                         Padding(
+                                           padding: const EdgeInsets.only(top: 2),
+                                           child: Text(
+                                             'Combo: ${item.comboName}',
+                                             style: TextStyle(fontSize: 12, color: Colors.orange.shade800, fontWeight: FontWeight.w600),
+                                           ),
+                                         ),
                                        // Combo Breakdown Details
                                        if (item.removedItems.isNotEmpty)
                                          Padding(

@@ -33,6 +33,9 @@ class OfferModel {
   final double discountValue;
   final double maximumDiscountAmount;
   final List<String> excludedCategoryIds;
+  final List<String> excludedProductIds;
+  final List<String> excludedComboIds;
+  final Map<String, List<String>> excludedComboProductIds;
 
   const OfferModel({
     required this.id,
@@ -64,6 +67,9 @@ class OfferModel {
     this.discountValue = 0.0,
     this.maximumDiscountAmount = 0.0,
     this.excludedCategoryIds = const [],
+    this.excludedProductIds = const [],
+    this.excludedComboIds = const [],
+    this.excludedComboProductIds = const {},
   });
 
   String get formattedDiscount {
@@ -129,6 +135,28 @@ class OfferModel {
       excludedList = rawExcluded.map((e) => e.toString()).toList();
     }
 
+    final rawExProducts = data['excludedProductIds'];
+    List<String> exProductsList = [];
+    if (rawExProducts is List) {
+      exProductsList = rawExProducts.map((e) => e.toString().trim()).toList();
+    }
+
+    final rawExCombos = data['excludedComboIds'];
+    List<String> exCombosList = [];
+    if (rawExCombos is List) {
+      exCombosList = rawExCombos.map((e) => e.toString().trim()).toList();
+    }
+
+    final rawExComboProds = data['excludedComboProductIds'];
+    Map<String, List<String>> exComboProdsMap = {};
+    if (rawExComboProds is Map) {
+      rawExComboProds.forEach((key, value) {
+        if (value is List) {
+          exComboProdsMap[key.toString().trim()] = value.map((e) => e.toString().trim()).toList();
+        }
+      });
+    }
+
     final rawBranchIds = data['branchIds'];
     List<String> bIdsList = [];
     if (rawBranchIds is List) {
@@ -188,6 +216,9 @@ class OfferModel {
       discountValue: discVal,
       maximumDiscountAmount: maxDiscVal,
       excludedCategoryIds: excludedList,
+      excludedProductIds: exProductsList,
+      excludedComboIds: exCombosList,
+      excludedComboProductIds: exComboProdsMap,
     );
   }
 }

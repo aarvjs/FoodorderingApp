@@ -298,9 +298,10 @@ class OrdersScreen extends ConsumerWidget {
               ),
               const Gap(6),
               ...order.items.map((item) {
-                final String name = item.isCombo && item.comboName != null && item.comboName!.isNotEmpty
+                final String productName = item.foodItem.name;
+                final String? comboTitle = item.isCombo && item.comboName != null && item.comboName!.isNotEmpty
                     ? item.comboName!
-                    : item.foodItem.name;
+                    : null;
                 final double unitP = item.unitPrice;
                 final int qty = item.quantity;
                 final double totalP = item.totalPrice;
@@ -321,7 +322,7 @@ class OrdersScreen extends ConsumerWidget {
                         children: [
                           Expanded(
                             child: Text(
-                              name,
+                              productName,
                               style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
                             ),
                           ),
@@ -343,6 +344,17 @@ class OrdersScreen extends ConsumerWidget {
                             ),
                         ],
                       ),
+                      if (comboTitle != null) ...[
+                        const Gap(2),
+                        Text(
+                          'Combo: $comboTitle',
+                          style: TextStyle(
+                            fontSize: 10.5,
+                            fontWeight: FontWeight.w600,
+                            color: isDark ? Colors.amber.shade300 : Colors.amber.shade900,
+                          ),
+                        ),
+                      ],
                       if (item.selectedSize != null && item.selectedSize!.isNotEmpty) ...[
                         const Gap(2),
                         Text('Size: ${item.selectedSize}',
@@ -871,31 +883,35 @@ class _OrderBillSheet extends StatelessWidget {
               // Header
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        order.restaurantName,
-                        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
-                      ),
-                      if (order.branchName.isNotEmpty)
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
                         Text(
-                          '${order.branchName} Branch',
-                          style: const TextStyle(fontSize: 12, color: AppColors.textLight, fontWeight: FontWeight.bold),
+                          order.restaurantName,
+                          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
                         ),
-                      if (order.branchFssaiNumber != null && order.branchFssaiNumber!.isNotEmpty)
-                        Text(
-                          'FSSAI Lic. No.: ${order.branchFssaiNumber}',
-                          style: const TextStyle(fontSize: 11, color: AppColors.textLight, fontWeight: FontWeight.bold),
-                        ),
-                      if (order.branchGstNumber != null && order.branchGstNumber!.isNotEmpty)
-                        Text(
-                          'GSTIN: ${order.branchGstNumber}',
-                          style: const TextStyle(fontSize: 11, color: AppColors.textLight, fontWeight: FontWeight.bold),
-                        ),
-                    ],
+                        if (order.branchName.isNotEmpty)
+                          Text(
+                            '${order.branchName} Branch',
+                            style: const TextStyle(fontSize: 12, color: AppColors.textLight, fontWeight: FontWeight.bold),
+                          ),
+                        if (order.branchFssaiNumber != null && order.branchFssaiNumber!.isNotEmpty)
+                          Text(
+                            'FSSAI Lic. No.: ${order.branchFssaiNumber}',
+                            style: const TextStyle(fontSize: 11, color: AppColors.textLight, fontWeight: FontWeight.bold),
+                          ),
+                        if (order.branchGstNumber != null && order.branchGstNumber!.isNotEmpty)
+                          Text(
+                            'GSTIN: ${order.branchGstNumber}',
+                            style: const TextStyle(fontSize: 11, color: AppColors.textLight, fontWeight: FontWeight.bold),
+                          ),
+                      ],
+                    ),
                   ),
+                  const Gap(8),
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                     decoration: BoxDecoration(
@@ -919,30 +935,32 @@ class _OrderBillSheet extends StatelessWidget {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                    decoration: BoxDecoration(
-                      color: order.isTakeAway ? Colors.purple.shade50 : Colors.blue.shade50,
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: order.isTakeAway ? Colors.purple.shade200 : Colors.blue.shade200),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          order.isTakeAway ? '🛍️ TAKE AWAY / SELF PICKUP' : '🛵 DELIVERY ORDER',
-                          style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w900,
-                            color: order.isTakeAway ? Colors.purple.shade900 : Colors.blue.shade900,
-                          ),
+                  Flexible(
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: order.isTakeAway ? Colors.purple.shade50 : Colors.blue.shade50,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: order.isTakeAway ? Colors.purple.shade200 : Colors.blue.shade200),
+                      ),
+                      child: Text(
+                        order.isTakeAway ? '🛍️ TAKE AWAY' : '🛵 DELIVERY',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w900,
+                          color: order.isTakeAway ? Colors.purple.shade900 : Colors.blue.shade900,
                         ),
-                      ],
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
                   ),
-                  Text(
-                    'Order #$orderNum',
-                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, fontFamily: 'monospace'),
+                  const Gap(8),
+                  Flexible(
+                    child: Text(
+                      'Order #$orderNum',
+                      style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold, fontFamily: 'monospace'),
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ),
                 ],
               ),
@@ -982,9 +1000,10 @@ class _OrderBillSheet extends StatelessWidget {
 
               // Items List
               ...order.items.map((item) {
-                final String name = item.isCombo && item.comboName != null && item.comboName!.isNotEmpty
+                final String productName = item.foodItem.name;
+                final String? comboTitle = item.isCombo && item.comboName != null && item.comboName!.isNotEmpty
                     ? item.comboName!
-                    : item.foodItem.name;
+                    : null;
                 final double unitP = item.unitPrice;
                 final int qty = item.quantity;
                 final double totalP = item.totalPrice;
@@ -1009,7 +1028,7 @@ class _OrderBillSheet extends StatelessWidget {
                               children: [
                                 Expanded(
                                   child: Text(
-                                    name,
+                                    productName,
                                     style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
                                   ),
                                 ),
@@ -1036,6 +1055,17 @@ class _OrderBillSheet extends StatelessWidget {
                           ),
                         ],
                       ),
+                      if (comboTitle != null) ...[
+                        const Gap(2),
+                        Text(
+                          'Combo: $comboTitle',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: isDark ? Colors.amber.shade300 : Colors.amber.shade900,
+                          ),
+                        ),
+                      ],
                       if (item.selectedSize != null && item.selectedSize!.isNotEmpty) ...[
                         const Gap(2),
                         Text('Size: ${item.selectedSize}',

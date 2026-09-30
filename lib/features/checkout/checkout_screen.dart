@@ -1066,9 +1066,10 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
             children: cartState.items.asMap().entries.map((entry) {
               final idx = entry.key;
               final item = entry.value;
-              final String name = item.isCombo && item.comboName != null && item.comboName!.isNotEmpty
+              final String productName = item.foodItem.name;
+              final String? comboTitle = item.isCombo && item.comboName != null && item.comboName!.isNotEmpty
                   ? item.comboName!
-                  : item.foodItem.name;
+                  : null;
               final double unitP = item.unitPrice;
               final int qty = item.quantity;
               final double totalP = item.totalPrice;
@@ -1088,7 +1089,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                               children: [
                                 Expanded(
                                   child: Text(
-                                    name,
+                                    productName,
                                     style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
                                   ),
                                 ),
@@ -1112,6 +1113,17 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                                 ],
                               ],
                             ),
+                            if (comboTitle != null) ...[
+                              const Gap(2),
+                              Text(
+                                'Combo: $comboTitle',
+                                style: TextStyle(
+                                  fontSize: 11.5,
+                                  fontWeight: FontWeight.w600,
+                                  color: isDark ? Colors.amber.shade300 : Colors.amber.shade900,
+                                ),
+                              ),
+                            ],
                             if (item.selectedSize != null && item.selectedSize!.isNotEmpty) ...[
                               const Gap(2),
                               Text('Size: ${item.selectedSize}',

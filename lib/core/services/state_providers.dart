@@ -82,6 +82,9 @@ class CartState {
   final double discountPercentage;
   final double? appliedCouponMinOrder;
   final List<String>? appliedCouponExcludedCategories;
+  final List<String>? appliedCouponExcludedProductIds;
+  final List<String>? appliedCouponExcludedComboIds;
+  final Map<String, List<String>>? appliedCouponExcludedComboProductIds;
   final String? appliedDiscountType;
   final double? appliedDiscountValue;
   final double? appliedMaxDiscountCap;
@@ -99,6 +102,9 @@ class CartState {
     this.discountPercentage = 0.0,
     this.appliedCouponMinOrder,
     this.appliedCouponExcludedCategories,
+    this.appliedCouponExcludedProductIds,
+    this.appliedCouponExcludedComboIds,
+    this.appliedCouponExcludedComboProductIds,
     this.appliedDiscountType,
     this.appliedDiscountValue,
     this.appliedMaxDiscountCap,
@@ -166,6 +172,9 @@ class CartState {
     double? discountPercentage,
     double? appliedCouponMinOrder,
     List<String>? appliedCouponExcludedCategories,
+    List<String>? appliedCouponExcludedProductIds,
+    List<String>? appliedCouponExcludedComboIds,
+    Map<String, List<String>>? appliedCouponExcludedComboProductIds,
     String? appliedDiscountType,
     double? appliedDiscountValue,
     double? appliedMaxDiscountCap,
@@ -185,6 +194,9 @@ class CartState {
       discountPercentage: clearCoupon ? 0.0 : (discountPercentage ?? this.discountPercentage),
       appliedCouponMinOrder: clearCoupon ? null : (appliedCouponMinOrder ?? this.appliedCouponMinOrder),
       appliedCouponExcludedCategories: clearCoupon ? null : (appliedCouponExcludedCategories ?? this.appliedCouponExcludedCategories),
+      appliedCouponExcludedProductIds: clearCoupon ? null : (appliedCouponExcludedProductIds ?? this.appliedCouponExcludedProductIds),
+      appliedCouponExcludedComboIds: clearCoupon ? null : (appliedCouponExcludedComboIds ?? this.appliedCouponExcludedComboIds),
+      appliedCouponExcludedComboProductIds: clearCoupon ? null : (appliedCouponExcludedComboProductIds ?? this.appliedCouponExcludedComboProductIds),
       appliedDiscountType: clearCoupon ? null : (appliedDiscountType ?? this.appliedDiscountType),
       appliedDiscountValue: clearCoupon ? null : (appliedDiscountValue ?? this.appliedDiscountValue),
       appliedMaxDiscountCap: clearCoupon ? null : (appliedMaxDiscountCap ?? this.appliedMaxDiscountCap),
@@ -259,6 +271,68 @@ class CartNotifier extends Notifier<CartState> {
     return firstRestId != restaurantId && firstBranchId != restaurantId;
   }
 
+  String? checkItemExclusion({
+    required CartItem item,
+    required List<String> excludedProductIds,
+    required List<String> excludedComboIds,
+    required Map<String, List<String>> excludedComboProductIds,
+  }) {
+    final String foodItemId = item.foodItem.id.trim();
+
+    // 1. Menu item exclusion check
+    if (!item.isCombo) {
+      if (excludedProductIds.any((id) => id.trim().toLowerCase() == foodItemId.toLowerCase())) {
+        return 'This offer is not applicable to ${item.foodItem.name}.';
+      }
+    }
+
+    // 2. Entire combo exclusion check
+    if (item.isCombo) {
+      final comboId = (item.comboId ?? '').trim();
+      if (comboId.isNotEmpty && excludedComboIds.any((id) => id.trim().toLowerCase() == comboId.toLowerCase())) {
+        return 'This offer is not applicable to this combo.';
+      }
+
+      // 3. Partial product inside combo exclusion check
+      if (comboId.isNotEmpty) {
+        List<String> exComboProducts = excludedComboProductIds[comboId] ?? [];
+        if (exComboProducts.isEmpty) {
+          final entry = excludedComboProductIds.entries.firstWhere(
+            (e) => e.key.trim().toLowerCase() == comboId.toLowerCase(),
+            orElse: () => const MapEntry('', []),
+          );
+          exComboProducts = entry.value;
+        }
+
+        if (exComboProducts.isNotEmpty) {
+          final comboItemId = (item.comboItemId ?? '').trim();
+          bool isChildExcluded = exComboProducts.any((id) {
+            final cleanId = id.trim().toLowerCase();
+            return cleanId == foodItemId.toLowerCase() || (comboItemId.isNotEmpty && cleanId == comboItemId.toLowerCase());
+          });
+
+          if (!isChildExcluded && item.customizationSelections.isNotEmpty) {
+            for (final cust in item.customizationSelections) {
+              if (cust.productId != null && cust.productId!.trim().isNotEmpty) {
+                final cProdId = cust.productId!.trim().toLowerCase();
+                if (exComboProducts.any((id) => id.trim().toLowerCase() == cProdId)) {
+                  isChildExcluded = true;
+                  break;
+                }
+              }
+            }
+          }
+
+          if (isChildExcluded) {
+            return 'This offer is not applicable to ${item.foodItem.name} in this combo.';
+          }
+        }
+      }
+    }
+
+    return null;
+  }
+
   void _revalidateDiscounts() {
     if (state.items.isEmpty) {
       state = state.copyWith(clearCoupon: true, clearReward: true);
@@ -280,6 +354,24 @@ class CartNotifier extends Notifier<CartState> {
 
       final minReq = state.appliedCouponMinOrder ?? 0.0;
       final excludedCategories = state.appliedCouponExcludedCategories ?? [];
+      final excludedProductIds = state.appliedCouponExcludedProductIds ?? [];
+      final excludedComboIds = state.appliedCouponExcludedComboIds ?? [];
+      final excludedComboProductIds = state.appliedCouponExcludedComboProductIds ?? {};
+
+      // Check item exclusions
+      for (final item in state.items) {
+        final exclusionMsg = checkItemExclusion(
+          item: item,
+          excludedProductIds: excludedProductIds,
+          excludedComboIds: excludedComboIds,
+          excludedComboProductIds: excludedComboProductIds,
+        );
+        if (exclusionMsg != null) {
+          debugPrint('[CartNotifier] Auto-removing coupon "${state.appliedCoupon}": cart contains excluded item (${item.foodItem.name})');
+          state = state.copyWith(clearCoupon: true);
+          return;
+        }
+      }
 
       // Recalculate current eligible product subtotal for Menu + Combo items
       double eligibleSubtotal = 0.0;
@@ -755,6 +847,44 @@ class CartNotifier extends Notifier<CartState> {
           excludedCatList = rawExcluded.map((e) => e.toString().trim().toUpperCase()).toList();
         }
 
+        final rawExProducts = data['excludedProductIds'];
+        List<String> excludedProductIds = [];
+        if (rawExProducts is List) {
+          excludedProductIds = rawExProducts.map((e) => e.toString().trim()).toList();
+        }
+
+        final rawExCombos = data['excludedComboIds'];
+        List<String> excludedComboIds = [];
+        if (rawExCombos is List) {
+          excludedComboIds = rawExCombos.map((e) => e.toString().trim()).toList();
+        }
+
+        final rawExComboProds = data['excludedComboProductIds'];
+        Map<String, List<String>> excludedComboProductIds = {};
+        if (rawExComboProds is Map) {
+          rawExComboProds.forEach((key, value) {
+            if (value is List) {
+              excludedComboProductIds[key.toString().trim()] = value.map((e) => e.toString().trim()).toList();
+            }
+          });
+        }
+
+        // Validate Menu Product, Entire Combo, and Partial Combo Product exclusions
+        for (final item in state.items) {
+          final exclusionError = checkItemExclusion(
+            item: item,
+            excludedProductIds: excludedProductIds,
+            excludedComboIds: excludedComboIds,
+            excludedComboProductIds: excludedComboProductIds,
+          );
+          if (exclusionError != null) {
+            return CouponApplyResult(
+              isSuccess: false,
+              message: exclusionError,
+            );
+          }
+        }
+
         double eligibleSubtotal = 0.0;
         for (final item in state.items) {
           final itemCat = item.foodItem.category.trim().toUpperCase();
@@ -811,6 +941,9 @@ class CartNotifier extends Notifier<CartState> {
           discountPercentage: discountPctForCart,
           appliedCouponMinOrder: minOrderVal,
           appliedCouponExcludedCategories: excludedCatList,
+          appliedCouponExcludedProductIds: excludedProductIds,
+          appliedCouponExcludedComboIds: excludedComboIds,
+          appliedCouponExcludedComboProductIds: excludedComboProductIds,
           appliedDiscountType: discountType,
           appliedDiscountValue: rawDisc,
           appliedMaxDiscountCap: maxDiscountCap,
