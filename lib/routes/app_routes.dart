@@ -75,8 +75,11 @@ class AppRoutes {
       if (shouldPromptNotification) {
         context.go(notificationPermission);
       } else {
+        final bool profileSkipped = prefs.getBool('profile_prompt_skipped') ?? false;
         final userModel = ref.read(authProvider).userModel;
-        if (userModel?.fullName == null || userModel!.fullName!.trim().isEmpty) {
+        final bool hasName = userModel?.fullName != null && userModel!.fullName!.trim().isNotEmpty;
+
+        if (!profileSkipped && !hasName) {
           context.go(completeProfile);
         } else {
           context.go(home);

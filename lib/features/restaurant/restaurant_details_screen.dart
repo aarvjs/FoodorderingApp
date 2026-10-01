@@ -19,6 +19,7 @@ import 'package:flutter/services.dart';
 import '../../core/utils/snackbar_utils.dart';
 import '../../models/offer_model.dart';
 import '../../models/combo_item_model.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../home/providers/restaurant_providers.dart';
 import '../product/combo_customization_sheet.dart';
 
@@ -43,6 +44,33 @@ class _RestaurantDetailsScreenState extends ConsumerState<RestaurantDetailsScree
     _searchFocusNode.dispose();
     _menuSearchController.dispose();
     super.dispose();
+  }
+
+  Future<void> _makePhoneCall(String phone) async {
+    final cleanPhone = phone.replaceAll(RegExp(r'[^\d+]'), '');
+    if (cleanPhone.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Phone number unavailable.')),
+        );
+      }
+      return;
+    }
+
+    final Uri url = Uri(scheme: 'tel', path: cleanPhone);
+    try {
+      if (await canLaunchUrl(url)) {
+        await launchUrl(url);
+      } else {
+        await launchUrl(url, mode: LaunchMode.externalApplication);
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Unable to open phone dialer for $phone')),
+        );
+      }
+    }
   }
 
 
@@ -311,26 +339,37 @@ class _RestaurantDetailsScreenState extends ConsumerState<RestaurantDetailsScree
                             child: Row(
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
-                                // 📞 Branch Contact Number
+                                // 📞 Branch Contact Number (Tappable -> Native Dialer)
                                 Flexible(
                                   flex: 5,
-                                  child: Row(
-                                    children: [
-                                      const Icon(Icons.phone_in_talk_rounded, size: 14, color: AppColors.primary),
-                                      const Gap(6),
-                                      Expanded(
-                                        child: Text(
-                                          restaurant.phone.isNotEmpty ? restaurant.phone : 'N/A',
-                                          style: TextStyle(
-                                            fontSize: 12,
-                                            fontWeight: FontWeight.w700,
-                                            color: isDark ? Colors.white : AppColors.textDark,
+                                  child: InkWell(
+                                    onTap: restaurant.phone.trim().isNotEmpty
+                                        ? () => _makePhoneCall(restaurant.phone.trim())
+                                        : null,
+                                    borderRadius: BorderRadius.circular(6),
+                                    child: Row(
+                                      children: [
+                                        const Icon(Icons.phone_in_talk_rounded, size: 14, color: AppColors.primary),
+                                        const Gap(6),
+                                        Expanded(
+                                          child: Text(
+                                            restaurant.phone.trim().isNotEmpty ? restaurant.phone.trim() : 'N/A',
+                                            style: TextStyle(
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.w700,
+                                              color: restaurant.phone.trim().isNotEmpty
+                                                  ? (isDark ? AppColors.darkPrimary : AppColors.primary)
+                                                  : (isDark ? Colors.white : AppColors.textDark),
+                                              decoration: restaurant.phone.trim().isNotEmpty
+                                                  ? TextDecoration.underline
+                                                  : TextDecoration.none,
+                                            ),
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
                                           ),
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
                                         ),
-                                      ),
-                                    ],
+                                      ],
+                                    ),
                                   ),
                                 ),
 

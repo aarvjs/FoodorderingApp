@@ -4,6 +4,7 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:go_router/go_router.dart';
 import 'package:iconsax/iconsax.dart';
 import 'package:gap/gap.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/config/app_colors.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/location_provider.dart';
@@ -32,7 +33,18 @@ class _LocationConfirmScreenState extends ConsumerState<LocationConfirmScreen> {
     }
 
     if (mounted) {
-      context.push('/complete-profile');
+      final prefs = await SharedPreferences.getInstance();
+      final bool profileSkipped = prefs.getBool('profile_prompt_skipped') ?? false;
+      final userModel = ref.read(authProvider).userModel;
+      final bool hasName = userModel?.fullName != null && userModel!.fullName!.trim().isNotEmpty;
+
+      if (mounted) {
+        if (!profileSkipped && !hasName) {
+          context.push('/complete-profile');
+        } else {
+          context.go('/home');
+        }
+      }
     }
   }
 

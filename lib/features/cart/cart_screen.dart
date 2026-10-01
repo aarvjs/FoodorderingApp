@@ -15,6 +15,7 @@ import '../rewards/repositories/reward_repository.dart';
 import 'widgets/coupon_selection_bottom_sheet.dart';
 import '../home/providers/restaurant_providers.dart';
 import '../../models/restaurant.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class CartScreen extends ConsumerStatefulWidget {
   const CartScreen({super.key});
@@ -319,18 +320,35 @@ class _CartScreenState extends ConsumerState<CartScreen> {
                               ],
                               if (branchPhone.isNotEmpty) ...[
                                 const Gap(4),
-                                Row(
-                                  children: [
-                                    const Text('📞 ', style: TextStyle(fontSize: 13)),
-                                    Text(
-                                      branchPhone,
-                                      style: TextStyle(
-                                        fontSize: 12,
-                                        color: Colors.amber.shade800,
-                                        fontWeight: FontWeight.w600,
+                                InkWell(
+                                  onTap: () async {
+                                    final cleanPhone = branchPhone.replaceAll(RegExp(r'[^\d+]'), '');
+                                    if (cleanPhone.isNotEmpty) {
+                                      final Uri url = Uri(scheme: 'tel', path: cleanPhone);
+                                      try {
+                                        if (await canLaunchUrl(url)) {
+                                          await launchUrl(url);
+                                        } else {
+                                          await launchUrl(url, mode: LaunchMode.externalApplication);
+                                        }
+                                      } catch (_) {}
+                                    }
+                                  },
+                                  borderRadius: BorderRadius.circular(4),
+                                  child: Row(
+                                    children: [
+                                      const Text('📞 ', style: TextStyle(fontSize: 13)),
+                                      Text(
+                                        branchPhone,
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          color: Colors.amber.shade900,
+                                          fontWeight: FontWeight.w700,
+                                          decoration: TextDecoration.underline,
+                                        ),
                                       ),
-                                    ),
-                                  ],
+                                    ],
+                                  ),
                                 ),
                               ],
                               const Gap(8),

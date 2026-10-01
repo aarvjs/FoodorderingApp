@@ -154,8 +154,23 @@ class Restaurant {
     double userLng = 0.0,
     List<FoodItem> menuItems = const [],
   }) {
-    final String rName = (docData['restaurantName'] ?? docData['name'] ?? 'Restaurant').toString();
-    final String bName = (docData['branchName'] ?? docData['name'] ?? '').toString();
+    final String rawRestName = (docData['restaurantName'] ?? '').toString().trim();
+    final String rawBranchName = (docData['branchName'] ?? '').toString().trim();
+    final String rawName = (docData['name'] ?? '').toString().trim();
+
+    // Determine parent restaurant name (rName)
+    final String rName = rawRestName.isNotEmpty ? rawRestName : 'Restaurant';
+
+    // Determine current authoritative branch name (bName) matching Admin & Branch Manager Panels (name || branchName)
+    String bName = '';
+    if (rawName.isNotEmpty && rawName != rName) {
+      bName = rawName;
+    } else if (rawBranchName.isNotEmpty && rawBranchName != rName) {
+      bName = rawBranchName;
+    } else {
+      bName = rawName.isNotEmpty ? rawName : rawBranchName;
+    }
+
     final String combinedName = (bName.isNotEmpty && bName != rName) ? '$rName ($bName)' : rName;
 
     final String logo = (docData['logo'] ?? docData['logoUrl'] ?? '').toString();

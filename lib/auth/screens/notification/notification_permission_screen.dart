@@ -25,12 +25,18 @@ class _NotificationPermissionScreenState extends ConsumerState<NotificationPermi
     await prefs.setBool('has_prompted_notification_permission', true);
   }
 
-  void _advanceNext() {
+  Future<void> _advanceNext() async {
+    final prefs = await SharedPreferences.getInstance();
+    final bool profileSkipped = prefs.getBool('profile_prompt_skipped') ?? false;
     final userModel = ref.read(authProvider).userModel;
-    if (userModel?.fullName == null || userModel!.fullName!.trim().isEmpty) {
-      context.go('/complete-profile');
-    } else {
-      context.go('/home');
+    final bool hasName = userModel?.fullName != null && userModel!.fullName!.trim().isNotEmpty;
+
+    if (mounted) {
+      if (!profileSkipped && !hasName) {
+        context.go('/complete-profile');
+      } else {
+        context.go('/home');
+      }
     }
   }
 

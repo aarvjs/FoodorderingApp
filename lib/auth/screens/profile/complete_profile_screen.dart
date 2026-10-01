@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import 'package:iconsax/iconsax.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:gap/gap.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/config/app_colors.dart';
 import '../../providers/auth_provider.dart';
 
@@ -161,7 +162,11 @@ class _CompleteProfileScreenState extends ConsumerState<CompleteProfileScreen> {
     if (mounted) {
       setState(() => _isSaving = false);
       if (success || isSkip) {
-        context.go('/home');
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setBool('profile_prompt_skipped', true);
+        if (mounted) {
+          context.go('/home');
+        }
       } else {
         final state = ref.read(authProvider);
         ScaffoldMessenger.of(context).showSnackBar(
