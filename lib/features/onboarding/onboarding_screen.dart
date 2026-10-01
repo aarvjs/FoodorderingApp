@@ -49,7 +49,7 @@ const List<_SlideData> _kSlides = [
     subtitle:
         'Hot pizza, cheesy burgers and crispy fries cooked fresh and delivered to your door in minutes.',
     imageUrl:
-        'https://images.unsplash.com/photo-1513104890138-7c749659a591?w=900&q=90&auto=format&fit=crop',
+        'https://images.unsplash.com/photo-1604382354936-07c5d9983bd3?w=900&q=90&auto=format&fit=crop',
     gradientColors: [Color(0xFFFF6B35), Color(0xFFFF4D4F), Color(0xFF7C0A02)],
     floatingItems: [
       _FloatingItem(emoji: '🍕', topFrac: 0.06, leftFrac: 0.03, scale: 1.7, phaseOffset: 0.0),
@@ -66,7 +66,8 @@ const List<_SlideData> _kSlides = [
     title: 'Track Your\nOrder Live',
     subtitle:
         'Watch your Perfect Pizza rider on the map in real-time. Know exactly when your hot pizza will arrive at your door.',
-    imageUrl: 'assets/images/perfect_pizza_onboarding2.png',
+    imageUrl:
+        'https://images.unsplash.com/photo-1574071318508-1cdbab80d002?w=900&q=90&auto=format&fit=crop',
     gradientColors: [Color(0xFF0879C9), Color(0xFF005B9F), Color(0xFF003865)],
     floatingItems: [
       _FloatingItem(emoji: '🍕', topFrac: 0.07, leftFrac: 0.03, scale: 1.8, phaseOffset: 0.0),
@@ -84,7 +85,7 @@ const List<_SlideData> _kSlides = [
     subtitle:
         'Discover handpicked premium dining and street food with your family — with massive exclusive discounts.',
     imageUrl:
-        'https://images.unsplash.com/photo-1628840042765-356cda07504e?w=900&q=90&auto=format&fit=crop',
+        'https://images.unsplash.com/photo-1593560708920-61dd98c46a4e?w=900&q=90&auto=format&fit=crop',
     gradientColors: [Color(0xFF11998E), Color(0xFF38EF7D), Color(0xFF0A4A30)],
     floatingItems: [
       _FloatingItem(emoji: '🍽️', topFrac: 0.06, leftFrac: 0.03, scale: 1.7, phaseOffset: 0.0),

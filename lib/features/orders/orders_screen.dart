@@ -1154,13 +1154,11 @@ class _OrderBillSheet extends StatelessWidget {
                 _buildBillRow('Packaging Charge', '₹${order.packagingCharge.toStringAsFixed(2)}'),
               if (order.tax > 0)
                 _buildBillRow(
-                  (order.branchGstNumber != null && order.branchGstNumber!.isNotEmpty)
-                      ? 'Taxes & GST (${order.taxPercentage}% • GSTIN: ${order.branchGstNumber})'
-                      : 'Taxes & GST (${order.taxPercentage}%)',
+                  order.taxPercentage > 0
+                      ? 'Taxes & GST (${order.taxPercentage}%)'
+                      : 'Taxes & GST',
                   '₹${order.tax.toStringAsFixed(2)}',
-                )
-              else if (order.branchGstNumber != null && order.branchGstNumber!.isNotEmpty)
-                _buildBillRow('Branch GSTIN', order.branchGstNumber!),
+                ),
 
               const Divider(height: 20),
               Row(
