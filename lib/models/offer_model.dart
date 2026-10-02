@@ -129,25 +129,25 @@ class OfferModel {
       daysList = rawDays.map((e) => e.toString()).toList();
     }
 
-    final rawExcluded = data['excludedCategoryIds'];
+    final rawExcluded = data['excludedCategoryIds'] ?? data['excludedCategories'];
     List<String> excludedList = [];
     if (rawExcluded is List) {
-      excludedList = rawExcluded.map((e) => e.toString()).toList();
+      excludedList = rawExcluded.map((e) => e.toString().trim()).toList();
     }
 
-    final rawExProducts = data['excludedProductIds'];
+    final rawExProducts = data['excludedProductIds'] ?? data['excludedProducts'];
     List<String> exProductsList = [];
     if (rawExProducts is List) {
       exProductsList = rawExProducts.map((e) => e.toString().trim()).toList();
     }
 
-    final rawExCombos = data['excludedComboIds'];
+    final rawExCombos = data['excludedComboIds'] ?? data['excludedCombos'];
     List<String> exCombosList = [];
     if (rawExCombos is List) {
       exCombosList = rawExCombos.map((e) => e.toString().trim()).toList();
     }
 
-    final rawExComboProds = data['excludedComboProductIds'];
+    final rawExComboProds = data['excludedComboProductIds'] ?? data['excludedComboProducts'];
     Map<String, List<String>> exComboProdsMap = {};
     if (rawExComboProds is Map) {
       rawExComboProds.forEach((key, value) {

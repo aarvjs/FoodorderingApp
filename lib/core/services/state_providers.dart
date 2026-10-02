@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../../models/cart_item.dart';
+import '../../models/offer_model.dart';
 import '../../models/order.dart';
 import '../../auth/providers/auth_provider.dart';
 import 'order_repository.dart';
@@ -122,10 +123,89 @@ class CartState {
     return items.fold(0.0, (total, item) => total + item.totalPrice);
   }
 
+  double get eligibleSubtotal {
+    if (items.isEmpty) return 0.0;
+    if (appliedCoupon == null) return subtotal;
+
+    final exProds = appliedCouponExcludedProductIds ?? [];
+    final exCombos = appliedCouponExcludedComboIds ?? [];
+    final exComboProds = appliedCouponExcludedComboProductIds ?? {};
+
+    if (exProds.isEmpty && exCombos.isEmpty && exComboProds.isEmpty) {
+      return subtotal;
+    }
+
+    double sum = 0.0;
+    for (final item in items) {
+      final String fId = item.foodItem.id.trim().toUpperCase();
+      final String fName = item.foodItem.name.trim().toUpperCase();
+      final String cItemId = (item.comboItemId ?? '').trim().toUpperCase();
+      final String cId = (item.comboId ?? '').trim().toUpperCase();
+
+      bool isExcluded = false;
+
+      if (exProds.isNotEmpty) {
+        isExcluded = exProds.any((id) {
+          final clean = id.trim().toUpperCase();
+          return clean == fId || clean == fName || (cItemId.isNotEmpty && clean == cItemId);
+        });
+      }
+
+      if (!isExcluded && item.isCombo && cId.isNotEmpty && exCombos.isNotEmpty) {
+        isExcluded = exCombos.any((id) => id.trim().toUpperCase() == cId);
+      }
+
+      if (!isExcluded && item.isCombo && cId.isNotEmpty && exComboProds.isNotEmpty) {
+        List<String> childEx = exComboProds[cId] ?? [];
+        if (childEx.isEmpty) {
+          final entry = exComboProds.entries.firstWhere(
+            (e) => e.key.trim().toUpperCase() == cId,
+            orElse: () => const MapEntry('', []),
+          );
+          childEx = entry.value;
+        }
+        if (childEx.isNotEmpty) {
+          isExcluded = childEx.any((id) {
+            final clean = id.trim().toUpperCase();
+            return clean == fId || clean == fName || (cItemId.isNotEmpty && clean == cItemId);
+          });
+        }
+      }
+
+      if (!isExcluded) {
+        sum += item.totalPrice;
+      }
+    }
+    return sum;
+  }
+
   double get couponDiscount {
-    if (subtotal <= 0) return 0.0;
-    final val = (subtotal * discountPercentage).clamp(0.0, subtotal);
-    return double.parse(val.toStringAsFixed(2));
+    if (items.isEmpty || appliedCoupon == null) return 0.0;
+    final eligSub = eligibleSubtotal;
+    if (eligSub <= 0) return 0.0;
+
+    final minReq = appliedCouponMinOrder ?? 0.0;
+    if (minReq > 0 && eligSub < minReq) return 0.0;
+
+    final dType = (appliedDiscountType ?? '').toUpperCase();
+    final rawVal = appliedDiscountValue ?? 0.0;
+    final maxCap = appliedMaxDiscountCap ?? 0.0;
+
+    double amount = 0.0;
+    if (dType == 'FIXED_AMOUNT' || dType == 'FLAT' || (rawVal >= 100.0 && dType != 'PERCENTAGE')) {
+      amount = rawVal.clamp(0.0, eligSub);
+    } else if (rawVal > 0) {
+      final pct = (rawVal > 1.0) ? (rawVal / 100.0) : rawVal;
+      amount = eligSub * pct;
+      if (maxCap > 0 && amount > maxCap) {
+        amount = maxCap;
+      }
+    } else if (discountPercentage > 0) {
+      amount = eligSub * discountPercentage;
+    }
+
+    final clamped = amount.clamp(0.0, eligSub);
+    return double.parse(clamped.toStringAsFixed(2));
   }
 
   double get maxRewardEligibleSubtotal {
@@ -278,10 +358,14 @@ class CartNotifier extends Notifier<CartState> {
     required Map<String, List<String>> excludedComboProductIds,
   }) {
     final String foodItemId = item.foodItem.id.trim();
+    final String foodItemName = item.foodItem.name.trim();
 
     // 1. Menu item exclusion check
     if (!item.isCombo) {
-      if (excludedProductIds.any((id) => id.trim().toLowerCase() == foodItemId.toLowerCase())) {
+      if (excludedProductIds.any((id) {
+        final cleanId = id.trim().toLowerCase();
+        return cleanId == foodItemId.toLowerCase() || cleanId == foodItemName.toLowerCase();
+      })) {
         return 'This offer is not applicable to ${item.foodItem.name}.';
       }
     }
@@ -308,7 +392,9 @@ class CartNotifier extends Notifier<CartState> {
           final comboItemId = (item.comboItemId ?? '').trim();
           bool isChildExcluded = exComboProducts.any((id) {
             final cleanId = id.trim().toLowerCase();
-            return cleanId == foodItemId.toLowerCase() || (comboItemId.isNotEmpty && cleanId == comboItemId.toLowerCase());
+            return cleanId == foodItemId.toLowerCase() ||
+                   cleanId == foodItemName.toLowerCase() ||
+                   (comboItemId.isNotEmpty && cleanId == comboItemId.toLowerCase());
           });
 
           if (!isChildExcluded && item.customizationSelections.isNotEmpty) {
@@ -333,6 +419,55 @@ class CartNotifier extends Notifier<CartState> {
     return null;
   }
 
+  bool isItemExcludedForOffer({
+    required CartItem item,
+    required List<String> excludedProductIds,
+    required List<String> excludedComboIds,
+    required Map<String, List<String>> excludedComboProductIds,
+  }) {
+    final itemId = item.foodItem.id.trim().toUpperCase();
+    final itemName = item.foodItem.name.trim().toUpperCase();
+    final comboItemId = (item.comboItemId ?? '').trim().toUpperCase();
+
+    if (excludedProductIds.isNotEmpty) {
+      if (excludedProductIds.any((id) {
+        final cleanId = id.trim().toUpperCase();
+        return cleanId == itemId || cleanId == itemName || (comboItemId.isNotEmpty && cleanId == comboItemId);
+      })) {
+        return true;
+      }
+    }
+
+    final exclusionMsg = checkItemExclusion(
+      item: item,
+      excludedProductIds: excludedProductIds,
+      excludedComboIds: excludedComboIds,
+      excludedComboProductIds: excludedComboProductIds,
+    );
+
+    return exclusionMsg != null;
+  }
+
+  double calculateEligibleSubtotalForOffer({
+    required List<String> excludedProductIds,
+    required List<String> excludedComboIds,
+    required Map<String, List<String>> excludedComboProductIds,
+  }) {
+    double eligibleSubtotal = 0.0;
+    for (final item in state.items) {
+      final bool isExcluded = isItemExcludedForOffer(
+        item: item,
+        excludedProductIds: excludedProductIds,
+        excludedComboIds: excludedComboIds,
+        excludedComboProductIds: excludedComboProductIds,
+      );
+      if (!isExcluded) {
+        eligibleSubtotal += item.totalPrice;
+      }
+    }
+    return eligibleSubtotal;
+  }
+
   void _revalidateDiscounts() {
     if (state.items.isEmpty) {
       state = state.copyWith(clearCoupon: true, clearReward: true);
@@ -353,61 +488,21 @@ class CartNotifier extends Notifier<CartState> {
       }
 
       final minReq = state.appliedCouponMinOrder ?? 0.0;
-      final excludedCategories = state.appliedCouponExcludedCategories ?? [];
       final excludedProductIds = state.appliedCouponExcludedProductIds ?? [];
       final excludedComboIds = state.appliedCouponExcludedComboIds ?? [];
       final excludedComboProductIds = state.appliedCouponExcludedComboProductIds ?? {};
 
-      // Check item exclusions
-      for (final item in state.items) {
-        final exclusionMsg = checkItemExclusion(
-          item: item,
-          excludedProductIds: excludedProductIds,
-          excludedComboIds: excludedComboIds,
-          excludedComboProductIds: excludedComboProductIds,
-        );
-        if (exclusionMsg != null) {
-          debugPrint('[CartNotifier] Auto-removing coupon "${state.appliedCoupon}": cart contains excluded item (${item.foodItem.name})');
-          state = state.copyWith(clearCoupon: true);
-          return;
-        }
-      }
-
       // Recalculate current eligible product subtotal for Menu + Combo items
-      double eligibleSubtotal = 0.0;
-      for (final item in state.items) {
-        final itemCat = item.foodItem.category.trim().toUpperCase();
-        final itemId = item.foodItem.id.trim().toUpperCase();
-        final bool isExcluded = excludedCategories.any((cat) => cat.toUpperCase() == itemCat || cat.toUpperCase() == itemId);
-        if (!isExcluded) {
-          eligibleSubtotal += item.totalPrice;
-        }
-      }
+      final double eligibleSubtotal = calculateEligibleSubtotalForOffer(
+        excludedProductIds: excludedProductIds,
+        excludedComboIds: excludedComboIds,
+        excludedComboProductIds: excludedComboProductIds,
+      );
 
-      // If current eligible subtotal < coupon minimum order requirement, auto-remove coupon
-      if (minReq > 0 && eligibleSubtotal < minReq) {
+      // If current eligible subtotal <= 0 or < coupon minimum order requirement, auto-remove coupon
+      if (eligibleSubtotal <= 0 || (minReq > 0 && eligibleSubtotal < minReq)) {
         debugPrint('[CartNotifier] Auto-removing coupon "${state.appliedCoupon}": eligible subtotal (₹$eligibleSubtotal) < minOrder (₹$minReq)');
         state = state.copyWith(clearCoupon: true);
-      } else {
-        // Recalculate discount percentage / amount for updated subtotal
-        final discountType = state.appliedDiscountType ?? '';
-        final rawDisc = state.appliedDiscountValue ?? 0.0;
-        final maxDiscountCap = state.appliedMaxDiscountCap ?? 0.0;
-
-        if (rawDisc > 0 && state.subtotal > 0) {
-          double finalDiscountAmount = 0.0;
-          if (discountType == 'FIXED_AMOUNT' || discountType == 'FLAT' || (rawDisc >= 100.0 && discountType != 'PERCENTAGE')) {
-            finalDiscountAmount = rawDisc.clamp(0.0, eligibleSubtotal);
-          } else {
-            final pct = (rawDisc > 1.0) ? (rawDisc / 100.0) : rawDisc;
-            finalDiscountAmount = eligibleSubtotal * pct;
-            if (maxDiscountCap > 0 && finalDiscountAmount > maxDiscountCap) {
-              finalDiscountAmount = maxDiscountCap;
-            }
-          }
-          final double newDiscountPct = (finalDiscountAmount / state.subtotal).clamp(0.0, 1.0);
-          state = state.copyWith(discountPercentage: newDiscountPct);
-        }
       }
     }
   }
@@ -497,8 +592,16 @@ class CartNotifier extends Notifier<CartState> {
   }
 
   Future<CouponApplyResult> applyOffer(dynamic offer) async {
-    final code = (offer is String) ? offer : (offer.couponCode ?? '').toString();
-    return applyCoupon(code);
+    if (offer is OfferModel) {
+      return applyCoupon(offer.couponCode, targetOfferId: offer.id);
+    } else if (offer is Map) {
+      final code = (offer['couponCode'] ?? offer['coupon'] ?? offer['code'] ?? '').toString();
+      final id = (offer['id'] ?? offer['_id'] ?? '').toString();
+      return applyCoupon(code, targetOfferId: id.isNotEmpty ? id : null);
+    } else {
+      final code = (offer ?? '').toString();
+      return applyCoupon(code);
+    }
   }
 
   int? _parseTimeToMinutes(String timeStr) {
@@ -519,9 +622,11 @@ class CartNotifier extends Notifier<CartState> {
     return null;
   }
 
-  Future<CouponApplyResult> applyCoupon(String code) async {
+  Future<CouponApplyResult> applyCoupon(String code, {String? targetOfferId}) async {
     final normalizedCode = code.trim().toUpperCase();
-    if (normalizedCode.isEmpty) {
+    final cleanTargetOfferId = (targetOfferId ?? '').trim();
+
+    if (normalizedCode.isEmpty && cleanTargetOfferId.isEmpty) {
       return const CouponApplyResult(
         isSuccess: false,
         message: 'Please enter a coupon code.',
@@ -536,27 +641,29 @@ class CartNotifier extends Notifier<CartState> {
     }
 
     // 1. Check legacy hardcoded coupons
-    if (normalizedCode == 'WELCOME50') {
-      state = state.copyWith(appliedCoupon: 'WELCOME50', appliedOfferId: null, discountPercentage: 0.50);
-      return const CouponApplyResult(
-        isSuccess: true,
-        message: 'Coupon "WELCOME50" applied successfully!',
-        appliedCode: 'WELCOME50',
-      );
-    } else if (normalizedCode == 'BINGE20') {
-      state = state.copyWith(appliedCoupon: 'BINGE20', appliedOfferId: null, discountPercentage: 0.20);
-      return const CouponApplyResult(
-        isSuccess: true,
-        message: 'Coupon "BINGE20" applied successfully!',
-        appliedCode: 'BINGE20',
-      );
-    } else if (normalizedCode == 'FREEDEL') {
-      state = state.copyWith(appliedCoupon: 'FREEDEL', appliedOfferId: null, discountPercentage: 0.05);
-      return const CouponApplyResult(
-        isSuccess: true,
-        message: 'Coupon "FREEDEL" applied successfully!',
-        appliedCode: 'FREEDEL',
-      );
+    if (cleanTargetOfferId.isEmpty) {
+      if (normalizedCode == 'WELCOME50') {
+        state = state.copyWith(appliedCoupon: 'WELCOME50', appliedOfferId: null, discountPercentage: 0.50);
+        return const CouponApplyResult(
+          isSuccess: true,
+          message: 'Coupon "WELCOME50" applied successfully!',
+          appliedCode: 'WELCOME50',
+        );
+      } else if (normalizedCode == 'BINGE20') {
+        state = state.copyWith(appliedCoupon: 'BINGE20', appliedOfferId: null, discountPercentage: 0.20);
+        return const CouponApplyResult(
+          isSuccess: true,
+          message: 'Coupon "BINGE20" applied successfully!',
+          appliedCode: 'BINGE20',
+        );
+      } else if (normalizedCode == 'FREEDEL') {
+        state = state.copyWith(appliedCoupon: 'FREEDEL', appliedOfferId: null, discountPercentage: 0.05);
+        return const CouponApplyResult(
+          isSuccess: true,
+          message: 'Coupon "FREEDEL" applied successfully!',
+          appliedCode: 'FREEDEL',
+        );
+      }
     }
 
     // 2. Validate against Firestore `offers` collection documents
@@ -625,15 +732,18 @@ class CartNotifier extends Notifier<CartState> {
 
       for (var doc in snap.docs) {
         final data = doc.data();
-        
-        // Coupon code field (supports 'coupon', 'couponCode', 'code', or 'OFFER' fallback)
         final rawCoupon = (data['coupon'] ?? data['couponCode'] ?? data['code'] ?? '').toString().trim().toUpperCase();
-        final fallbackCoupon = 'OFFER${doc.id.substring(0, doc.id.length > 4 ? 4 : doc.id.length).toUpperCase()}';
-        
-        final matchCode = (rawCoupon.isNotEmpty && rawCoupon == normalizedCode) ||
-            (fallbackCoupon == normalizedCode);
 
-        if (!matchCode) continue;
+        if (cleanTargetOfferId.isNotEmpty) {
+          if (doc.id.trim() != cleanTargetOfferId) continue;
+        } else {
+          final fallbackCoupon = 'OFFER${doc.id.substring(0, doc.id.length > 4 ? 4 : doc.id.length).toUpperCase()}';
+          
+          final matchCode = (rawCoupon.isNotEmpty && rawCoupon == normalizedCode) ||
+              (fallbackCoupon == normalizedCode);
+
+          if (!matchCode) continue;
+        }
 
         // Requirement 9: Is offer active?
         final status = (data['status'] ?? 'ACTIVE').toString().toUpperCase();
@@ -840,26 +950,19 @@ class CartNotifier extends Notifier<CartState> {
           }
         }
 
-        // Requirement 7: Exclude Categories check & calculate eligible subtotal
-        final rawExcluded = data['excludedCategoryIds'];
-        List<String> excludedCatList = [];
-        if (rawExcluded is List) {
-          excludedCatList = rawExcluded.map((e) => e.toString().trim().toUpperCase()).toList();
-        }
-
-        final rawExProducts = data['excludedProductIds'];
+        final rawExProducts = data['excludedProductIds'] ?? data['excludedProducts'];
         List<String> excludedProductIds = [];
         if (rawExProducts is List) {
           excludedProductIds = rawExProducts.map((e) => e.toString().trim()).toList();
         }
 
-        final rawExCombos = data['excludedComboIds'];
+        final rawExCombos = data['excludedComboIds'] ?? data['excludedCombos'];
         List<String> excludedComboIds = [];
         if (rawExCombos is List) {
           excludedComboIds = rawExCombos.map((e) => e.toString().trim()).toList();
         }
 
-        final rawExComboProds = data['excludedComboProductIds'];
+        final rawExComboProds = data['excludedComboProductIds'] ?? data['excludedComboProducts'];
         Map<String, List<String>> excludedComboProductIds = {};
         if (rawExComboProds is Map) {
           rawExComboProds.forEach((key, value) {
@@ -869,36 +972,16 @@ class CartNotifier extends Notifier<CartState> {
           });
         }
 
-        // Validate Menu Product, Entire Combo, and Partial Combo Product exclusions
-        for (final item in state.items) {
-          final exclusionError = checkItemExclusion(
-            item: item,
-            excludedProductIds: excludedProductIds,
-            excludedComboIds: excludedComboIds,
-            excludedComboProductIds: excludedComboProductIds,
-          );
-          if (exclusionError != null) {
-            return CouponApplyResult(
-              isSuccess: false,
-              message: exclusionError,
-            );
-          }
-        }
-
-        double eligibleSubtotal = 0.0;
-        for (final item in state.items) {
-          final itemCat = item.foodItem.category.trim().toUpperCase();
-          final itemId = item.foodItem.id.trim().toUpperCase();
-          final bool isExcluded = excludedCatList.contains(itemCat) || excludedCatList.contains(itemId);
-          if (!isExcluded) {
-            eligibleSubtotal += item.totalPrice;
-          }
-        }
+        final double eligibleSubtotal = calculateEligibleSubtotalForOffer(
+          excludedProductIds: excludedProductIds,
+          excludedComboIds: excludedComboIds,
+          excludedComboProductIds: excludedComboProductIds,
+        );
 
         if (eligibleSubtotal <= 0) {
           return const CouponApplyResult(
             isSuccess: false,
-            message: 'Items in your cart belong to excluded categories for this offer.',
+            message: 'Items in your cart are excluded for this offer.',
           );
         }
 
@@ -940,7 +1023,6 @@ class CartNotifier extends Notifier<CartState> {
           appliedOfferId: doc.id,
           discountPercentage: discountPctForCart,
           appliedCouponMinOrder: minOrderVal,
-          appliedCouponExcludedCategories: excludedCatList,
           appliedCouponExcludedProductIds: excludedProductIds,
           appliedCouponExcludedComboIds: excludedComboIds,
           appliedCouponExcludedComboProductIds: excludedComboProductIds,

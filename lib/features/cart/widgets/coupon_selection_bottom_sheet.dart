@@ -47,18 +47,18 @@ class _CouponSelectionBottomSheetState extends ConsumerState<CouponSelectionBott
     super.dispose();
   }
 
-  Future<void> _handleApplyCode(String code) async {
-    final trimmed = code.trim();
-    if (trimmed.isEmpty) return;
+  Future<void> _handleApplyOffer(dynamic offer) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final navigator = Navigator.of(context);
 
     setState(() => _isApplyingCustomCode = true);
-    final result = await ref.read(cartProvider.notifier).applyCoupon(trimmed);
+    final result = await ref.read(cartProvider.notifier).applyOffer(offer);
     if (!mounted) return;
     setState(() => _isApplyingCustomCode = false);
 
     if (result.isSuccess) {
-      Navigator.of(context).pop();
-      ScaffoldMessenger.of(context).showSnackBar(
+      navigator.pop();
+      messenger.showSnackBar(
         SnackBar(
           content: Row(
             children: [
@@ -72,7 +72,51 @@ class _CouponSelectionBottomSheetState extends ConsumerState<CouponSelectionBott
         ),
       );
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(
+      messenger.showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              const Icon(Icons.error_outline_rounded, color: Colors.white, size: 18),
+              const Gap(8),
+              Expanded(child: Text(result.message, style: const TextStyle(fontWeight: FontWeight.bold))),
+            ],
+          ),
+          backgroundColor: AppColors.error,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+
+  Future<void> _handleApplyCode(String code) async {
+    final trimmed = code.trim();
+    if (trimmed.isEmpty) return;
+
+    final messenger = ScaffoldMessenger.of(context);
+    final navigator = Navigator.of(context);
+
+    setState(() => _isApplyingCustomCode = true);
+    final result = await ref.read(cartProvider.notifier).applyCoupon(trimmed);
+    if (!mounted) return;
+    setState(() => _isApplyingCustomCode = false);
+
+    if (result.isSuccess) {
+      navigator.pop();
+      messenger.showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              const Icon(Icons.check_circle_rounded, color: Colors.white, size: 18),
+              const Gap(8),
+              Expanded(child: Text(result.message, style: const TextStyle(fontWeight: FontWeight.bold))),
+            ],
+          ),
+          backgroundColor: AppColors.success,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } else {
+      messenger.showSnackBar(
         SnackBar(
           content: Row(
             children: [
@@ -337,9 +381,23 @@ class _CouponSelectionBottomSheetState extends ConsumerState<CouponSelectionBott
                         (cartState.appliedCoupon!.toUpperCase() == offer.couponCode.toUpperCase() ||
                             cartState.appliedCoupon!.toUpperCase() == offer.title.toUpperCase());
 
-                    final bool meetsMinOrder = offer.minimumOrder <= 0 || cartState.subtotal >= offer.minimumOrder;
-                    final double shortage = offer.minimumOrder > cartState.subtotal
-                        ? (offer.minimumOrder - cartState.subtotal)
+                    final double eligibleSubtotal = cartNotifier.calculateEligibleSubtotalForOffer(
+                      excludedProductIds: offer.excludedProductIds,
+                      excludedComboIds: offer.excludedComboIds,
+                      excludedComboProductIds: offer.excludedComboProductIds,
+                    );
+
+                    final bool hasEligibleItems = cartState.items.any((item) => !cartNotifier.isItemExcludedForOffer(
+                      item: item,
+                      excludedProductIds: offer.excludedProductIds,
+                      excludedComboIds: offer.excludedComboIds,
+                      excludedComboProductIds: offer.excludedComboProductIds,
+                    ));
+
+                    final double offerMinOrder = offer.minimumOrder > 0 ? offer.minimumOrder : offer.minimumOrderAmount;
+                    final bool meetsMinOrder = hasEligibleItems && (offerMinOrder <= 0 || eligibleSubtotal >= offerMinOrder);
+                    final double shortage = offerMinOrder > eligibleSubtotal
+                        ? (offerMinOrder - eligibleSubtotal)
                         : 0.0;
 
                     return Container(
@@ -550,7 +608,9 @@ class _CouponSelectionBottomSheetState extends ConsumerState<CouponSelectionBott
                                   Icon(Icons.info_outline_rounded, size: 13, color: Colors.orange.shade800),
                                   const Gap(4),
                                   Text(
-                                    'Add ₹${shortage.toStringAsFixed(0)} more items to unlock this coupon',
+                                    !hasEligibleItems
+                                        ? 'Items in your cart are excluded for this offer'
+                                        : 'Add ₹${shortage.toStringAsFixed(0)} more eligible items to unlock this coupon',
                                     style: TextStyle(
                                       fontSize: 11,
                                       fontWeight: FontWeight.w700,
@@ -649,7 +709,7 @@ class _CouponSelectionBottomSheetState extends ConsumerState<CouponSelectionBott
                                 ),
                               ] else ...[
                                 ElevatedButton(
-                                  onPressed: () => _handleApplyCode(offer.couponCode),
+                                  onPressed: () => _handleApplyOffer(offer),
                                   style: ElevatedButton.styleFrom(
                                     backgroundColor: isDark ? AppColors.darkPrimary : AppColors.primary,
                                     foregroundColor: isDark ? AppColors.textDark : Colors.white,

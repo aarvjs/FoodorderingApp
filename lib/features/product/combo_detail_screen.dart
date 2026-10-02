@@ -266,7 +266,7 @@ class ComboDetailScreen extends ConsumerWidget {
           // Items List Sliver
           SliverPadding(
             padding: const EdgeInsets.only(left: 16, right: 16, bottom: 40),
-            sliver: itemsAsync.isLoading && comboItems.isEmpty
+            sliver: (itemsAsync.isLoading && comboItems.isEmpty)
                 ? SliverList(
                     delegate: SliverChildBuilderDelegate(
                       (context, index) => Padding(
@@ -572,7 +572,8 @@ class ComboDetailScreen extends ConsumerWidget {
                                   ),
                                 ),
                               ),
-                            );
+                            ),
+                          );
                           },
                           childCount: comboItems.length,
                         ),

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -6,10 +7,72 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 @pragma('vm:entry-point')
 Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   await Firebase.initializeApp();
+
+  // Handle data-only push notifications in background / terminated states
+  if (message.notification == null && message.data.isNotEmpty) {
+    final data = message.data;
+    final title = data['title'] ?? 'Order Status Update';
+    final body = data['body'] ?? 'Your order status has been updated.';
+    final orderId = (data['orderId'] ?? '').toString();
+
+    final FlutterLocalNotificationsPlugin localNotifications = FlutterLocalNotificationsPlugin();
+
+    const AndroidNotificationChannel channel = AndroidNotificationChannel(
+      'order_status_notifications_v4',
+      'Order Updates',
+      description: 'Order status and delivery update notifications',
+      importance: Importance.max,
+      playSound: true,
+      sound: RawResourceAndroidNotificationSound('appsound'),
+      enableVibration: true,
+    );
+
+    final androidPlugin = localNotifications
+        .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
+
+    if (androidPlugin != null) {
+      await androidPlugin.createNotificationChannel(channel);
+    }
+
+    const AndroidInitializationSettings androidInitSettings =
+        AndroidInitializationSettings('@mipmap/ic_launcher');
+    const InitializationSettings initSettings = InitializationSettings(
+      android: androidInitSettings,
+    );
+
+    await localNotifications.initialize(settings: initSettings);
+
+    const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
+      'order_status_notifications_v4',
+      'Order Updates',
+      channelDescription: 'Order status updates',
+      importance: Importance.max,
+      priority: Priority.high,
+      playSound: true,
+      sound: RawResourceAndroidNotificationSound('appsound'),
+      icon: '@mipmap/ic_launcher',
+      ticker: 'Order Update',
+      visibility: NotificationVisibility.public,
+      enableVibration: true,
+    );
+
+    const NotificationDetails platformDetails = NotificationDetails(android: androidDetails);
+    final String notifKey = data['id'] ?? message.messageId ?? DateTime.now().millisecondsSinceEpoch.toString();
+    final int notificationId = notifKey.hashCode.abs() % 100000;
+
+    await localNotifications.show(
+      id: notificationId,
+      title: title,
+      body: body,
+      notificationDetails: platformDetails,
+      payload: orderId,
+    );
+  }
 }
 
 class NotificationService {
@@ -20,13 +83,17 @@ class NotificationService {
   final FirebaseMessaging _fcm = FirebaseMessaging.instance;
   final FlutterLocalNotificationsPlugin _localNotifications = FlutterLocalNotificationsPlugin();
 
-  static const String channelId = 'order_status_notifications_v3';
+  static const String channelId = 'order_status_notifications_v4';
   static const String channelName = 'Order Updates';
 
   bool _initialized = false;
   bool _spLoaded = false;
   GlobalKey<NavigatorState>? navigatorKey;
   final Set<String> _processedNotifIds = {};
+  final Map<String, String> _orderLastStatus = {};
+
+  StreamSubscription? _notifSubscription;
+  StreamSubscription? _orderSubscription;
 
   Future<void> _loadProcessedNotifIds() async {
     if (_spLoaded) return;
@@ -51,6 +118,92 @@ class NotificationService {
     } catch (_) {}
   }
 
+  bool _isEventProcessed({
+    required String orderId,
+    required String status,
+    String? docId,
+    String? customKey,
+  }) {
+    final cleanStatus = status.trim().toUpperCase();
+    final cleanOrderId = orderId.trim();
+
+    if (docId != null && docId.isNotEmpty && _processedNotifIds.contains(docId)) {
+      return true;
+    }
+    if (customKey != null && customKey.isNotEmpty && _processedNotifIds.contains(customKey)) {
+      return true;
+    }
+
+    if (cleanOrderId.isNotEmpty) {
+      if (cleanStatus.isNotEmpty) {
+        if (_processedNotifIds.contains('${cleanOrderId}_$cleanStatus') ||
+            _processedNotifIds.contains('notif_${cleanOrderId}_$cleanStatus') ||
+            _processedNotifIds.contains('order_status_${cleanOrderId}_$cleanStatus')) {
+          return true;
+        }
+      }
+
+      if (cleanStatus == 'PLACED' || cleanStatus == 'ORDER_CREATED') {
+        if (_processedNotifIds.contains('${cleanOrderId}_PLACED') ||
+            _processedNotifIds.contains('${cleanOrderId}_ORDER_CREATED') ||
+            _processedNotifIds.contains('notif_${cleanOrderId}_PLACED') ||
+            _processedNotifIds.contains('order_status_${cleanOrderId}_PLACED')) {
+          return true;
+        }
+      }
+
+      if (cleanStatus == 'PENDING') {
+        if (_processedNotifIds.contains('${cleanOrderId}_PENDING') ||
+            _processedNotifIds.contains('notif_${cleanOrderId}_PENDING') ||
+            _processedNotifIds.contains('order_status_${cleanOrderId}_PENDING')) {
+          return true;
+        }
+      }
+    }
+
+    return false;
+  }
+
+  void _markEventProcessed({
+    required String orderId,
+    required String status,
+    String? docId,
+    String? customKey,
+  }) {
+    final cleanStatus = status.trim().toUpperCase();
+    final cleanOrderId = orderId.trim();
+
+    if (docId != null && docId.isNotEmpty) {
+      _processedNotifIds.add(docId);
+    }
+    if (customKey != null && customKey.isNotEmpty) {
+      _processedNotifIds.add(customKey);
+    }
+
+    if (cleanOrderId.isNotEmpty) {
+      if (cleanStatus.isNotEmpty) {
+        _processedNotifIds.add('${cleanOrderId}_$cleanStatus');
+        _processedNotifIds.add('notif_${cleanOrderId}_$cleanStatus');
+        _processedNotifIds.add('order_status_${cleanOrderId}_$cleanStatus');
+      }
+
+      if (cleanStatus == 'PLACED' || cleanStatus == 'ORDER_CREATED') {
+        _processedNotifIds.add('${cleanOrderId}_PLACED');
+        _processedNotifIds.add('${cleanOrderId}_ORDER_CREATED');
+        _processedNotifIds.add('notif_${cleanOrderId}_PLACED');
+        _processedNotifIds.add('order_status_${cleanOrderId}_PLACED');
+      }
+
+      if (cleanStatus == 'PENDING') {
+        _processedNotifIds.add('${cleanOrderId}_PENDING');
+        _processedNotifIds.add('notif_${cleanOrderId}_PENDING');
+        _processedNotifIds.add('order_status_${cleanOrderId}_PENDING');
+      }
+    }
+
+    _saveProcessedNotifIds();
+  }
+
   Future<void> initialize({GlobalKey<NavigatorState>? key}) async {
     if (_initialized) return;
     _initialized = true;
@@ -58,10 +211,10 @@ class NotificationService {
     await _loadProcessedNotifIds();
 
     try {
-      // Register background messaging handler
+      // 1. Register background messaging handler
       FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
 
-      // 1. Android Notification Channel (v3) with custom sound 'appsound'
+      // 2. Android Notification Channel (v4) with custom sound 'appsound'
       const AndroidNotificationChannel channel = AndroidNotificationChannel(
         channelId,
         channelName,
@@ -69,21 +222,23 @@ class NotificationService {
         importance: Importance.max,
         playSound: true,
         sound: RawResourceAndroidNotificationSound('appsound'),
+        enableVibration: true,
       );
 
       final androidPlugin = _localNotifications
           .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
 
       if (androidPlugin != null) {
-        // Clean up legacy channel IDs if present to enforce sound settings
+        // Clean up legacy channel IDs to ensure new channel settings take effect
         try {
           await androidPlugin.deleteNotificationChannel(channelId: 'order_status_notifications');
           await androidPlugin.deleteNotificationChannel(channelId: 'order_status_notifications_v2');
+          await androidPlugin.deleteNotificationChannel(channelId: 'order_status_notifications_v3');
         } catch (_) {}
         await androidPlugin.createNotificationChannel(channel);
       }
 
-      // 2. Local Notifications Initialization
+      // 3. Local Notifications Initialization
       const AndroidInitializationSettings androidInitSettings =
           AndroidInitializationSettings('@mipmap/ic_launcher');
       const InitializationSettings initSettings = InitializationSettings(
@@ -99,17 +254,17 @@ class NotificationService {
         },
       );
 
-      // 3. FCM Token Refresh listener
+      // 4. FCM Token Refresh listener
       _fcm.onTokenRefresh.listen((newToken) async {
         await syncFcmToken();
       });
 
-      // 4. Foreground FCM Message listener
+      // 5. Foreground FCM Message listener
       FirebaseMessaging.onMessage.listen((RemoteMessage message) {
         _showLocalNotification(message);
       });
 
-      // 5. Background App Tap listener
+      // 6. Background App Tap listener
       FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
         final orderId = message.data['orderId'];
         if (orderId != null && orderId.toString().isNotEmpty) {
@@ -117,7 +272,7 @@ class NotificationService {
         }
       });
 
-      // 6. Terminated Initial Message
+      // 7. Terminated Initial Message
       final initialMessage = await _fcm.getInitialMessage();
       if (initialMessage != null) {
         final orderId = initialMessage.data['orderId'];
@@ -128,14 +283,16 @@ class NotificationService {
         }
       }
 
-      // 7. Sync Device FCM Token
+      // 8. Sync Device FCM Token
       await syncFcmToken();
 
-      // 8. Listen to Auth State to start real-time Firestore notification listener
+      // 9. Listen to Auth State to start real-time Firestore listeners
       FirebaseAuth.instance.authStateChanges().listen((user) {
         if (user != null) {
           syncFcmToken();
-          _listenToCustomerFirestoreNotifications(user.uid);
+          _startCustomerFirestoreListeners(user.uid);
+        } else {
+          _stopCustomerFirestoreListeners();
         }
       });
     } catch (e) {
@@ -145,15 +302,18 @@ class NotificationService {
 
   Future<void> requestPermission(BuildContext context) async {
     try {
-      final settings = await _fcm.requestPermission(
+      // 1. Request FCM permission
+      await _fcm.requestPermission(
         alert: true,
         badge: true,
         sound: true,
         provisional: false,
       );
-      if (settings.authorizationStatus == AuthorizationStatus.authorized) {
-        await syncFcmToken();
-      }
+
+      // 2. Request Android 13+ POST_NOTIFICATIONS runtime permission
+      await Permission.notification.request();
+
+      await syncFcmToken();
     } catch (e) {
       debugPrint('Notification permission request error: $e');
     }
@@ -167,6 +327,7 @@ class NotificationService {
       final token = await _fcm.getToken();
       if (token != null && token.isNotEmpty) {
         await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
+          'fcmToken': token,
           'fcmTokens': FieldValue.arrayUnion([token]),
           'lastTokenSync': DateTime.now().toIso8601String(),
         }, SetOptions(merge: true));
@@ -190,12 +351,25 @@ class NotificationService {
     } catch (_) {}
   }
 
-  void _listenToCustomerFirestoreNotifications(String userId) {
+  void _stopCustomerFirestoreListeners() {
+    _notifSubscription?.cancel();
+    _notifSubscription = null;
+    _orderSubscription?.cancel();
+    _orderSubscription = null;
+  }
+
+  void _startCustomerFirestoreListeners(String userId) {
+    _stopCustomerFirestoreListeners();
     if (userId.isEmpty) return;
 
+    _listenToCustomerNotificationsCollection(userId);
+    _listenToCustomerOrdersCollection(userId);
+  }
+
+  void _listenToCustomerNotificationsCollection(String userId) {
     bool isInitialSnapshot = true;
 
-    FirebaseFirestore.instance
+    _notifSubscription = FirebaseFirestore.instance
         .collection('notifications')
         .where('userId', isEqualTo: userId)
         .snapshots()
@@ -210,11 +384,7 @@ class NotificationService {
           final orderId = (data['orderId'] ?? '').toString();
           final status = (data['status'] ?? '').toString();
 
-          _processedNotifIds.add(docId);
-          if (orderId.isNotEmpty && status.isNotEmpty) {
-            _processedNotifIds.add('${orderId}_$status');
-            _processedNotifIds.add('notif_${orderId}_$status');
-          }
+          _markEventProcessed(orderId: orderId, status: status, docId: docId);
         }
         isInitialSnapshot = false;
         await _saveProcessedNotifIds();
@@ -228,36 +398,108 @@ class NotificationService {
 
           final docId = change.doc.id;
           final orderId = (data['orderId'] ?? '').toString();
-          final status = (data['status'] ?? '').toString();
+          String status = (data['status'] ?? '').toString();
+          final type = (data['type'] ?? '').toString();
 
-          final String primaryKey = docId;
-          final String secondaryKey = (orderId.isNotEmpty && status.isNotEmpty)
-              ? '${orderId}_$status'
-              : docId;
+          if (status.isEmpty) {
+            final titleStr = (data['title'] ?? '').toString().toLowerCase();
+            if (type == 'delivery' || type == 'order_created' || titleStr.contains('placed')) {
+              status = 'PLACED';
+            }
+          }
 
-          if (_processedNotifIds.contains(primaryKey) || _processedNotifIds.contains(secondaryKey)) {
+          if (_isEventProcessed(orderId: orderId, status: status, docId: docId)) {
             continue;
           }
 
           final bool isFresh = _isFreshNotification(data);
           if (!isFresh) {
-            _processedNotifIds.add(primaryKey);
-            _processedNotifIds.add(secondaryKey);
-            await _saveProcessedNotifIds();
+            _markEventProcessed(orderId: orderId, status: status, docId: docId);
             continue;
           }
 
-          final String title = (data['title'] ?? 'Order Status Updated').toString();
-          final String body = (data['body'] ?? 'Your order status has been updated.').toString();
+          final String title = (data['title'] ?? _getTitleForStatus(status)).toString();
+          final String body = (data['body'] ?? _getBodyForStatus(status, orderId)).toString();
 
           _processForegroundNotification(
-            notifKey: primaryKey,
-            secondaryKey: secondaryKey,
+            docId: docId,
+            status: status,
             title: title,
             body: body,
             orderId: orderId,
           );
         }
+      }
+    });
+  }
+
+  void _listenToCustomerOrdersCollection(String userId) {
+    bool isInitialSnapshot = true;
+
+    _orderSubscription = FirebaseFirestore.instance
+        .collection('orders')
+        .where('customerId', isEqualTo: userId)
+        .snapshots()
+        .listen((snapshot) async {
+      await _loadProcessedNotifIds();
+
+      if (isInitialSnapshot) {
+        for (final doc in snapshot.docs) {
+          final data = doc.data();
+          final orderId = doc.id;
+          final status = (data['status'] ?? '').toString().toUpperCase();
+          if (status.isNotEmpty) {
+            _orderLastStatus[orderId] = status;
+            _markEventProcessed(orderId: orderId, status: status, docId: doc.id);
+          }
+        }
+        isInitialSnapshot = false;
+        await _saveProcessedNotifIds();
+        return;
+      }
+
+      for (final change in snapshot.docChanges) {
+        final data = change.doc.data();
+        if (data == null) continue;
+
+        final orderId = change.doc.id;
+        final orderNum = (data['orderNumber'] ?? orderId).toString();
+        final currentStatus = (data['status'] ?? '').toString().toUpperCase();
+        final previousStatus = _orderLastStatus[orderId];
+
+        _orderLastStatus[orderId] = currentStatus;
+
+        // Skip if status is empty or hasn't changed (e.g. ACCEPTED -> ACCEPTED)
+        if (currentStatus.isEmpty || currentStatus == previousStatus) {
+          continue;
+        }
+
+        // Do NOT trigger a second notification for the initial PENDING status of a newly created order.
+        // The initial order creation notification ("Order Placed") is already generated by checkout / notifications collection.
+        if (previousStatus == null && currentStatus == 'PENDING') {
+          _markEventProcessed(orderId: orderId, status: 'PENDING');
+          continue;
+        }
+
+        if (_isEventProcessed(orderId: orderId, status: currentStatus)) {
+          continue;
+        }
+
+        final estPrep = (data['estimatedPrepMinutes'] is num)
+            ? (data['estimatedPrepMinutes'] as num).toInt()
+            : int.tryParse(data['estimatedPrepMinutes']?.toString() ?? '');
+        final rejReason = data['rejectionReason']?.toString();
+
+        final String title = _getTitleForStatus(currentStatus);
+        final String body = _getBodyForStatus(currentStatus, orderNum, prepTime: estPrep, reason: rejReason);
+
+        _processForegroundNotification(
+          docId: 'order_status_${orderId}_$currentStatus',
+          status: currentStatus,
+          title: title,
+          body: body,
+          orderId: orderId,
+        );
       }
     });
   }
@@ -285,23 +527,20 @@ class NotificationService {
     final notification = message.notification;
     final data = message.data;
 
-    final title = notification?.title ?? data['title'] ?? 'Order Status Update';
-    final body = notification?.body ?? data['body'] ?? 'Your order status has been updated.';
     final orderId = (data['orderId'] ?? '').toString();
     final status = (data['status'] ?? '').toString();
+    final messageId = message.messageId;
 
-    final String primaryKey = data['id'] ?? message.messageId ?? DateTime.now().millisecondsSinceEpoch.toString();
-    final String secondaryKey = (orderId.isNotEmpty && status.isNotEmpty)
-        ? '${orderId}_$status'
-        : (data['id'] ?? primaryKey);
-
-    if (_processedNotifIds.contains(primaryKey) || _processedNotifIds.contains(secondaryKey)) {
+    if (_isEventProcessed(orderId: orderId, status: status, docId: messageId)) {
       return;
     }
 
+    final title = notification?.title ?? data['title'] ?? _getTitleForStatus(status);
+    final body = notification?.body ?? data['body'] ?? _getBodyForStatus(status, orderId);
+
     _processForegroundNotification(
-      notifKey: primaryKey,
-      secondaryKey: secondaryKey,
+      docId: messageId ?? DateTime.now().millisecondsSinceEpoch.toString(),
+      status: status,
       title: title,
       body: body,
       orderId: orderId,
@@ -309,26 +548,19 @@ class NotificationService {
   }
 
   void _processForegroundNotification({
-    required String notifKey,
-    required String secondaryKey,
+    required String docId,
+    required String status,
     required String title,
     required String body,
     required String orderId,
   }) {
     // 1. Mark as processed for deduplication
-    _processedNotifIds.add(notifKey);
-    _processedNotifIds.add(secondaryKey);
-    if (notifKey.startsWith('notif_')) {
-      // Strip 'notif_' prefix if key format is notif_orderId_status
-      final stripped = notifKey.replaceFirst('notif_', '');
-      _processedNotifIds.add(stripped);
-    }
-    _saveProcessedNotifIds();
-    if (_processedNotifIds.length > 200) {
-      _processedNotifIds.remove(_processedNotifIds.first);
-    }
+    _markEventProcessed(orderId: orderId, status: status, docId: docId);
 
-    // 2. Trigger Local Notification UI Banner
+    // 2. Trigger Local Notification UI Banner in Android System Tray with custom sound
+    // Note: AudioPlayer is NOT called here because the Android notification channel
+    // has playSound: true with RawResourceAndroidNotificationSound('appsound').
+    // The system notification automatically plays the sound ONCE.
     const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
       channelId,
       channelName,
@@ -338,11 +570,14 @@ class NotificationService {
       playSound: true,
       sound: RawResourceAndroidNotificationSound('appsound'),
       icon: '@mipmap/ic_launcher',
+      ticker: 'Order Update',
+      visibility: NotificationVisibility.public,
+      enableVibration: true,
     );
 
     const NotificationDetails platformDetails = NotificationDetails(android: androidDetails);
 
-    final int notificationId = notifKey.hashCode.abs() % 100000;
+    final int notificationId = '${orderId}_${status}_$docId'.hashCode.abs() % 100000;
     _localNotifications.show(
       id: notificationId,
       title: title,
@@ -361,4 +596,48 @@ class NotificationService {
       }
     }
   }
+
+  String _getTitleForStatus(String status) {
+    switch (status.toUpperCase()) {
+      case 'ACCEPTED':
+        return 'Order Accepted! 🍳';
+      case 'PREPARING':
+        return 'Kitchen Preparing Your Order 👨‍🍳';
+      case 'READY':
+        return 'Order Ready! 📦';
+      case 'OUT_FOR_DELIVERY':
+        return 'Out for Delivery! 🛵';
+      case 'DELIVERED':
+        return 'Order Delivered! 🎉';
+      case 'REJECTED':
+        return 'Order Rejected ❌';
+      case 'CANCELLED':
+        return 'Order Cancelled ⚠️';
+      default:
+        return 'Order Status Updated';
+    }
+  }
+
+  String _getBodyForStatus(String status, String orderId, {int? prepTime, String? reason}) {
+    final displayOrder = orderId.isNotEmpty ? '#$orderId' : '';
+    switch (status.toUpperCase()) {
+      case 'ACCEPTED':
+        return 'Your order $displayOrder has been accepted. Estimated prep time: ${prepTime ?? 20} mins.';
+      case 'PREPARING':
+        return 'The chef is now preparing your meal for order $displayOrder.';
+      case 'READY':
+        return 'Your order $displayOrder is ready and waiting for pickup/dispatch.';
+      case 'OUT_FOR_DELIVERY':
+        return 'Your order $displayOrder is on the way. Our rider will reach you soon!';
+      case 'DELIVERED':
+        return 'Your order $displayOrder has been delivered. Bon appétit!';
+      case 'REJECTED':
+        return 'Order $displayOrder was rejected. Reason: ${reason ?? 'Kitchen busy'}';
+      case 'CANCELLED':
+        return 'Order $displayOrder has been cancelled.';
+      default:
+        return 'Your order $displayOrder status is now ${status.replaceAll('_', ' ')}.';
+    }
+  }
 }
+
