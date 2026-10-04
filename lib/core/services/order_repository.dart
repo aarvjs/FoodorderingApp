@@ -191,6 +191,7 @@ class OrderRepository {
       'rewardBranchId': rewardBranchId ?? (branchId.isNotEmpty ? branchId : restaurantId),
       'appliedCoupon': appliedCoupon ?? '',
       'appliedOfferId': appliedOfferId ?? '',
+      'offerConsumed': false,
       'branchGstNumber': branchGstNumber ?? '',
       'gstNumber': branchGstNumber ?? '',
       'branchFssaiNumber': branchFssaiNumber ?? '',
@@ -273,16 +274,38 @@ class OrderRepository {
               }
             }
 
+            DateTime? parseOfferDate(dynamic val) {
+              if (val == null) return null;
+              if (val is String) return DateTime.tryParse(val);
+              if (val is Timestamp) return val.toDate();
+              if (val is num) return DateTime.fromMillisecondsSinceEpoch(val.toInt());
+              return null;
+            }
+
             int userUsageCount = 0;
             final offerDocId = offerSnap.id.trim();
             final offerCoupon = (data['coupon'] ?? data['couponCode'] ?? '').toString().trim().toUpperCase();
+            final offerLastActivated = parseOfferDate(data['lastActivatedAt']);
 
             for (final oDoc in docMap.values) {
               final oData = oDoc.data();
+
+              // 1. If offer was reactivated, ignore orders placed before lastActivatedAt
+              final orderCreatedAt = parseOfferDate(oData['createdAt']);
+              if (offerLastActivated != null && orderCreatedAt != null) {
+                if (orderCreatedAt.isBefore(offerLastActivated)) {
+                  continue;
+                }
+              }
+
               final oStatus = (oData['status'] ?? '').toString().toUpperCase();
-              if (oStatus == 'CANCELLED' || oStatus == 'REJECTED') {
+              final bool offerConsumed = oData['offerConsumed'] == true;
+
+              // 2. Offer is NOT consumed if order was cancelled/rejected before OUT_FOR_DELIVERY (offerConsumed != true)
+              if ((oStatus == 'CANCELLED' || oStatus == 'REJECTED') && !offerConsumed) {
                 continue;
               }
+
               final oAppliedOfferId = (oData['appliedOfferId'] ?? '').toString().trim();
               final oAppliedCoupon = (oData['appliedCoupon'] ?? '').toString().trim().toUpperCase();
 
@@ -307,19 +330,8 @@ class OrderRepository {
             }
           }
 
-          final int newCount = usageCount + 1;
-          final int newRemaining = usageLimit > 0 ? max(0, usageLimit - newCount) : 0;
-          final Map<String, dynamic> updateData = {
-            'usageCount': newCount,
-            'remainingUses': newRemaining,
-            'updatedAt': nowIso,
-          };
-          if (usageLimit > 0 && newCount >= usageLimit) {
-            updateData['status'] = 'EXPIRED';
-            updateData['isActive'] = false;
-          }
-
-          transaction.update(offerSnap.reference, updateData);
+          // Ensure appliedOfferId is correctly set on order document
+          orderData['appliedOfferId'] = offerSnap.id;
         }
 
         transaction.set(docRef, orderData);

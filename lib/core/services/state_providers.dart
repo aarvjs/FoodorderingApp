@@ -861,17 +861,39 @@ class CartNotifier extends Notifier<CartState> {
                 }
               }
 
+              DateTime? parseOfferDate(dynamic val) {
+                if (val == null) return null;
+                if (val is String) return DateTime.tryParse(val);
+                if (val is Timestamp) return val.toDate();
+                if (val is num) return DateTime.fromMillisecondsSinceEpoch(val.toInt());
+                return null;
+              }
+
               int userUsageCount = 0;
               final offerDocId = doc.id.trim();
               final offerCouponCode = (data['coupon'] ?? data['couponCode'] ?? data['code'] ?? '').toString().trim().toUpperCase();
               final matchCouponCode = offerCouponCode.isNotEmpty ? offerCouponCode : normalizedCode;
+              final offerLastActivated = parseOfferDate(data['lastActivatedAt']);
 
               for (final oDoc in docMap.values) {
                 final oData = oDoc.data();
+
+                // 1. If offer was reactivated, ignore orders placed before lastActivatedAt
+                final orderCreatedAt = parseOfferDate(oData['createdAt']);
+                if (offerLastActivated != null && orderCreatedAt != null) {
+                  if (orderCreatedAt.isBefore(offerLastActivated)) {
+                    continue;
+                  }
+                }
+
                 final oStatus = (oData['status'] ?? '').toString().toUpperCase();
-                if (oStatus == 'CANCELLED' || oStatus == 'REJECTED') {
+                final bool offerConsumed = oData['offerConsumed'] == true;
+
+                // 2. Offer is NOT consumed if order was cancelled/rejected before OUT_FOR_DELIVERY (offerConsumed != true)
+                if ((oStatus == 'CANCELLED' || oStatus == 'REJECTED') && !offerConsumed) {
                   continue;
                 }
+
                 final oAppliedOfferId = (oData['appliedOfferId'] ?? '').toString().trim();
                 final oAppliedCoupon = (oData['appliedCoupon'] ?? '').toString().trim().toUpperCase();
 
