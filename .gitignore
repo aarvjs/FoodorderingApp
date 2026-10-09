@@ -50,3 +50,8 @@ key.properties
 *.keystore
 android/key.properties
 
+# Secrets and credentials
+*.csv
+.env*
+
+
